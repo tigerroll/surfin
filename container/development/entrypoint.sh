@@ -17,7 +17,7 @@ function install_packages() {
   local packages+=("procps-ng") 
   local packages+=("wget")
   local packages+=("unzip")
-	local packages+=("python3")
+  local packages+=("python3")
   local packages+=("python3-pip")
   local packages+=("iproute")
   local packages+=("util-linux")
