@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
+	"surfin/pkg/batch/adaptor/database"
 	adaptor "surfin/pkg/batch/core/adaptor"
+	adaptor_core "surfin/pkg/batch/core/adaptor"
 	config "surfin/pkg/batch/core/config"
 	model "surfin/pkg/batch/core/domain/model"
 	"surfin/pkg/batch/core/domain/repository"
-	adaptor_core "surfin/pkg/batch/core/adaptor"
-	sql_repo "surfin/pkg/batch/infrastructure/repository/sql"
-	"surfin/pkg/batch/adaptor/database"
 	tx "surfin/pkg/batch/core/tx"
+	sql_repo "surfin/pkg/batch/infrastructure/repository/sql"
 	"surfin/pkg/batch/support/util/exception"
 	test_util "surfin/pkg/batch/test"
 
@@ -70,8 +70,8 @@ func setupSQLiteTestDB(t *testing.T) (repository.JobRepository, adaptor.DBConnec
 
 		globalGormDB = gormDB
 		// NewGormDBAdapter のシグネチャに合わせる
-		globalDBConn = database.NewGormDBAdapter(gormDB, cfg, "test_sqlite") 
-		
+		globalDBConn = database.NewGormDBAdapter(gormDB, cfg, "test_sqlite")
+
 		// Test Resolver を作成: 常に globalDBConn を返す
 		testDBResolver = &testSingleConnectionResolver{conn: globalDBConn}
 
@@ -119,7 +119,7 @@ func TestSQLiteJobRepository_Lifecycle(t *testing.T) {
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
 	txCtx = context.WithValue(ctx, "tx", txAdapter)
-	
+
 	err = repo.SaveJobInstance(txCtx, instance)
 	assert.NoError(t, err)
 	err = globalTxManager.Commit(txAdapter)
@@ -135,7 +135,7 @@ func TestSQLiteJobRepository_Lifecycle(t *testing.T) {
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
 	txCtx = context.WithValue(ctx, "tx", txAdapter)
-	
+
 	err = repo.SaveJobExecution(txCtx, execution)
 	assert.NoError(t, err)
 	err = globalTxManager.Commit(txAdapter) // ここでコミットを追加
@@ -163,7 +163,7 @@ func TestSQLiteJobRepository_Lifecycle(t *testing.T) {
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
 	txCtx = context.WithValue(ctx, "tx", txAdapter)
-	
+
 	err = repo.SaveStepExecution(txCtx, stepExecution)
 	assert.NoError(t, err)
 	err = globalTxManager.Commit(txAdapter) // ここでコミットを追加
@@ -200,7 +200,7 @@ func TestSQLiteJobRepository_OptimisticLocking(t *testing.T) {
 
 	ctx := context.Background()
 	instance := test_util.NewTestJobInstance("lockTestJob", test_util.NewTestJobParameters(nil))
-	
+
 	// JobInstanceの保存
 	txAdapter, err := globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
@@ -210,7 +210,7 @@ func TestSQLiteJobRepository_OptimisticLocking(t *testing.T) {
 
 	// 1. JobExecution の楽観的ロックテスト
 	exec1 := test_util.NewTestJobExecution(instance.ID, instance.JobName, instance.Parameters)
-	
+
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
 	txCtx = context.WithValue(ctx, "tx", txAdapter)
@@ -255,7 +255,7 @@ func TestSQLiteJobRepository_CheckpointData(t *testing.T) {
 	instance := test_util.NewTestJobInstance("checkpointJob", test_util.NewTestJobParameters(nil))
 	exec := test_util.NewTestJobExecution(instance.ID, instance.JobName, instance.Parameters)
 	stepExec := test_util.NewTestStepExecution(exec, "checkpointStep")
-	
+
 	// 変数を事前に宣言
 	var txAdapter tx.Tx
 	var txCtx context.Context
@@ -275,7 +275,7 @@ func TestSQLiteJobRepository_CheckpointData(t *testing.T) {
 	ec := test_util.NewTestExecutionContext(nil)
 	ec.Put("offset", 50)
 	dataToSave := &model.CheckpointData{StepExecutionID: stepExec.ID, ExecutionContext: ec}
-	
+
 	txAdapter, err = txManager.Begin(ctx)
 	assert.NoError(t, err)
 	txCtx = context.WithValue(ctx, "tx", txAdapter)
@@ -290,18 +290,18 @@ func TestSQLiteJobRepository_CheckpointData(t *testing.T) {
 	offset, ok = foundData.ExecutionContext.GetInt("offset")
 	assert.True(t, ok)
 	assert.Equal(t, 50, offset)
-	
+
 	// 3. 更新のテスト
 	ec.Put("offset", 100)
 	dataToSave.ExecutionContext = ec
-	
+
 	txAdapter, err = txManager.Begin(ctx)
 	assert.NoError(t, err)
 	txCtx = context.WithValue(ctx, "tx", txAdapter)
 	err = repo.SaveCheckpointData(txCtx, dataToSave)
 	assert.NoError(t, err)
 	txManager.Commit(txAdapter)
-	
+
 	foundData, err = repo.FindCheckpointData(ctx, stepExec.ID)
 	assert.NoError(t, err)
 	offset, ok = foundData.ExecutionContext.GetInt("offset")
@@ -319,7 +319,7 @@ func TestSQLiteJobRepository_CheckpointData(t *testing.T) {
 func createTestTables(db *gorm.DB) error {
 	// NOTE: SQLite の場合、JSON 型は TEXT として扱われます。
 	// 主キー、NOT NULL、インデックスを定義します。
-	
+
 	// batch_job_instance
 	if err := db.Exec(`
 		CREATE TABLE batch_job_instance (

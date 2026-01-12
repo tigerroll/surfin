@@ -19,7 +19,6 @@ import (
 // Methods:
 //   - ExecuteUpdate: Executes write operations such as INSERT, UPDATE, DELETE.
 //   - ExecuteUpsert: Executes UPSERT (INSERT OR REPLACE / ON CONFLICT DO UPDATE) operations.
-//
 type DBExecutor interface {
 	// ExecuteUpdate performs write operations (INSERT, UPDATE, DELETE) within a transaction.
 	// model: The target model struct or slice.
@@ -63,7 +62,7 @@ type DBConnection interface {
 	// Config returns the database configuration associated with this connection.
 	// Returns: config.DatabaseConfig struct.
 	Config() config.DatabaseConfig
-	
+
 	// GetSQLDB returns the underlying *sql.DB connection.
 	// This exposes low-level dependencies but is necessary for migration tools and raw SQL access.
 	// Returns: *sql.DB instance and an error.
@@ -144,7 +143,6 @@ type DBConnectionResolver interface {
 //   - ForceReconnect: Forces the closure and re-establishment of an existing connection.
 //   - CloseAll: Closes all connections managed by this provider.
 //   - Type: Returns the type of database handled by this provider.
-//
 type DBProvider interface {
 	// GetConnection retrieves a database connection with the specified name.
 	// name: The name of the database connection to retrieve.
@@ -156,7 +154,6 @@ type DBProvider interface {
 	CloseAll() error
 	// Type returns the type of database handled by this provider (e.g., "postgres", "mysql").
 	Type() string
-	
 }
 
 // DBProviderGroup is an Fx tag used to group all DBProvider implementations.

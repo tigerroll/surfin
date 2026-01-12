@@ -9,8 +9,8 @@ import (
 	"go.uber.org/fx"
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
-	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	cfg "github.com/tigerroll/surfin/pkg/batch/core/config"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -19,14 +19,14 @@ import (
 // BirdClientSubmitterParams holds the dependencies injected via DI.
 type BirdClientSubmitterParams struct {
 	fx.In
-	Config *cfg.Config
+	Config        *cfg.Config
 	JobRepository repository.JobRepository
 }
 
 // BirdClientSubmitter is an implementation of core.RemoteJobSubmitter for submitting remote jobs via the Surfin Bird orchestrator's API.
 type BirdClientSubmitter struct {
-	apiEndpoint string
-	jobRepository repository.JobRepository
+	apiEndpoint     string
+	jobRepository   repository.JobRepository
 	pollingInterval time.Duration
 }
 
@@ -42,8 +42,8 @@ func NewBirdClientSubmitter(p BirdClientSubmitterParams) port.RemoteJobSubmitter
 	}
 
 	return &BirdClientSubmitter{
-		apiEndpoint: batchConfig.APIEndpoint,
-		jobRepository: p.JobRepository,
+		apiEndpoint:     batchConfig.APIEndpoint,
+		jobRepository:   p.JobRepository,
 		pollingInterval: pollingInterval,
 	}
 }
@@ -51,16 +51,16 @@ func NewBirdClientSubmitter(p BirdClientSubmitterParams) port.RemoteJobSubmitter
 // SubmitWorkerJob sends StepExecution information to the Surfin Bird API to request remote execution.
 func (s *BirdClientSubmitter) SubmitWorkerJob(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution, workerStep port.Step) (string, error) {
 	workerStepName := workerStep.StepName()
-	
+
 	logger.Infof("BirdClientSubmitter: Requesting execution of Worker Step '%s' to Surfin Bird API (%s).", workerStepName, s.apiEndpoint)
 
 	// Actual API call logic would go here.
-	
+
 	// For now, we assume the API call is successful and return a dummy job ID.
 	remoteJobID := fmt.Sprintf("bird-job-%s", stepExecution.ID)
-	
+
 	logger.Debugf("BirdClientSubmitter: Obtained remote job ID '%s'.", remoteJobID)
-	
+
 	return remoteJobID, nil
 }
 
@@ -79,20 +79,20 @@ func (s *BirdClientSubmitter) AwaitCompletion(ctx context.Context, remoteJobID s
 		case <-ctx.Done():
 			// If context is cancelled (e.g., timeout, job stop request).
 			logger.Warnf("BirdClientSubmitter: Waiting for remote job '%s' interrupted by context: %v", remoteJobID, ctx.Err())
-			
+
 			// Attempting to update StepExecution status to STOPPED and persist.
 			stepExecution.MarkAsStopped()
 			if updateErr := s.jobRepository.UpdateStepExecution(ctx, stepExecution); updateErr != nil {
 				logger.Errorf("BirdClientSubmitter: Failed to update StepExecution (ID: %s) status to STOPPED: %v", stepExecution.ID, updateErr)
 			}
-			
+
 			return exception.NewBatchError("remote_agent", fmt.Sprintf("Remote execution wait interrupted: %v", ctx.Err()), ctx.Err(), false, true)
 
 		case <-ticker.C:
 			// Polling interval elapsed.
 			pollCount++
 			logger.Debugf("BirdClientSubmitter: Polling #%d (StepExecution ID: %s).", pollCount, stepExecution.ID)
-			
+
 			// 1. Retrieve the latest StepExecution status.
 			latestSE, err := s.jobRepository.FindStepExecutionByID(ctx, stepExecution.ID)
 			if err != nil {
@@ -113,7 +113,7 @@ func (s *BirdClientSubmitter) AwaitCompletion(ctx context.Context, remoteJobID s
 			// 2. Check status.
 			if latestSE.Status.IsFinished() {
 				logger.Infof("BirdClientSubmitter: Remote StepExecution ID '%s' reached a terminal state (%s).", stepExecution.ID, latestSE.Status)
-				
+
 				// Copy all fields except ID, JobExecutionID, StepName, StartTime, and Version.
 				stepExecution.EndTime = latestSE.EndTime
 				stepExecution.Status = latestSE.Status
@@ -129,13 +129,13 @@ func (s *BirdClientSubmitter) AwaitCompletion(ctx context.Context, remoteJobID s
 				stepExecution.SkipWriteCount = latestSE.SkipWriteCount
 				stepExecution.ExecutionContext = latestSE.ExecutionContext
 				stepExecution.LastUpdated = latestSE.LastUpdated
-				
+
 				// Determine whether to return an error based on the terminal status.
 				if latestSE.Status == model.BatchStatusFailed || latestSE.Status == model.BatchStatusAbandoned {
 					// If the remote worker failed.
 					return exception.NewBatchErrorf("remote_agent", "Remote StepExecution ID '%s' failed. Status: %s", stepExecution.ID, latestSE.Status)
 				}
-				
+
 				return nil // Normal completion.
 			}
 

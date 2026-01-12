@@ -57,7 +57,7 @@ func fromDomainJobExecution(je *model.JobExecution) *JobExecutionEntity {
 		RestartCount:     je.RestartCount,
 	}
 	// The StepExecutions field has been removed from the entity, so related processing is also removed.
-	
+
 	return entity
 }
 
@@ -86,7 +86,7 @@ func toDomainJobExecution(entity *JobExecutionEntity) *model.JobExecution {
 	}
 	// StepExecutions are manually loaded in the repository layer, so an empty slice is initialized here.
 	je.StepExecutions = make([]*model.StepExecution, 0)
-	
+
 	return je
 }
 
@@ -116,7 +116,7 @@ func fromDomainStepExecution(se *model.StepExecution) *StepExecutionEntity {
 		Version:          se.Version,
 	}
 	// The JobExecution field has been removed from the entity, so related processing is also removed.
-	
+
 	return entity
 }
 

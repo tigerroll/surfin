@@ -1,29 +1,29 @@
 package partition
 
 import (
+	"github.com/tigerroll/surfin/pkg/batch/component/partitioner"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
-	"go.uber.org/fx"
 	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
-	"github.com/tigerroll/surfin/pkg/batch/component/partitioner"
-	remote "github.com/tigerroll/surfin/pkg/batch/infrastructure/remote"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
+	remote "github.com/tigerroll/surfin/pkg/batch/infrastructure/remote"
+	"go.uber.org/fx"
 )
 
 // StepExecutorProviderParams defines the dependencies required to select a StepExecutor.
 type StepExecutorProviderParams struct {
 	fx.In
-	Config             *config.Config
-	SimpleExecutor     port.StepExecutor `name:"simpleStepExecutor"`
-	RemoteExecutor     port.StepExecutor `name:"remoteStepExecutor"`
+	Config         *config.Config
+	SimpleExecutor port.StepExecutor `name:"simpleStepExecutor"`
+	RemoteExecutor port.StepExecutor `name:"remoteStepExecutor"`
 }
 
 // SimpleStepExecutorParams defines the dependencies for SimpleStepExecutor.
 type SimpleStepExecutorParams struct {
 	fx.In
-	Tracer metrics.Tracer
-	MetricRecorder metrics.MetricRecorder // MetricRecorder for metrics collection.
-	MetadataTxManager tx.TransactionManager `name:"metadata"` // Requests the metadata TxManager.
+	Tracer            metrics.Tracer
+	MetricRecorder    metrics.MetricRecorder // MetricRecorder for metrics collection.
+	MetadataTxManager tx.TransactionManager  `name:"metadata"` // Requests the metadata TxManager.
 }
 
 // ProvideStepExecutor selects and provides the appropriate core.StepExecutor based on configuration.

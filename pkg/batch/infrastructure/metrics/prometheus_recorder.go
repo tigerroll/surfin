@@ -6,8 +6,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
-	model "surfin/pkg/batch/core/domain/model"
 	port "surfin/pkg/batch/core/application/port"
+	model "surfin/pkg/batch/core/domain/model"
 	metrics "surfin/pkg/batch/core/metrics"
 	logger "surfin/pkg/batch/support/util/logger"
 )

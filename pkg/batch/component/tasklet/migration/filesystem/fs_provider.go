@@ -2,8 +2,8 @@ package filesystem
 
 import (
 	"embed"
-	"io/fs"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	"io/fs"
 )
 
 //go:embed resource

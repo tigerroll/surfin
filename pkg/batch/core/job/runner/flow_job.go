@@ -9,21 +9,21 @@ import (
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
-	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // FlowJob is an implementation of core.Job that executes a job based on a flow defined in JSL.
 type FlowJob struct {
-	id            string
-	name          string
-	flow          *model.FlowDefinition
-	jobRepository repository.JobRepository
-	jobListeners  []port.JobExecutionListener
+	id             string
+	name           string
+	flow           *model.FlowDefinition
+	jobRepository  repository.JobRepository
+	jobListeners   []port.JobExecutionListener
 	metricRecorder metrics.MetricRecorder
-	tracer        metrics.Tracer
+	tracer         metrics.Tracer
 	// JobParametersIncrementer is used by JobLauncher, so it is not held directly by FlowJob
 }
 
@@ -41,13 +41,13 @@ func NewFlowJob(
 	tracer metrics.Tracer,
 ) *FlowJob {
 	return &FlowJob{
-		id:            id,
-		name:          name,
-		flow:          flow,
-		jobRepository: jobRepository,
-		jobListeners:  jobListeners,
+		id:             id,
+		name:           name,
+		flow:           flow,
+		jobRepository:  jobRepository,
+		jobListeners:   jobListeners,
 		metricRecorder: metricRecorder,
-		tracer:        tracer,
+		tracer:         tracer,
 	}
 }
 
@@ -123,7 +123,7 @@ func (j *FlowJob) Run(ctx context.Context, jobExecution *model.JobExecution, job
 
 		logger.Infof("Job '%s' (Execution ID: %s) finished. Final Status: %s, Exit Status: %s",
 			j.name, jobExecution.ID, jobExecution.Status, jobExecution.ExitStatus)
-		
+
 		// Log StepExecution details without sensitive EC data
 		for _, se := range jobExecution.StepExecutions {
 			logger.Debugf("  StepExecution Details (Step: %s): %s", se.StepName, se.DebugString())
@@ -132,7 +132,7 @@ func (j *FlowJob) Run(ctx context.Context, jobExecution *model.JobExecution, job
 
 	// Start execution from the flow's starting element
 	currentElementID := j.flow.StartElement
-	
+
 	// If the job is restarted, or resuming from a previously failed step
 	if jobExecution.CurrentStepName != "" && (jobExecution.Status == model.BatchStatusRestarting || jobExecution.Status == model.BatchStatusStarted) {
 		// If JobLauncher transitioned to RESTARTING or STARTED, resume from CurrentStepName.
@@ -190,7 +190,7 @@ func (j *FlowJob) Run(ctx context.Context, jobExecution *model.JobExecution, job
 					break
 				}
 			}
-			
+
 			isNewExecution := stepExecution == nil
 			if !isNewExecution && stepExecution.Status == model.BatchStatusStarting {
 				// StepExecution created by SimpleJobLauncher during restart is persisted here for the first time.
@@ -229,7 +229,7 @@ func (j *FlowJob) Run(ctx context.Context, jobExecution *model.JobExecution, job
 			}
 
 			// Inject StepExecution into context before execution, especially important for Chunk processing components (Writers)
-			executionCtx := port.GetContextWithStepExecution(ctx, stepExecution) 
+			executionCtx := port.GetContextWithStepExecution(ctx, stepExecution)
 
 			elementErr = elem.Execute(executionCtx, jobExecution, stepExecution)
 			elementExitStatus = stepExecution.ExitStatus
@@ -338,7 +338,7 @@ func (j *FlowJob) Run(ctx context.Context, jobExecution *model.JobExecution, job
 						j.tracer.RecordError(splitCtx, "job_runner", err)
 						return
 					}
-					
+
 					// StepExecution.GetContextWithStepExecution has been moved to port.interfaces.go
 					executionCtx := port.GetContextWithStepExecution(splitCtx, splitStepExecution)
 
@@ -358,7 +358,7 @@ func (j *FlowJob) Run(ctx context.Context, jobExecution *model.JobExecution, job
 			close(splitExitStatuses)
 
 			var combinedSplitError error
-			
+
 			for err := range splitErrors {
 				if err != nil {
 					// Combine into elementErr (treated as the error for the entire Split)
@@ -373,7 +373,7 @@ func (j *FlowJob) Run(ctx context.Context, jobExecution *model.JobExecution, job
 			} else {
 				elementExitStatus = model.ExitStatusCompleted
 			}
-			
+
 			logger.Infof("Job '%s': Execution of Split '%s' completed. Result: %s", j.name, splitName, elementExitStatus)
 
 		default:

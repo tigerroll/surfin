@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
@@ -19,11 +19,11 @@ type MetricEvent struct {
 	JobExecution  *model.JobExecution
 	StepExecution *model.StepExecution // Used for step execution events
 	// Other event data can be added here as needed
-	StepName      string            // For item-level metrics
-	Count         int               // For ItemWrite and ChunkCommit counts
-	Reason        string            // For ItemSkip and ItemRetry reasons
-	Duration      time.Duration     // For duration metrics
-	Tags          map[string]string // For duration metric tags
+	StepName string            // For item-level metrics
+	Count    int               // For ItemWrite and ChunkCommit counts
+	Reason   string            // For ItemSkip and ItemRetry reasons
+	Duration time.Duration     // For duration metrics
+	Tags     map[string]string // For duration metric tags
 }
 
 // Metric event type constants
@@ -92,7 +92,7 @@ func (r *AsyncMetricRecorder) run() {
 func (r *AsyncMetricRecorder) processEvent(event MetricEvent) {
 	// A new background context is used here because the event payload does not contain the original context.
 	// Consider including the original context in the event structure if needed.
-	ctx := context.Background() 
+	ctx := context.Background()
 	switch event.Type {
 	case MetricEventTypeJobStart:
 		r.syncRecorder.RecordJobStart(ctx, event.JobExecution)
@@ -205,7 +205,7 @@ func NewAsyncMetricRecorderWrapper(lc fx.Lifecycle, cfg *config.Config, syncReco
 	if bufferSize <= 0 {
 		bufferSize = 100
 	}
-	asyncRecorder := NewAsyncMetricRecorder(bufferSize, syncRecorder) 
+	asyncRecorder := NewAsyncMetricRecorder(bufferSize, syncRecorder)
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
 			asyncRecorder.Close()

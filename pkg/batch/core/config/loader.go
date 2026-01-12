@@ -97,7 +97,7 @@ func validateExceptionClasses(cfg *Config) error {
 			return err
 		}
 	}
-	
+
 	// Skipping validation for NoRollback setting as it does not exist in config.go.
 
 	return nil
@@ -143,7 +143,7 @@ func loadStructFromEnv(val reflect.Value, prefix string) error {
 			}
 			continue
 		}
-		
+
 		if err := setField(field, envValue); err != nil {
 			return fmt.Errorf("failed to set field '%s' from env var '%s': %w", fieldType.Name, envVarName, err)
 		}
@@ -166,7 +166,7 @@ func loadMapOfStructsFromEnv(mapField reflect.Value, prefix string) error {
 		if !strings.HasPrefix(env, prefix) {
 			continue
 		}
-		
+
 		// Extract key and field name from environment variable name
 		// Example: DATABASES_JOBDB_HOST=localhost -> keyPart="JOBDB_HOST", value="localhost"
 		keyPartWithValue := strings.TrimPrefix(env, prefix)
@@ -183,7 +183,7 @@ func loadMapOfStructsFromEnv(mapField reflect.Value, prefix string) error {
 		if len(keyAndFieldParts) < 2 {
 			continue
 		}
-		mapKey := strings.ToLower(keyAndFieldParts[0]) // e.g., "jobdb"
+		mapKey := strings.ToLower(keyAndFieldParts[0])             // e.g., "jobdb"
 		structFieldName := strings.Join(keyAndFieldParts[1:], "_") // e.g., "HOST"
 
 		// Get or create an instance of the struct
@@ -191,7 +191,7 @@ func loadMapOfStructsFromEnv(mapField reflect.Value, prefix string) error {
 		if !structVal.IsValid() {
 			structVal = reflect.New(elemType).Elem() // Create a new instance if not found
 		}
-		
+
 		// Set the value of the struct field
 		if err := setStructFieldFromEnv(structVal, structFieldName, envValue); err != nil {
 			return err
@@ -211,7 +211,7 @@ func setStructFieldFromEnv(structVal reflect.Value, fieldName string, value stri
 		if yamlTag == "" || yamlTag == "-" {
 			continue
 		}
-		
+
 		// Check if YAML tag and environment variable name match
 		if strings.EqualFold(yamlTag, fieldName) { // (case-insensitive comparison)
 			return setField(field, value)

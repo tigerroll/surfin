@@ -2,8 +2,8 @@
 package jsl
 
 import (
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 )
 

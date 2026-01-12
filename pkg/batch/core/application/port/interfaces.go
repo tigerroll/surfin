@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 )
 
 // Standard errors
@@ -57,7 +57,7 @@ type Step interface {
 	GetTransactionOptions() *sql.TxOptions
 	// GetPropagation returns the transaction propagation attribute (e.g., REQUIRED, REQUIRES_NEW, NESTED).
 	GetPropagation() string
-	
+
 	// SetMetricRecorder sets the MetricRecorder.
 	SetMetricRecorder(recorder metrics.MetricRecorder)
 	// SetTracer sets the Tracer.
@@ -65,7 +65,6 @@ type Step interface {
 	// GetExecutionContextPromotion returns the ExecutionContext promotion settings for this step.
 	GetExecutionContextPromotion() *model.ExecutionContextPromotion
 }
-
 
 // RemoteJobSubmitter delegates worker step execution to a remote environment.
 type RemoteJobSubmitter interface {

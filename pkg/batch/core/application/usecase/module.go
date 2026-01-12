@@ -16,14 +16,14 @@ var Module = fx.Options(
 		NewDefaultJobOperator,
 		fx.As(new(JobOperator)),
 	)),
-	
+
 	// Provide JobLauncher (uses constructor defined in simple_joblauncher.go)
 	fx.Provide(NewSimpleJobLauncher),
 	fx.Provide(fx.Annotate(
 		func(launcher *SimpleJobLauncher) JobLauncher { return launcher },
 		fx.As(new(JobLauncher)),
 	)),
-	
+
 	// Invoke hook to set JobLauncher in DefaultJobOperator
 	fx.Invoke(func(operator JobOperator, launcher *SimpleJobLauncher) {
 		// Downcast to concrete type DefaultJobOperator and call SetJobLauncher

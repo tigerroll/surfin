@@ -49,7 +49,7 @@ func TestGetMaskedJobParametersMap(t *testing.T) {
 	if len(masked) != 4 {
 		t.Errorf("Map size changed unexpectedly: %d", len(masked))
 	}
-	
+
 	// nil input test
 	maskedNil := serialization.GetMaskedJobParametersMap(nil)
 	if len(maskedNil) != 0 {
@@ -90,8 +90,8 @@ func TestMarshalJobParameters_Masking(t *testing.T) {
 
 func TestExecutionContext_MarshalUnmarshal(t *testing.T) {
 	original := map[string]interface{}{
-		"step": "chunk",
-		"index": 5,
+		"step":      "chunk",
+		"index":     5,
 		"float_val": 123.45,
 	}
 
@@ -108,8 +108,8 @@ func TestExecutionContext_MarshalUnmarshal(t *testing.T) {
 
 	// JSON Unmarshal は数値を float64 に変換するため、比較用のマップを調整する
 	expectedRestored := map[string]interface{}{
-		"step": "chunk",
-		"index": float64(5), // JSON Unmarshal converts numbers to float64
+		"step":      "chunk",
+		"index":     float64(5), // JSON Unmarshal converts numbers to float64
 		"float_val": 123.45,
 	}
 

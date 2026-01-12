@@ -38,8 +38,8 @@ func NewDefaultRetryPolicyFactory() *DefaultRetryPolicyFactory {
 // Returns: A new RetryPolicy instance.
 func (f *DefaultRetryPolicyFactory) Create(maxAttempts int, initialInterval int, retryableExceptions []string) RetryPolicy {
 	return &defaultRetryPolicy{
-		maxAttempts: maxAttempts,
-		initialInterval: initialInterval,
+		maxAttempts:         maxAttempts,
+		initialInterval:     initialInterval,
 		retryableExceptions: retryableExceptions,
 	}
 }
@@ -47,8 +47,8 @@ func (f *DefaultRetryPolicyFactory) Create(maxAttempts int, initialInterval int,
 // defaultRetryPolicy is the default implementation of RetryPolicy.
 // This policy operates based on the configured maximum attempts, initial interval, and list of retryable exceptions.
 type defaultRetryPolicy struct {
-	maxAttempts int
-	initialInterval int
+	maxAttempts         int
+	initialInterval     int
 	retryableExceptions []string
 }
 
@@ -66,19 +66,19 @@ func (p *defaultRetryPolicy) ShouldRetry(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	// 1. Check BatchError flag
 	if be, ok := err.(*exception.BatchError); ok && be.IsRetryable() {
 		return true
 	}
-	
+
 	// 2. Match against configured retryable exceptions list
 	for _, typeName := range p.retryableExceptions {
 		if exception.IsErrorOfType(err, typeName) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 

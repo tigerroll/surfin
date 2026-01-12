@@ -7,9 +7,9 @@ import (
 
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -17,23 +17,23 @@ import (
 
 // MigrationTasklet executes database migrations using provided fs.FS resources.
 type MigrationTasklet struct {
-	cfg                  *config.Config
-	repo                 repository.JobRepository
-	allDBConnections     map[string]adaptor.DBConnection
-	allDBProviders       map[string]adaptor.DBProvider
-	resolver             port.ExpressionResolver
-	dbResolver           port.DBConnectionResolver
-	allMigrationFS       map[string]fs.FS
-	properties           map[string]string
-	migratorProvider     MigratorProvider
+	cfg              *config.Config
+	repo             repository.JobRepository
+	allDBConnections map[string]adaptor.DBConnection
+	allDBProviders   map[string]adaptor.DBProvider
+	resolver         port.ExpressionResolver
+	dbResolver       port.DBConnectionResolver
+	allMigrationFS   map[string]fs.FS
+	properties       map[string]string
+	migratorProvider MigratorProvider
 
 	// Configured properties
-	dbConnectionName string
-	fsName           string
-	migrationDir     string
-	command          string // e.g., "up", "down", "status".
-	isFrameworkMigration bool // Indicates if it's a framework migration.
-	
+	dbConnectionName     string
+	fsName               string
+	migrationDir         string
+	command              string // e.g., "up", "down", "status".
+	isFrameworkMigration bool   // Indicates if it's a framework migration.
+
 	// Execution Context
 	ec model.ExecutionContext
 }
@@ -51,22 +51,22 @@ func NewMigrationTasklet(
 	allDBProviders map[string]adaptor.DBProvider,
 	migratorProvider MigratorProvider,
 ) (*MigrationTasklet, error) {
-	
+
 	taskletName := "migration_tasklet"
 	logger.Debugf("MigrationTasklet builder received properties: %v", properties)
-	
+
 	// Required properties from JSL
-	
+
 	dbConnectionName, ok := properties["dbRef"] // Using old key 'dbRef' for JobFactory compatibility.
 	if !ok || dbConnectionName == "" {
 		return nil, exception.NewBatchErrorf(taskletName, "Property 'dbRef' is required for MigrationTasklet")
 	}
-	
+
 	fsName, ok := properties["migrationFSName"] // Using old key 'migrationFSName' for JobFactory compatibility.
 	if !ok || fsName == "" {
 		return nil, exception.NewBatchErrorf(taskletName, "Property 'migrationFSName' is required for MigrationTasklet")
 	}
-	
+
 	migrationDir, ok := properties["migrationDir"]
 	if !ok || migrationDir == "" {
 		// If migrationDir is empty, use the DB type as default.
@@ -74,19 +74,19 @@ func NewMigrationTasklet(
 		logger.Warnf("Property 'migrationDir' is missing. Attempting to use DB type as default.")
 		// Not checking here as DB connection might not be established yet. Will check in Execute.
 	}
-	
+
 	command := properties["command"]
 	if command == "" { // Default command.
 		command = "up"
 	}
-	
+
 	isFrameworkMigration := false
 	if isFrameworkStr, ok := properties["isFramework"]; ok {
 		if strings.ToLower(isFrameworkStr) == "true" {
 			isFrameworkMigration = true
 		}
 	}
-	
+
 	t := &MigrationTasklet{
 		cfg:                  cfg,
 		repo:                 repo,
@@ -104,16 +104,16 @@ func NewMigrationTasklet(
 		isFrameworkMigration: isFrameworkMigration,
 		ec:                   model.NewExecutionContext(),
 	}
-	
+
 	logger.Debugf("MigrationTasklet initialized: DB=%s, FS=%s, Dir=%s, Command=%s, IsFramework=%t", dbConnectionName, fsName, migrationDir, command, isFrameworkMigration)
-	
+
 	return t, nil
 }
 
 // Execute runs the database migration logic.
 func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.StepExecution) (model.ExitStatus, error) {
 	taskletName := "migration_tasklet"
-	logger.Infof("Starting database migration for DB connection '%s' using FS '%s' and directory '%s' with command '%s'.", 
+	logger.Infof("Starting database migration for DB connection '%s' using FS '%s' and directory '%s' with command '%s'.",
 		t.dbConnectionName, t.fsName, t.migrationDir, t.command)
 
 	// 1. Get DB Configuration to determine DB Type
@@ -158,7 +158,7 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 	if t.isFrameworkMigration {
 		migrationTable = FixedFrameworkMigrationsTable
 	}
-	
+
 	// 5. Determine Migration Directory (use DB type if not specified in JSL).
 	migrationDir := t.migrationDir
 	if migrationDir == "" {
@@ -181,13 +181,13 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 	default:
 		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Unknown migration command: %s", t.command)
 	}
-	
+
 	// 8. Refresh DB Connection (refresh connection after migration).
 	refreshErr := dbConn.RefreshConnection(ctx)
 	if refreshErr != nil {
 		// Connection is likely closed.
 		logger.Warnf("MigrationTasklet: Failed to refresh DB connection '%s' after migration: %v. Attempting to reconnect...", t.dbConnectionName, refreshErr)
-		
+
 		// Force re-establishment of connection using DBProvider.
 		provider, ok := t.allDBProviders[dbConn.Type()]
 		if !ok {
@@ -197,7 +197,7 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 				provider, ok = t.allDBProviders["postgres"]
 			}
 		}
-		
+
 		if ok {
 			// ForceReconnect is defined in the DBProvider interface.
 			_, err := provider.ForceReconnect(t.dbConnectionName)
@@ -212,7 +212,7 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 			logger.Errorf("MigrationTasklet: Cannot find DBProvider for type '%s' to force reconnect.", dbConn.Type())
 		}
 	}
-	
+
 	// If successful
 	return model.ExitStatusCompleted, nil
 }

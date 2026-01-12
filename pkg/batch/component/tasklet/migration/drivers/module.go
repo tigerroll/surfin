@@ -1,12 +1,12 @@
 package drivers
 
 import (
-    "go.uber.org/fx"
+	"go.uber.org/fx"
 
-    // Blank imports for golang-migrate database drivers to ensure they are registered.
-    _ "github.com/golang-migrate/migrate/v4/database/mysql"
-    _ "github.com/golang-migrate/migrate/v4/database/postgres"
-    _ "github.com/golang-migrate/migrate/v4/database/sqlite"
+	// Blank imports for golang-migrate database drivers to ensure they are registered.
+	_ "github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/database/sqlite"
 )
 
 // Module provides the blank imports for golang-migrate database drivers.

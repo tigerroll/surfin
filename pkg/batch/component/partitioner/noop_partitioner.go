@@ -27,5 +27,6 @@ func (p *NoOpPartitioner) Partition(ctx context.Context, gridSize int) (map[stri
 	}
 	return partitions, nil
 }
+
 // Verify that [NoOpPartitioner] satisfies the [port.Partitioner] interface.
 var _ port.Partitioner = (*NoOpPartitioner)(nil)

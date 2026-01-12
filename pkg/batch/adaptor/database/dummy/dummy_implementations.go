@@ -14,7 +14,7 @@ import (
 // It performs no actual operations.
 type dummyTx struct{}
 
-func (d *dummyTx) Commit(ctx context.Context) error { return nil }
+func (d *dummyTx) Commit(ctx context.Context) error   { return nil }
 func (d *dummyTx) Rollback(ctx context.Context) error { return nil }
 func (d *dummyTx) ExecuteUpdate(ctx context.Context, entity interface{}, operation string, tableName string, where map[string]interface{}) (int64, error) {
 	return 0, nil
@@ -22,7 +22,7 @@ func (d *dummyTx) ExecuteUpdate(ctx context.Context, entity interface{}, operati
 func (d *dummyTx) ExecuteUpsert(ctx context.Context, entities interface{}, tableName string, conflictColumns []string, updateColumns []string) (int64, error) {
 	return 0, nil
 }
-func (d *dummyTx) Savepoint(name string) error { return nil }
+func (d *dummyTx) Savepoint(name string) error           { return nil }
 func (d *dummyTx) RollbackToSavepoint(name string) error { return nil }
 
 // dummyTxManager is a dummy implementation of the tx.TransactionManager interface.
@@ -32,7 +32,7 @@ type dummyTxManager struct{}
 func (d *dummyTxManager) Begin(ctx context.Context, opts ...*sql.TxOptions) (tx.Tx, error) {
 	return &dummyTx{}, nil
 }
-func (d *dummyTxManager) Commit(t tx.Tx) error { return nil }
+func (d *dummyTxManager) Commit(t tx.Tx) error   { return nil }
 func (d *dummyTxManager) Rollback(t tx.Tx) error { return nil }
 
 // dummyTxManagerFactory is a dummy implementation of the tx.TransactionManagerFactory interface.
@@ -65,12 +65,12 @@ func (d *dummyDBConnection) Count(ctx context.Context, tableName interface{}, wh
 func (d *dummyDBConnection) Pluck(ctx context.Context, model interface{}, column string, target interface{}, query map[string]interface{}) error {
 	return nil
 }
-func (d *dummyDBConnection) Type() string { return "dummy" }
-func (d *dummyDBConnection) Name() string { return "dummy" }
-func (d *dummyDBConnection) Close() error { return nil }
+func (d *dummyDBConnection) Type() string                                { return "dummy" }
+func (d *dummyDBConnection) Name() string                                { return "dummy" }
+func (d *dummyDBConnection) Close() error                                { return nil }
 func (d *dummyDBConnection) RefreshConnection(ctx context.Context) error { return nil }
-func (d *dummyDBConnection) Config() config.DatabaseConfig { return config.DatabaseConfig{} }
-func (d *dummyDBConnection) GetSQLDB() (*sql.DB, error) { return nil, nil }
+func (d *dummyDBConnection) Config() config.DatabaseConfig               { return config.DatabaseConfig{} }
+func (d *dummyDBConnection) GetSQLDB() (*sql.DB, error)                  { return nil, nil }
 
 // dummyDBProvider is a dummy implementation of the adaptor.DBProvider interface.
 // It always returns a dummy DBConnection.
@@ -83,7 +83,7 @@ func (d *dummyDBProvider) ForceReconnect(name string) (adaptor.DBConnection, err
 	return &dummyDBConnection{}, nil
 }
 func (d *dummyDBProvider) CloseAll() error { return nil }
-func (d *dummyDBProvider) Type() string { return "dummy" }
+func (d *dummyDBProvider) Type() string    { return "dummy" }
 
 // DefaultDBConnectionResolver is a dummy implementation of the adaptor.DBConnectionResolver.
 type DefaultDBConnectionResolver struct{}

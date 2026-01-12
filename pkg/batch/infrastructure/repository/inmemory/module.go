@@ -5,8 +5,8 @@ package inmemory
 import (
 	"go.uber.org/fx"
 
-	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	dummy "github.com/tigerroll/surfin/pkg/batch/adaptor/database/dummy" // Import of dummy module.
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 )
 
 // Module is an Fx module that provides InMemoryJobRepository as a repository.JobRepository interface.

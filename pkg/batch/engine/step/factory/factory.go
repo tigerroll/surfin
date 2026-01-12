@@ -1,17 +1,17 @@
 package factory
 
 import (
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	itemstep "github.com/tigerroll/surfin/pkg/batch/engine/step/item"
 	partitionstep "github.com/tigerroll/surfin/pkg/batch/engine/step/partition"
 	taskletstep "github.com/tigerroll/surfin/pkg/batch/engine/step/tasklet"
-	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
-	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
-	"go.uber.org/fx"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	"go.uber.org/fx"
 )
 
 // StepFactory is an interface for creating port.Step instances.
@@ -70,22 +70,22 @@ type StepFactory interface {
 // DefaultStepFactory is the default implementation of the StepFactory interface.
 // It manages the dependencies required for constructing Steps.
 type DefaultStepFactory struct {
-	jobRepository repository.JobRepository
-	txManager     tx.TransactionManager
-	stepExecutor  port.StepExecutor
+	jobRepository  repository.JobRepository
+	txManager      tx.TransactionManager
+	stepExecutor   port.StepExecutor
 	metricRecorder metrics.MetricRecorder
-	tracer        metrics.Tracer
+	tracer         metrics.Tracer
 }
 
 // DefaultStepFactoryParams defines the parameters that the NewDefaultStepFactory function
 // receives through dependency injection (Fx).
 type DefaultStepFactoryParams struct {
 	fx.In
-	JobRepository repository.JobRepository
+	JobRepository     repository.JobRepository
 	MetadataTxManager tx.TransactionManager `name:"metadata"` // Requests the metadata TxManager.
-	StepExecutor  port.StepExecutor
-	MetricRecorder metrics.MetricRecorder
-	Tracer        metrics.Tracer
+	StepExecutor      port.StepExecutor
+	MetricRecorder    metrics.MetricRecorder
+	Tracer            metrics.Tracer
 }
 
 // NewDefaultStepFactory creates a new instance of DefaultStepFactory.
@@ -96,11 +96,11 @@ func NewDefaultStepFactory(
 	p DefaultStepFactoryParams,
 ) *DefaultStepFactory {
 	return &DefaultStepFactory{
-		jobRepository: p.JobRepository,
-		txManager:     p.MetadataTxManager, // Uses the tagged TxManager.
-		stepExecutor:  p.StepExecutor,
+		jobRepository:  p.JobRepository,
+		txManager:      p.MetadataTxManager, // Uses the tagged TxManager.
+		stepExecutor:   p.StepExecutor,
 		metricRecorder: p.MetricRecorder,
-		tracer:        p.Tracer,
+		tracer:         p.Tracer,
 	}
 }
 

@@ -2,13 +2,13 @@
 package generic
 
 import (
-	"go.uber.org/fx"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	"go.uber.org/fx"
 )
 
 // NewExecutionContextWriterTaskletComponentBuilderParams defines the dependencies for NewExecutionContextWriterTaskletComponentBuilder.

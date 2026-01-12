@@ -4,18 +4,18 @@ import (
 	"context"
 	"testing"
 
+	"surfin/pkg/batch/adaptor/database"
 	adaptor "surfin/pkg/batch/core/adaptor"
 	config "surfin/pkg/batch/core/config"
 	model "surfin/pkg/batch/core/domain/model"
 	job "surfin/pkg/batch/core/domain/repository"
 	sqlRepo "surfin/pkg/batch/infrastructure/repository/sql"
 	"surfin/pkg/batch/support/util/exception"
-	"surfin/pkg/batch/adaptor/database"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	testify_mock "github.com/stretchr/testify/mock" // 修正: エイリアスを使用
-	"gorm.io/driver/mysql" // 追加
+	"gorm.io/driver/mysql"                          // 追加
 	"gorm.io/gorm"
 )
 
@@ -32,7 +32,7 @@ func setupGormInstanceMock(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, adaptor.DBC
 
 	cfg := config.DatabaseConfig{Type: "mock_db"}
 	dbConn := database.NewGormDBAdapter(gormDB, cfg, "mock_db")
-	
+
 	txManager := &MockTxManager{}
 
 	// NewGORMJobRepository のシグネチャ変更に対応
@@ -57,7 +57,7 @@ func TestGORMJobRepository_SaveJobInstance(t *testing.T) {
 	mockTx := new(MockTx)
 	// query引数は nil または空マップの可能性があるため Anything を使用
 	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "CREATE", "batch_job_instance", testify_mock.Anything).Return(int64(1), nil)
-	
+
 	// トランザクションコンテキストを作成
 	txCtx := context.WithValue(ctx, "tx", mockTx)
 

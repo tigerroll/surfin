@@ -5,17 +5,17 @@ import (
 	"embed"
 	"os"
 	"os/signal"
-	"syscall"
 	"strings"
+	"syscall"
 
 	_ "embed"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	"github.com/tigerroll/surfin/example/weather/internal/app"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	
+
 	"go.uber.org/fx"
 )
 
@@ -42,7 +42,8 @@ var embeddedJSL []byte
 // If not set, Postgres, MySQL, and SQLite are used by default.
 //
 // Returns:
-//   A list of fx.Option to provide to the Fx application.
+//
+//	A list of fx.Option to provide to the Fx application.
 func getDBProviderOptions() []fx.Option {
 	// Get the list of DB Providers to use from environment variables (e.g., "postgres,sqlite")
 	adaptors := os.Getenv("DB_ADAPTORS")

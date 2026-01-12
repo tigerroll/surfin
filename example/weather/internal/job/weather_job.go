@@ -14,9 +14,9 @@ import (
 // This builder uses the generic FlowJob implementation from the core framework.
 func NewWeatherJobBuilder() support.JobBuilder {
 	return func(
-		jobRepository repository.JobRepository, 
-		cfg *config.Config, 
-		listeners []port.JobExecutionListener, 
+		jobRepository repository.JobRepository,
+		cfg *config.Config,
+		listeners []port.JobExecutionListener,
 		flow *model.FlowDefinition,
 		metricRecorder metrics.MetricRecorder,
 		tracer metrics.Tracer,

@@ -7,9 +7,9 @@ import (
 	"sync"
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
-	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
@@ -30,7 +30,7 @@ type SimpleJobLauncher struct {
 	jobRunner     port.JobRunner // FIX: Added jobRunner.
 	// activeJobCancellations holds the cancel functions for running jobs.
 	activeJobCancellations map[string]context.CancelFunc // FIX: Added field.
-	mu                     sync.Mutex // FIX: Added field.
+	mu                     sync.Mutex                    // FIX: Added field.
 }
 
 // NewSimpleJobLauncher creates a new SimpleJobLauncher.
@@ -40,9 +40,9 @@ func NewSimpleJobLauncher(
 	runner port.JobRunner, // FIX: Added runner.
 ) *SimpleJobLauncher {
 	return &SimpleJobLauncher{
-		jobRepository: repo,
-		jobFactory:    factory,
-		jobRunner:     runner,
+		jobRepository:          repo,
+		jobFactory:             factory,
+		jobRunner:              runner,
 		activeJobCancellations: make(map[string]context.CancelFunc), // FIX: Added field.
 	}
 }
@@ -95,7 +95,7 @@ func (l *SimpleJobLauncher) Launch(ctx context.Context, jobName string, jobParam
 	}
 
 	// 2. Find/Create JobInstance
-	
+
 	// T_RESTART_1: Retrieve JobParametersIncrementer
 	incrementer := l.jobFactory.GetJobParametersIncrementer(jobName)
 

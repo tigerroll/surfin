@@ -40,18 +40,18 @@ func NewDefaultSkipPolicyFactory() *DefaultSkipPolicyFactory {
 // Returns: A new SkipPolicy instance and any error that occurred during creation.
 func (f *DefaultSkipPolicyFactory) Create(skipLimit int, skippableExceptions []string) (SkipPolicy, error) {
 	return &defaultSkipPolicy{
-		skipLimit: skipLimit,
+		skipLimit:           skipLimit,
 		skippableExceptions: skippableExceptions,
-		currentSkipCount: 0,
+		currentSkipCount:    0,
 	}, nil
 }
 
 // defaultSkipPolicy is the default implementation of SkipPolicy.
 // This policy operates based on the configured skip limit and list of skippable exceptions.
 type defaultSkipPolicy struct {
-	skipLimit int
+	skipLimit           int
 	skippableExceptions []string
-	currentSkipCount int
+	currentSkipCount    int
 }
 
 // ShouldSkip determines if an error is skippable.
@@ -65,7 +65,7 @@ func (p *defaultSkipPolicy) ShouldSkip(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	// 1. Check if skip limit is exceeded
 	// If skipLimit is 0, skipping is not allowed.
 	if p.skipLimit > 0 && p.currentSkipCount >= p.skipLimit {
@@ -76,19 +76,19 @@ func (p *defaultSkipPolicy) ShouldSkip(err error) bool {
 	if p.skipLimit == 0 {
 		return false
 	}
-	
+
 	// 2. Check BatchError flag
 	if be, ok := err.(*exception.BatchError); ok && be.IsSkippable() {
 		return true
 	}
-	
+
 	// 3. Match against configured skippable exceptions list
 	for _, typeName := range p.skippableExceptions {
 		if exception.IsErrorOfType(err, typeName) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 

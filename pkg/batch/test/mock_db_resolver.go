@@ -9,7 +9,7 @@ import (
 // MockDBConnectionResolver is a mock implementation of port.DBConnectionResolver.
 type MockDBConnectionResolver struct {
 	port.DBConnectionResolver // Enforces the use of the port package.
-	ResolveFunc func(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution, defaultName string) (string, error)
+	ResolveFunc               func(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution, defaultName string) (string, error)
 }
 
 // ResolveDBConnectionName executes the mock function.

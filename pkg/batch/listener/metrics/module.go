@@ -2,9 +2,9 @@ package metrics
 
 import (
 	"go.uber.org/fx"
-	
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
@@ -92,18 +92,17 @@ func NewMetricsRetryItemListenerBuilder(recorder metrics.MetricRecorder) jsl.Log
 	}
 }
 
-
 // AllMetricsListenerBuilders is a struct to receive all metrics listener builders from Fx.
 type AllMetricsListenerBuilders struct {
 	fx.In
-	JobListenerBuilder    jsl.JobExecutionListenerBuilder `name:"metricsJobListener"`
-	StepListenerBuilder   jsl.StepExecutionListenerBuilder `name:"metricsStepListener"`
-	ChunkListenerBuilder  jsl.ChunkListenerBuilder `name:"metricsChunkListener"`
-	ItemReadListenerBuilder jsl.ItemReadListenerBuilder `name:"metricsItemReadListener"`
-	ItemProcessListenerBuilder jsl.ItemProcessListenerBuilder `name:"metricsItemProcessListener"`
-	ItemWriteListenerBuilder jsl.ItemWriteListenerBuilder `name:"metricsItemWriteListener"`
-	SkipListenerBuilder   jsl.SkipListenerBuilder `name:"metricsSkipListener"`
-	RetryItemListenerBuilder jsl.LoggingRetryItemListenerBuilder `name:"metricsRetryItemListener"`
+	JobListenerBuilder         jsl.JobExecutionListenerBuilder     `name:"metricsJobListener"`
+	StepListenerBuilder        jsl.StepExecutionListenerBuilder    `name:"metricsStepListener"`
+	ChunkListenerBuilder       jsl.ChunkListenerBuilder            `name:"metricsChunkListener"`
+	ItemReadListenerBuilder    jsl.ItemReadListenerBuilder         `name:"metricsItemReadListener"`
+	ItemProcessListenerBuilder jsl.ItemProcessListenerBuilder      `name:"metricsItemProcessListener"`
+	ItemWriteListenerBuilder   jsl.ItemWriteListenerBuilder        `name:"metricsItemWriteListener"`
+	SkipListenerBuilder        jsl.SkipListenerBuilder             `name:"metricsSkipListener"`
+	RetryItemListenerBuilder   jsl.LoggingRetryItemListenerBuilder `name:"metricsRetryItemListener"`
 }
 
 // RegisterAllMetricsListeners registers all metrics listener builders with the JobFactory.
@@ -124,7 +123,7 @@ var Module = fx.Options(
 	// PrometheusRecorder is provided by infrastructure/metrics, so it is decorated here to be asynchronous.
 	// fx.Decorate replaces the existing MetricRecorder (PrometheusRecorder) with AsyncMetricRecorderWrapper.
 	fx.Decorate(NewAsyncMetricRecorderWrapper),
-	
+
 	// Job Listener
 	fx.Provide(fx.Annotate(NewMetricsJobListenerBuilder, fx.ResultTags(`name:"metricsJobListener"`))),
 	// Step Listener
@@ -141,7 +140,7 @@ var Module = fx.Options(
 	fx.Provide(fx.Annotate(NewMetricsSkipListenerBuilder, fx.ResultTags(`name:"metricsSkipListener"`))),
 	// Retry Item Listener
 	fx.Provide(fx.Annotate(NewMetricsRetryItemListenerBuilder, fx.ResultTags(`name:"metricsRetryItemListener"`))),
-	
+
 	// Register all builders
 	fx.Invoke(RegisterAllMetricsListeners),
 )

@@ -29,7 +29,6 @@ func NewInMemoryJobRepository() *InMemoryJobRepository {
 	}
 }
 
-
 // Close releases resources used by the repository.
 // As an in-memory repository, it holds no external resources, so this method always returns nil.
 func (r *InMemoryJobRepository) Close() error {

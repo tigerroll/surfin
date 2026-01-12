@@ -9,12 +9,12 @@ import (
 
 	_ "embed"
 
+	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	jobRepo "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
-	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	
+
 	"go.uber.org/fx"
 )
 
@@ -28,15 +28,14 @@ var embeddedConfig []byte
 //go:embed resources/job.yaml
 var embeddedJSL []byte
 
-
 // startJobExecution はアプリケーション起動時にジョブ実行を開始する Fx Hook ヘルパー関数です。
 func startJobExecution(
-    lc fx.Lifecycle,
-    shutdowner fx.Shutdowner,
-    jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
-    jobRepository jobRepo.JobRepository,
-    cfg *config.Config,
-    appCtx context.Context,
+	lc fx.Lifecycle,
+	shutdowner fx.Shutdowner,
+	jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
+	jobRepository jobRepo.JobRepository,
+	cfg *config.Config,
+	appCtx context.Context,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: onStartJobExecution(jobLauncher, jobRepository, cfg, shutdowner, appCtx),
@@ -46,11 +45,11 @@ func startJobExecution(
 
 // onStartJobExecution is an Fx Hook helper function that starts job execution upon application startup.
 func onStartJobExecution(
-    jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
-    jobRepository jobRepo.JobRepository,
-    cfg *config.Config,
-    shutdowner fx.Shutdowner,
-    appCtx context.Context,
+	jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
+	jobRepository jobRepo.JobRepository,
+	cfg *config.Config,
+	shutdowner fx.Shutdowner,
+	appCtx context.Context,
 ) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		go func() {
@@ -59,7 +58,7 @@ func onStartJobExecution(
 					logger.Errorf("Panic recovered in job execution: %v", r)
 				}
 				logger.Infof("Requesting application shutdown after job completion.")
-				
+
 				if err := shutdowner.Shutdown(); err != nil {
 					logger.Errorf("Failed to shutdown application: %v", err)
 				}
@@ -87,7 +86,7 @@ func onStartJobExecution(
 				select {
 				case <-ctx.Done():
 					logger.Warnf("Application context cancelled. Stopping monitoring for job '%s' (Execution ID: %s).", jobName, jobExecution.ID)
-					
+
 					latestExecution, fetchErr := jobRepository.FindJobExecutionByID(context.Background(), jobExecution.ID)
 					if fetchErr == nil && !latestExecution.Status.IsFinished() {
 						logger.Warnf("Job '%s' (Execution ID: %s) was running. Attempting graceful stop via JobOperator.", jobName, jobExecution.ID)
@@ -106,7 +105,7 @@ func onStartJobExecution(
 					if latestExecution.Status.IsFinished() {
 						logger.Infof("Job '%s' (Execution ID: %s) finished with status: %s, ExitStatus: %s",
 							jobName, latestExecution.ID, latestExecution.Status, latestExecution.ExitStatus)
-						
+
 						return
 					}
 					logger.Debugf("Job '%s' (Execution ID: %s) is still running. Current status: %s", jobName, latestExecution.ID, latestExecution.Status)

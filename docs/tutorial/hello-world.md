@@ -727,7 +727,6 @@ import (
 	supportConfig "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	incrementer "github.com/tigerroll/surfin/pkg/batch/core/support/incrementer"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	jobRunner "github.com/tigerroll/surfin/pkg/batch/core/job/runner"
 	inmemoryRepo "github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/inmemory"
 	helloTasklet "github.com/tigerroll/surfin/example/hello-world/internal/step"
 	dummy "github.com/tigerroll/surfin/pkg/batch/adaptor/database/dummy"
@@ -771,8 +770,8 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 	options = append(options, item.Module)
 	options = append(options, fx.Invoke(fx.Annotate(startJobExecution, fx.ParamTags("", "", "", "", "", `name:"appCtx"`))))
 	options = append(options, helloTasklet.Module)
-	options = append(options, appjob.Module) // アプリケーション固有の JobBuilder を提供するモジュールを直接追加
-	options = append(options, apprunner.Module) // apprunner.Module を追加
+	options = append(options, appjob.Module)    // アプリケーション固有の JobBuilder を提供するモジュールを直接追加
+	options = append(options, dummy.Module)     // ダミーDB関連モジュールを追加
 	return options
 }
 ```
@@ -821,7 +820,7 @@ func startJobExecution(
     lc fx.Lifecycle,
     shutdowner fx.Shutdowner,
     jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
-    jobRepository jobRepo.JobRepository,
+    jobRepository repository.JobRepository,
     cfg *config.Config,
     appCtx context.Context,
 ) {
@@ -834,7 +833,7 @@ func startJobExecution(
 // onStartJobExecution is an Fx Hook helper function that starts job execution upon application startup.
 func onStartJobExecution(
     jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
-    jobRepository jobRepo.JobRepository,
+    jobRepository repository.JobRepository,
     cfg *config.Config,
     shutdowner fx.Shutdowner,
     appCtx context.Context,

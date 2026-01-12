@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
-	
+
 	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 )
 
@@ -41,10 +41,10 @@ type WeatherReader struct {
 	currentIndex int
 
 	// stepExecutionContext holds the reference to the Step's ExecutionContext.
-	stepExecutionContext model.ExecutionContext 
+	stepExecutionContext model.ExecutionContext
 	// readerState holds the reader's internal state.
-	readerState          model.ExecutionContext 
-	resolver             core.ExpressionResolver
+	readerState model.ExecutionContext
+	resolver    core.ExpressionResolver
 }
 
 func NewWeatherReader(
@@ -69,8 +69,8 @@ func NewWeatherReader(
 	}
 
 	return &WeatherReader{
-		config: weatherReaderCfg,
-		client: &http.Client{Timeout: 10 * time.Second},
+		config:   weatherReaderCfg,
+		client:   &http.Client{Timeout: 10 * time.Second},
 		resolver: resolver,
 		// stepExecutionContext is set during Open.
 		stepExecutionContext: model.NewExecutionContext(), // Initialized (will be overwritten later)
@@ -91,7 +91,7 @@ func (r *WeatherReader) Open(ctx context.Context, ec model.ExecutionContext) err
 	if err := r.restoreReaderStateFromExecutionContext(ctx); err != nil {
 		return err
 	}
-	
+
 	// Fetch data from API if forecastData is empty (initial run or restart)
 	if r.forecastData == nil || len(r.forecastData.Hourly.Time) == 0 {
 		return r.fetchWeatherData(ctx)
@@ -112,7 +112,7 @@ func (r *WeatherReader) Read(ctx context.Context) (any, error) {
 	if r.forecastData == nil || r.currentIndex >= len(r.forecastData.Hourly.Time) {
 		logger.Debugf("WeatherReader: Finished reading all weather data. Returning EOF.")
 		// Reset state after reading all data.
-		r.forecastData = nil 
+		r.forecastData = nil
 		r.currentIndex = 0
 		return nil, io.EOF
 	}
@@ -156,8 +156,8 @@ func (r *WeatherReader) SetExecutionContext(ctx context.Context, ec model.Execut
 		return ctx.Err()
 	default:
 	}
-	r.stepExecutionContext = ec // Set the Step's ExecutionContext 
-	return r.restoreReaderStateFromExecutionContext(ctx) // Restore reader state from EC 
+	r.stepExecutionContext = ec                          // Set the Step's ExecutionContext
+	return r.restoreReaderStateFromExecutionContext(ctx) // Restore reader state from EC
 }
 
 // GetExecutionContext retrieves the reader's ExecutionContext state.
@@ -168,12 +168,12 @@ func (r *WeatherReader) GetExecutionContext(ctx context.Context) (model.Executio
 	default:
 	}
 	logger.Debugf("WeatherReader.GetExecutionContext is called.")
-	
+
 	// Save internal state to "reader_context" in the Step ExecutionContext.
 	if err := r.saveReaderStateToExecutionContext(ctx); err != nil {
 		return nil, err
 	}
-	
+
 	return r.readerState, nil // Return the reader's own state.
 }
 
@@ -237,7 +237,7 @@ func (r *WeatherReader) restoreReaderStateFromExecutionContext(ctx context.Conte
 		r.stepExecutionContext.Put(ReaderContextKey, readerCtx)
 	}
 	// Restore reader internal state from readerCtx.
-	r.readerState = readerCtx.Copy() 
+	r.readerState = readerCtx.Copy()
 	if idx, ok := r.readerState.GetInt(CurrentIndexKey); ok {
 		r.currentIndex = idx
 		logger.Debugf("WeatherReader: Restored currentIndex %d from ExecutionContext.", r.currentIndex)

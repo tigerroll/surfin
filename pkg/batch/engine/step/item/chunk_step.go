@@ -4,19 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"io"
 	"fmt"
+	"io"
 
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
-	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/retry"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/skip"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 )
 
 // ChunkStep is an implementation of core.Step for chunk-oriented processing.
@@ -36,18 +36,18 @@ type ChunkStep struct {
 	retryItemListeners     []port.RetryItemListener
 	chunkListeners         []port.ChunkListener
 	promotion              *model.ExecutionContextPromotion
-	
-	txManager              tx.TransactionManager // For managing chunk processing transactions.
+
+	txManager tx.TransactionManager // For managing chunk processing transactions.
 
 	// T_TX_DEC: Addition of transaction attributes
-	isolationLevel         sql.IsolationLevel
-	propagation            string // Holds values like REQUIRED, REQUIRES_NEW as strings
+	isolationLevel sql.IsolationLevel
+	propagation    string // Holds values like REQUIRED, REQUIRES_NEW as strings
 
 	// Policies
 	retryPolicy     retry.RetryPolicy // Global retry policy (for chunk operations)
 	itemRetryPolicy retry.RetryPolicy // Item retry policy (for item read/process)
 	skipPolicy      skip.SkipPolicy   // Item skip policy
-	
+
 	// Metrics and Tracing
 	metricRecorder metrics.MetricRecorder
 	tracer         metrics.Tracer
@@ -81,17 +81,17 @@ func NewJSLAdaptedStep(
 	txManager tx.TransactionManager,
 	metricRecorder metrics.MetricRecorder,
 	tracer metrics.Tracer,
-) (*ChunkStep) {
+) *ChunkStep {
 	// Note: RetryPolicy and SkipPolicy creation should ideally be delegated to factories,
 	// but for simplicity, we use default implementations here.
-	
+
 	// Item Retry Policy
 	itemRetryPolicy := retry.NewDefaultRetryPolicyFactory().Create(
 		itemRetryConfig.MaxAttempts,
 		itemRetryConfig.InitialInterval,
 		itemRetryConfig.RetryableExceptions,
 	)
-	
+
 	// Item Skip Policy
 	itemSkipPolicy, _ := skip.NewDefaultSkipPolicyFactory().Create(
 		itemSkipConfig.SkipLimit,
@@ -243,9 +243,9 @@ func (s *ChunkStep) notifyRetryWrite(ctx context.Context, items []any, err error
 func (s *ChunkStep) notifySkipWrite(ctx context.Context, item any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemSkip(ctx, s.id, "write")
-	
+
 	itemInterface := item
-	
+
 	for _, l := range s.itemWriteListeners {
 		l.OnSkipInWrite(ctx, itemInterface, err)
 	}
@@ -256,9 +256,9 @@ func (s *ChunkStep) notifySkipWrite(ctx context.Context, item any, err error) {
 
 // Execute runs the chunk-oriented step logic.
 func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution) error {
-	
+
 	logger.Infof("ChunkStep '%s' executing.", s.id)
-	
+
 	// 1. Update StepExecution status to STARTED
 	stepExecution.MarkAsStarted()
 	if err := s.jobRepository.UpdateStepExecution(ctx, stepExecution); err != nil {
@@ -274,7 +274,7 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 	if checkpointData != nil {
 		checkpointEC = checkpointData.ExecutionContext
 		logger.Infof("Checkpoint data loaded for step '%s'. Restoring state.", s.id)
-		
+
 		// Restore statistics (T1/T2 Step 1.1.3)
 		if rc, ok := checkpointEC.GetInt("readCount"); ok {
 			stepExecution.ReadCount = rc
@@ -298,17 +298,17 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 
 	// 3. Chunk processing loop
 	var chunkError error
-	
+
 	// Chunk processing statistics (start from current StepExecution values)
 	readCount := stepExecution.ReadCount
 	writeCount := stepExecution.WriteCount
 	commitCount := stepExecution.CommitCount
-	
+
 	// Declare processedItem and processErr for reassignment within the loop
 	var processedItem any
 	var processErr error
 	var processAttempts int // Declared outside the loop
-	
+
 	// Main chunk processing loop
 	for {
 		// 3.1. Begin transaction
@@ -318,7 +318,7 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 			break
 		}
 		txCtx := context.WithValue(ctx, "tx", txAdapter) // Store transaction in context
-		
+
 		// Listener notification (BeforeChunk)
 		for _, l := range s.chunkListeners {
 			l.BeforeChunk(txCtx, stepExecution)
@@ -327,7 +327,7 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 		var itemsToWrite []any
 		currentChunkReadCount := 0
 		isEOF := false
-		
+
 		// 3.2. Chunk read/process loop
 		for currentChunkReadCount < s.chunkSize {
 			var item any
@@ -376,14 +376,14 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 			// Processing after successful read
 			readCount++
 			currentChunkReadCount++
-			
+
 			// Process
 			processAttempts = 0 // Reset for each item
-			
+
 			// Process retry loop
 			for {
 				processedItem, processErr = s.processor.Process(txCtx, item)
-				
+
 				if processErr != nil {
 					be, isBatchError := processErr.(*exception.BatchError)
 
@@ -411,12 +411,12 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 					chunkError = exception.NewBatchError(s.id, "Item process failed (Fatal or limit reached)", processErr, false, false)
 					goto EndReadLoop // Exit the entire chunk processing
 				}
-				
+
 				// Process successful
 				s.metricRecorder.RecordItemProcess(txCtx, s.id) // Record metric
 				break
 			}
-			
+
 			if processedItem != nil {
 				itemsToWrite = append(itemsToWrite, processedItem)
 			} else {
@@ -426,31 +426,31 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 
 		NextItemRead: // Jump here if skipped, to the next loop iteration
 		}
-		
+
 	EndReadLoop:
-		
+
 		if chunkError != nil {
 			// If an error occurred during read or process, rollback the transaction
 			s.txManager.Rollback(txAdapter)
-			
+
 			// Listener notification (AfterChunk - failed)
 			for _, l := range s.chunkListeners {
 				l.AfterChunk(txCtx, stepExecution)
 			}
 			break
 		}
-		
+
 		// If read ended with EOF and there are no items to write, rollback transaction and exit loop
 		if currentChunkReadCount == 0 && len(itemsToWrite) == 0 {
 			s.txManager.Rollback(txAdapter) // Rollback as transaction was started but nothing was done
-			
+
 			// Listener notification (AfterChunk - successful/empty)
 			for _, l := range s.chunkListeners {
 				l.AfterChunk(txCtx, stepExecution)
 			}
 			break
 		}
-		
+
 		// 3.3. Write
 		if len(itemsToWrite) > 0 && s.writer != nil {
 			writeAttempts := 0
@@ -468,7 +468,7 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 						writeAttempts++
 						logger.Warnf("ChunkStep '%s': Item write failed (Attempt %d/%d). Retrying chunk: %v", s.id, writeAttempts, s.itemRetryPolicy.GetMaxAttempts(), writeErr)
 						s.notifyRetryWrite(txCtx, itemsToWrite, writeErr)
-						
+
 						// Rollback transaction and continue outer chunk loop (retry)
 						s.txManager.Rollback(txAdapter)
 						stepExecution.RollbackCount++
@@ -481,20 +481,20 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 						s.skipPolicy.IncrementSkipCount()
 						stepExecution.AddFailureException(writeErr)
 						logger.Warnf("ChunkStep '%s': Item write failed (Skip Count: %d/%d). Triggering chunk splitting.", s.id, s.skipPolicy.GetSkipCount(), s.skipPolicy.GetSkipLimit())
-						
+
 						// 2.1. Rollback transaction
 						s.txManager.Rollback(txAdapter)
 						stepExecution.RollbackCount++
-						
+
 						// 2.2. Execute chunk splitting process
 						// If chunk splitting succeeds, error items are skipped, and remaining items are committed.
 						_, fatalErr := s.HandleSkippableWriteFailure(txCtx, itemsToWrite, stepExecution) // Ignore remainingItems
-						
+
 						if fatalErr != nil {
 							chunkError = fatalErr
 							goto EndChunkLoop
 						}
-						
+
 						// Chunk splitting succeeded, and all items were processed, so exit this chunk loop,
 						// and return to the beginning of the outer chunk loop (to read the next chunk).
 						goto EndChunkTransaction
@@ -506,18 +506,18 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 					chunkError = exception.NewBatchError(s.id, "Item write failed (Fatal or limit reached)", writeErr, false, false)
 					goto EndChunkLoop // Exit the entire chunk processing
 				}
-				
+
 				// Write successful
 				s.metricRecorder.RecordItemWrite(txCtx, s.id, len(itemsToWrite)) // Record metric
 				break
 			}
 			writeCount += len(itemsToWrite)
 		}
-		
+
 		// 3.4. Commit transaction
 		if commitErr := s.txManager.Commit(txAdapter); commitErr != nil {
 			chunkError = exception.NewBatchError(s.id, "Failed to commit transaction for chunk", commitErr, false, false)
-			
+
 			// Listener notification (AfterChunk - failed)
 			for _, l := range s.chunkListeners {
 				l.AfterChunk(txCtx, stepExecution)
@@ -525,19 +525,19 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 			break
 		}
 		commitCount++
-		
+
 		// Listener notification (AfterChunk - successful)
 		for _, l := range s.chunkListeners {
 			l.AfterChunk(txCtx, stepExecution)
 		}
-		
+
 		// 3.5. Save checkpoint (T1/T2 Step 1.1.2)
 		// After successful commit, save Reader/Writer state and statistics
 		if err := s.saveCheckpoint(ctx, stepExecution, readCount, writeCount); err != nil {
 			logger.Errorf("ChunkStep '%s': Failed to save checkpoint after commit: %v", s.id, err)
 			// Checkpoint save failure is not fatal, but log it
 		}
-		
+
 		// 3.6. Determine end of chunk processing
 		if isEOF {
 			// If read ended with EOF
@@ -546,17 +546,17 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 		}
 	RetryChunk: // Jump here on write retry
 	EndChunkTransaction: // Jump target on successful chunk splitting or EOF
-		; // Empty statement to allow label definition
+		// Empty statement to allow label definition
 	} // End of chunk loop
 EndChunkLoop:
 
 	// 4. Finalization
-	
+
 	// Update statistics
 	stepExecution.ReadCount = readCount
 	stepExecution.WriteCount = writeCount
 	stepExecution.CommitCount = commitCount
-	
+
 	// Close Reader/Writer
 	if closeErr := s.reader.Close(ctx); closeErr != nil {
 		logger.Warnf("Failed to close ItemReader: %v", closeErr)
@@ -600,7 +600,7 @@ EndChunkLoop:
 	// Include statistics in the final ExecutionContext
 	finalStepEC.Put("readCount", readCount)
 	finalStepEC.Put("writeCount", writeCount)
-	
+
 	// Update StepExecution's ExecutionContext field
 	stepExecution.ExecutionContext = finalStepEC
 
@@ -611,7 +611,7 @@ EndChunkLoop:
 	} else {
 		stepExecution.MarkAsCompleted()
 	}
-	
+
 	// 6. Persist
 	if updateErr := s.jobRepository.UpdateStepExecution(ctx, stepExecution); updateErr != nil {
 		logger.Errorf("ChunkStep '%s': Failed to update final StepExecution state: %v", s.id, updateErr)
@@ -619,7 +619,7 @@ EndChunkLoop:
 			chunkError = updateErr
 		}
 	}
-	
+
 	logger.Infof("ChunkStep '%s' finished. ExitStatus: %s", s.id, stepExecution.ExitStatus)
 	return chunkError
 }
@@ -627,7 +627,7 @@ EndChunkLoop:
 // saveCheckpoint retrieves the state of the Reader/Writer and saves it to the JobRepository.
 func (s *ChunkStep) saveCheckpoint(ctx context.Context, stepExecution *model.StepExecution, readCount, writeCount int) error {
 	currentEC := model.NewExecutionContext()
-	
+
 	// Get Reader state
 	if s.reader != nil {
 		if ec, err := s.reader.GetExecutionContext(ctx); err == nil {
@@ -654,12 +654,12 @@ func (s *ChunkStep) saveCheckpoint(ctx context.Context, stepExecution *model.Ste
 		// Include statistics in the checkpoint (to restore statistics on restart)
 		currentEC.Put("readCount", readCount)
 		currentEC.Put("writeCount", writeCount)
-		
+
 		checkpointToSave := &model.CheckpointData{
 			StepExecutionID:  stepExecution.ID,
 			ExecutionContext: currentEC,
 		}
-		
+
 		if err := s.jobRepository.SaveCheckpointData(ctx, checkpointToSave); err != nil {
 			return fmt.Errorf("failed to save checkpoint data: %w", err)
 		}
@@ -673,13 +673,13 @@ func (s *ChunkStep) saveCheckpoint(ctx context.Context, stepExecution *model.Ste
 // Returns: (remaining items, fatal error)
 func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalItems []any, stepExecution *model.StepExecution) ([]any, error) {
 	taskletName := s.id
-	
+
 	// Remaining items after chunk splitting (expected to be empty if this function succeeds)
 	var remainingItems []any
-	
+
 	// Hold fatal error if it occurs during chunk splitting
 	var fatalError error
-	
+
 	// 1. Re-write items one by one to identify errors
 	for i, item := range originalItems {
 		// 1.1. Begin transaction for a single item
@@ -689,24 +689,24 @@ func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalIte
 			break
 		}
 		txCtx := context.WithValue(ctx, "tx", txAdapter)
-		
+
 		// 1.2. Write single item
 		writeErr := s.writer.Write(txCtx, txAdapter, []any{item})
-		
+
 		if writeErr != nil {
 			// 1.3. Write failed: Skip processing
-			
+
 			// Re-check if skip limit is exceeded
 			if s.skipPolicy.ShouldSkip(writeErr) && stepExecution.SkipWriteCount < s.skipPolicy.GetSkipLimit() {
 				s.skipPolicy.IncrementSkipCount()
 				stepExecution.SkipWriteCount++
 				stepExecution.AddFailureException(writeErr)
 				s.notifySkipWrite(txCtx, item, writeErr)
-				
+
 				// Rollback
 				s.txManager.Rollback(txAdapter)
 				logger.Warnf("ChunkStep '%s': Item skipped during chunk splitting: %+v", taskletName, item)
-				
+
 				// This item was skipped, so do not add to remainingItems
 			} else {
 				// Skip limit exceeded or fatal error
@@ -720,17 +720,17 @@ func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalIte
 				fatalError = exception.NewBatchError(taskletName, "Failed to commit transaction during chunk splitting", commitErr, false, false)
 				break
 			}
-			
+
 			// Do not add successful items to remainingItems (as they are already persisted)
 			writeCount := stepExecution.WriteCount + 1
-			stepExecution.WriteCount = writeCount // Update statistics
+			stepExecution.WriteCount = writeCount            // Update statistics
 			s.metricRecorder.RecordItemWrite(txCtx, s.id, 1) // Record metric
 		}
 	}
-	
+
 	// At the completion of chunk splitting, all items from the original chunk are considered processed.
 	// Successful items were committed, and failed items were skipped.
 	// Therefore, this function returns an empty remainingItems and fatalError.
-	
+
 	return remainingItems, fatalError
 }

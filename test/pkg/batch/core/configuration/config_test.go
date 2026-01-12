@@ -3,9 +3,9 @@ package configuration_test
 import (
 	"testing"
 
-	config "surfin/pkg/batch/core/config"
-	"surfin/pkg/batch/adaptor/database"
 	"github.com/stretchr/testify/assert"
+	"surfin/pkg/batch/adaptor/database"
+	config "surfin/pkg/batch/core/config"
 )
 
 func TestNewConfig_Defaults(t *testing.T) {
@@ -74,7 +74,7 @@ func TestDatabaseConfig_ConnectionString(t *testing.T) {
 	assert.NoError(t, err)
 	expected = "mysql_user@tcp(mysql_host:3306)/mysql_db?charset=utf8mb4&parseTime=True&loc=Local"
 	assert.Equal(t, expected, connStr)
-	
+
 	// SQLite
 	cfg = config.DatabaseConfig{
 		Type:     "sqlite",

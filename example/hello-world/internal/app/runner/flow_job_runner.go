@@ -80,10 +80,10 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 		switch element := currentElement.(type) {
 		case port.Step:
 			logger.Infof("FlowJobRunner: Executing Step '%s' for Job '%s'.", element.StepName(), jobInstance.JobName())
-			
+
 			// 新しい StepExecution を作成
 			stepExecution := model.NewStepExecution(model.NewID(), jobExecution, element.StepName())
-			jobExecution.AddStepExecution(stepExecution) // JobExecution のリストに追加
+			jobExecution.AddStepExecution(stepExecution)      // JobExecution のリストに追加
 			jobExecution.CurrentStepName = element.StepName() // 現在のステップ名を更新
 
 			// StepExecution を最初に保存する (SimpleStepExecutor が保存しない場合のワークアラウンド)

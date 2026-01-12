@@ -4,10 +4,10 @@ package expression
 import (
 	"context"
 	"fmt"
-	"regexp"
-	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	"regexp"
 	"strings"
 )
 
@@ -46,12 +46,12 @@ func (r *DefaultExpressionResolver) Resolve(ctx context.Context, expression stri
 		if val, err := r.resolveJobParameters(innerExpression, jobExecution); err == nil {
 			return val
 		}
-		
+
 		// 2. Attempt to resolve JobExecutionContext
 		if val, err := r.resolveJobExecutionContext(innerExpression, jobExecution); err == nil {
 			return val
 		}
-		
+
 		// 3. Attempt to resolve StepExecution (only if StepExecution exists)
 		if stepExecution != nil {
 			if val, err := r.resolveStepExecution(innerExpression, stepExecution); err == nil {
@@ -75,7 +75,7 @@ func (r *DefaultExpressionResolver) resolveJobParameters(expr string, jobExecuti
 		return "", fmt.Errorf("pattern mismatch")
 	}
 	key := matches[1]
-	
+
 	if val, ok := jobExecution.Parameters.Params[key]; ok {
 		return fmt.Sprintf("%v", val), nil
 	}

@@ -99,7 +99,6 @@ func TestJobExecution_TransitionTo(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Invalid state transition")
 
-
 	// FAILED -> FAILED (Self-transition is invalid for FAILED)
 	je = newTestJobExecution(model.BatchStatusFailed)
 	err = je.TransitionTo(model.BatchStatusFailed)
