@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	coreport "surfin/pkg/batch/core/application/port" // JobExecutionListener, NotificationListener
-	model "surfin/pkg/batch/core/domain/model" // JobExecution, BatchStatus
-	"surfin/pkg/batch/core/ports"
-	"surfin/pkg/batch/support/util/logger"
+	coreport "github.com/tigerroll/surfin/pkg/batch/core/application/port" // JobExecutionListener, NotificationListener
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model" // JobExecution, BatchStatus
+	"github.com/tigerroll/surfin/pkg/batch/core/ports"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // DummyNotifier is a dummy implementation that only logs notifications.

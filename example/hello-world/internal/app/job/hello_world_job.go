@@ -3,12 +3,12 @@ package job
 import (
 	"context"
 
-	config "surfin/pkg/batch/core/config"
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	repository "surfin/pkg/batch/core/domain/repository"
-	metrics "surfin/pkg/batch/core/metrics"
-	logger "surfin/pkg/batch/support/util/logger"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // HelloWorldJob は port.Job インターフェースを実装するシンプルなジョブです。

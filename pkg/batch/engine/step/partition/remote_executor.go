@@ -3,10 +3,10 @@ package partition
 import (
 	"context"
 	"fmt"
-	core "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	metrics "surfin/pkg/batch/core/metrics"
-	logger "surfin/pkg/batch/support/util/logger"
+	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // RemoteStepExecutor is an implementation of StepExecutor that delegates Step execution

@@ -2,11 +2,11 @@ package bootstrap
 
 import (
 	"go.uber.org/fx"
-	"surfin/pkg/batch/core/support/expression"
-	stepFactory "surfin/pkg/batch/engine/step/factory"
-	partition "surfin/pkg/batch/engine/step/partition"
-	"surfin/pkg/batch/engine/step/retry"
-	"surfin/pkg/batch/engine/step/skip"
+	"github.com/tigerroll/surfin/pkg/batch/core/support/expression"
+	stepFactory "github.com/tigerroll/surfin/pkg/batch/engine/step/factory"
+	partition "github.com/tigerroll/surfin/pkg/batch/engine/step/partition"
+	"github.com/tigerroll/surfin/pkg/batch/engine/step/retry"
+	"github.com/tigerroll/surfin/pkg/batch/engine/step/skip"
 )
 
 // Module provides initializer-related components to Fx.

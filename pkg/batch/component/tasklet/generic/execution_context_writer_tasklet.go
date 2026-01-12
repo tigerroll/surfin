@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	exception "surfin/pkg/batch/support/util/exception"
-	logger "surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // ExecutionContextWriterTasklet is a [port.Tasklet] that writes values specified in JSL properties to the [model.ExecutionContext].

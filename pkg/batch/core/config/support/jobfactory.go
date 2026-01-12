@@ -2,15 +2,15 @@ package support
 
 import (
 	"fmt"
-	config "surfin/pkg/batch/core/config"
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	repository "surfin/pkg/batch/core/domain/repository"
-	jsl "surfin/pkg/batch/core/config/jsl"
-	step_factory "surfin/pkg/batch/engine/step/factory"
-	metrics "surfin/pkg/batch/core/metrics"
-	exception "surfin/pkg/batch/support/util/exception"
-	tx "surfin/pkg/batch/core/tx"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	step_factory "github.com/tigerroll/surfin/pkg/batch/engine/step/factory"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"go.uber.org/fx"
 )
 

@@ -2,9 +2,9 @@
 package jsl
 
 import (
-	config "surfin/pkg/batch/core/config"
-	core "surfin/pkg/batch/core/application/port"
-	repository "surfin/pkg/batch/core/domain/repository"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 )
 
 // JSLDefinitionBytes holds the content of a JSL file as a byte slice.

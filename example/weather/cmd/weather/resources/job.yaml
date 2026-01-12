@@ -7,39 +7,39 @@ listeners:
   - ref: loggingJobListener # Listener name registered in JobFactory
 
 flow:
-  start-element: migrateMetadataStep # Starting element of the flow (Changed from fetchWeatherDataStep)
+  start-element: migrateMetadataStep # Starting element of the flow
   elements:
-    migrateMetadataStep: # ADDED: Step to run framework migrations
+    migrateMetadataStep: # Step to run framework migrations
       id: migrateMetadataStep
       tasklet:
         ref: migrationTasklet
         properties:
-          dbRef: "metadata" # JobRepositoryが使用するDB接続名
-          migrationFSName: "frameworkMigrationsFS" # フレームワークのマイグレーションFS名
-          migrationDir: "postgres" # PostgreSQLのマイグレーションファイルが格納されているディレクトリ
-          isFramework: "true" # フレームワークマイグレーションであることを示す
+          dbRef: "metadata" # DB connection name used by JobRepository
+          migrationFSName: "frameworkMigrationsFS" # Framework migration FS name
+          migrationDir: "postgres" # Directory containing PostgreSQL migration files
+          isFramework: "true" # Indicates this is a framework migration
       listeners:
         - ref: loggingStepListener
       transitions:
         - on: COMPLETED
-          to: migrateWorkloadStep # 成功したら次のステップへ
+          to: migrateWorkloadStep # Transition to next step on success
         - on: FAILED
           fail: true
           
-    migrateWorkloadStep: # ADDED: Step to run application migrations for workload DB (sqlite)
+    migrateWorkloadStep: # Step to run application migrations for workload DB
       id: migrateWorkloadStep
       tasklet:
         ref: migrationTasklet
         properties:
-          dbRef: "metadata" # ワークロードDB接続名
-          migrationFSName: "weatherAppFS" # アプリケーションのマイグレーションFS名
-          migrationDir: "postgres" # SQLiteのマイグレーションファイルが格納されているディレクトリ
-          isFramework: "false" # アプリケーションマイグレーションであることを示す
+          dbRef: "metadata" # Workload DB connection name
+          migrationFSName: "weatherAppFS" # Application migration FS name
+          migrationDir: "postgres" # Directory containing SQLite migration files
+          isFramework: "false" # Indicates this is an application migration
       listeners:
         - ref: loggingStepListener
       transitions:
         - on: COMPLETED
-          to: fetchWeatherDataStep # 成功したらデータ処理ステップへ
+          to: fetchWeatherDataStep # Transition to data processing step on success
         - on: FAILED
           fail: true
 
@@ -47,13 +47,12 @@ flow:
       id: fetchWeatherDataStep
       reader:
         ref: weatherItemReader
-        # database: workload # Change: Reader does not use DB, remove unnecessary property
       processor:
         ref: weatherItemProcessor
-      writer: # データベースに書き込む
+      writer: # Write to database
         ref: weatherItemWriter
         properties:
-          targetDBName: "metadata" # Writerが使用するターゲットDB名を指定
+          targetDBName: "metadata" # Specify target DB name for Writer
       chunk:
         item-count: 50 # Use config.Batch.ChunkSize
         commit-interval: 1
@@ -69,40 +68,21 @@ flow:
         - ref: loggingSkipListener
       retry-item-listeners: # Item retry listeners
         - ref: loggingRetryItemListener
-      chunk-listeners: # Add
+      chunk-listeners:
         - ref: loggingChunkListener
-      execution-context-promotion: # Promote reader state to Job EC (Moved from promoteExecutionContextStep)
+      execution-context-promotion: # Promote reader state to Job EC
         keys:
           - "reader_context" # Promote the entire context saved by WeatherReader
-          - "decision.condition" # Promote the condition set by the tasklet (This key is set by the reader/processor/writer if needed, but typically set by a Tasklet or Decision)
+          - "decision.condition" # Promote the condition set by the tasklet
       transitions:
         - on: COMPLETED # If the step completes successfully
           to: checkConditionDecision # Transition directly to Decision
         - on: FAILED # If the step fails
           fail: true # Terminate the entire job as failed
           
-    # promoteExecutionContextStep: # DELETED: Functionality merged into fetchWeatherDataStep
-    #   id: promoteExecutionContextStep
-    #   tasklet:
-    #     ref: executionContextWriterTasklet
-    #     properties:
-    #       key: "decision.condition"
-    #       value: "true" # This value is checked in the Decision step
-    #   execution-context-promotion: # Promote StepExecutionContext values to JobExecutionContext
-    #     keys:
-    #       - "reader_context" # Promote the entire context saved by WeatherReader
-    #       - "decision.condition"
-    #   listeners:
-    #     - ref: loggingStepListener
-    #   transitions:
-    #     - on: COMPLETED
-    #       to: checkConditionDecision # Transition to the existing Decision
-    #     - on: FAILED
-    #       fail: true
-          
     checkConditionDecision: # ConditionalDecision element
       id: checkConditionDecision
-      ref: conditionalDecision # Add: Reference to Decision Builder
+      ref: conditionalDecision # Reference to Decision Builder
       properties:
         conditionKey: "decision.condition" # Key to retrieve from ExecutionContext
         expectedValue: "true"             # COMPLETED if it matches this value
@@ -116,10 +96,10 @@ flow:
     randomFailTaskletStep:
       id: randomFailTaskletStep
       tasklet:
-        ref: randomFailTasklet # Change: ref name
+        ref: randomFailTasklet # ref name
         properties:
           message: "Condition was TRUE! Executing randomFailTaskletStep."
-      listeners: # Step level listeners (TaskletStep also has StepExecutionListener)
+      listeners: # Step level listeners
         - ref: loggingStepListener
       transitions:
         - on: COMPLETED
@@ -130,7 +110,7 @@ flow:
     anotherRandomFailTaskletStep:
       id: anotherRandomFailTaskletStep
       tasklet:
-        ref: randomFailTasklet # Change: ref name
+        ref: randomFailTasklet # ref name
         properties:
           message: "Condition was FALSE or not found! Executing anotherRandomFailTaskletStep."
       listeners:
@@ -140,5 +120,4 @@ flow:
           end: true
         - on: FAILED
           fail: true
-  transition-rules:
-    # Existing transition rules are deleted or commented out here because they are defined within the element definitions (depending on JSL specification, they might be redundant if defined in elements)
+  transition-rules: # Transition rules are defined within elements for clarity

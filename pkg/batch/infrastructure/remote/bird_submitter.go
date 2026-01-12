@@ -8,12 +8,12 @@ import (
 
 	"go.uber.org/fx"
 
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	cfg "surfin/pkg/batch/core/config"
-	repository "surfin/pkg/batch/core/domain/repository"
-	exception "surfin/pkg/batch/support/util/exception"
-	logger "surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	cfg "github.com/tigerroll/surfin/pkg/batch/core/config"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // BirdClientSubmitterParams holds the dependencies injected via DI.

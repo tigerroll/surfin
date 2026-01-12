@@ -4,10 +4,10 @@ import (
 	"context"
 	"io"
  
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	tx "surfin/pkg/batch/core/tx"
-	"surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // NoOpItemReader is an implementation of [port.ItemReader] that always returns [io.EOF].

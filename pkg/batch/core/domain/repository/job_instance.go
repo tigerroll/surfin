@@ -3,8 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/support/util/exception"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 )
 
 // JobInstance defines operations for persisting and retrieving job instance metadata.

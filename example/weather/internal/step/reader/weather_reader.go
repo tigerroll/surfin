@@ -10,18 +10,18 @@ import (
 	"strings"
 	"time"
 
-	config "surfin/pkg/batch/core/config"
-	core "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/support/util/exception"
-	logger "surfin/pkg/batch/support/util/logger"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
-	weather_entity "surfin/example/weather/internal/domain/entity"
+	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
 	
-	configbinder "surfin/pkg/batch/support/util/configbinder"
+	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 )
 
-// Reader固有の設定構造体 (JSLプロパティバインディング用)
+// WeatherReaderConfig is a configuration struct specific to the Reader (for JSL property binding).
 type WeatherReaderConfig struct {
 	APIEndpoint string `yaml:"apiEndpoint"`
 	APIKey      string `yaml:"apiKey"`
@@ -35,7 +35,7 @@ const (
 )
 
 type WeatherReader struct {
-	config       *WeatherReaderConfig // 型をローカル定義に変更
+	config       *WeatherReaderConfig
 	client       *http.Client
 	forecastData *weather_entity.OpenMeteoForecast
 	currentIndex int
@@ -52,18 +52,18 @@ func NewWeatherReader(
 	resolver core.ExpressionResolver,
 	properties map[string]string,
 ) (*WeatherReader, error) {
-	// 1. 設定構造体を定義し、デフォルト値を設定
+	// 1. Define configuration struct and set default values.
 	weatherReaderCfg := &WeatherReaderConfig{
 		APIEndpoint: cfg.Surfin.Batch.APIEndpoint,
 		APIKey:      cfg.Surfin.Batch.APIKey,
 	}
 
-	// 2. JSLプロパティを自動バインディング (T3)
+	// 2. Automatic binding of JSL properties.
 	if err := configbinder.BindProperties(properties, weatherReaderCfg); err != nil {
 		return nil, exception.NewBatchError(ModuleWeatherReader, "Failed to bind properties", err, false, false)
 	}
 
-	// 3. バリデーション
+	// 3. Validation
 	if weatherReaderCfg.APIEndpoint == "" {
 		return nil, fmt.Errorf("WeatherReaderConfig.APIEndpoint is not configured")
 	}
@@ -242,7 +242,7 @@ func (r *WeatherReader) restoreReaderStateFromExecutionContext(ctx context.Conte
 		r.currentIndex = idx
 		logger.Debugf("WeatherReader: Restored currentIndex %d from ExecutionContext.", r.currentIndex)
 	} else if val, found := r.readerState.Get(CurrentIndexKey); found {
-		// GetIntが失敗したが、キーは存在する場合 (型がint/float64以外)
+		// If GetInt failed but the key exists (type is not int/float64)
 		logger.Warnf("WeatherReader: ExecutionContext currentIndex has unexpected type (%T). Initializing to 0.", val)
 		r.currentIndex = 0
 	} else {
@@ -280,7 +280,7 @@ func (r *WeatherReader) saveReaderStateToExecutionContext(ctx context.Context) e
 
 	// Save reader internal state to readerCtx AND r.readerState.
 	readerCtx.Put(CurrentIndexKey, r.currentIndex)
-	r.readerState.Put(CurrentIndexKey, r.currentIndex) // ADDED
+	r.readerState.Put(CurrentIndexKey, r.currentIndex)
 
 	if r.forecastData != nil {
 		forecastJSON, err := json.Marshal(r.forecastData)
@@ -289,10 +289,10 @@ func (r *WeatherReader) saveReaderStateToExecutionContext(ctx context.Context) e
 			return exception.NewBatchError(ModuleWeatherReader, "Failed to encode forecastData", err, false, false)
 		}
 		readerCtx.Put(ForecastDataKey, string(forecastJSON))
-		r.readerState.Put(ForecastDataKey, string(forecastJSON)) // ADDED
+		r.readerState.Put(ForecastDataKey, string(forecastJSON))
 	} else {
 		readerCtx.Remove(ForecastDataKey)
-		r.readerState.Remove(ForecastDataKey) // ADDED
+		r.readerState.Remove(ForecastDataKey)
 	}
 	logger.Debugf("WeatherReader: Saved currentIndex (%d) and forecastData state to ExecutionContext.", r.currentIndex)
 	return nil

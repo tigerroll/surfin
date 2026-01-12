@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	repository "surfin/pkg/batch/core/domain/repository"
-	metrics "surfin/pkg/batch/core/metrics"
-	logger "surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // SimpleJobRunner is an implementation of port.JobRunner that executes the flow by calling the Job's Run method.

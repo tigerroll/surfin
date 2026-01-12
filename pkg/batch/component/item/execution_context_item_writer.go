@@ -6,14 +6,14 @@ import (
 	"context"
 	"reflect"
 
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	tx "surfin/pkg/batch/core/tx"
-	logger "surfin/pkg/batch/support/util/logger"
-	config "surfin/pkg/batch/core/config"
-	jsl "surfin/pkg/batch/core/config/jsl"
-	support "surfin/pkg/batch/core/config/support"
-	repository "surfin/pkg/batch/core/domain/repository"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 )
 
 // ExecutionContextItemWriter is an ItemWriter that stores the number of items written to the ExecutionContext.

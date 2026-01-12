@@ -174,10 +174,10 @@ import (
 	"context"
 	"fmt"
 
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/support/util/exception"
-	"surfin/pkg/batch/support/util/logger"
-	configbinder "surfin/pkg/batch/support/util/configbinder"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 )
 
 // HelloWorldTaskletConfig は JSL から渡されるプロパティをバインドするための構造体です。
@@ -258,12 +258,12 @@ package step
 import (
 	"go.uber.org/fx"
 
-	core "surfin/pkg/batch/core/application/port"
-	config "surfin/pkg/batch/core/config"
-	jsl "surfin/pkg/batch/core/config/jsl"
-	support "surfin/pkg/batch/core/config/support"
-	job "surfin/pkg/batch/core/domain/repository"
-	logger "surfin/pkg/batch/support/util/logger"
+	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // NewHelloWorldTaskletComponentBuilder は HelloWorldTasklet の jsl.ComponentBuilder を作成します。
@@ -328,12 +328,12 @@ package job
 import (
 	"context"
 
-	config "surfin/pkg/batch/core/config"
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	repository "surfin/pkg/batch/core/domain/repository"
-	metrics "surfin/pkg/batch/core/metrics"
-	logger "surfin/pkg/batch/support/util/logger"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // HelloWorldJob は port.Job インターフェースを実装するシンプルなジョブです。
@@ -415,8 +415,8 @@ var _ port.Job = (*HelloWorldJob)(nil)
 package job
 
 import "go.uber.org/fx"
-import support "surfin/pkg/batch/core/config/support"
-import logger "surfin/pkg/batch/support/util/logger"
+import support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+import logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 // RegisterHelloWorldJobBuilder は作成した JobBuilder を JobFactory に登録します。
 func RegisterHelloWorldJobBuilder(
@@ -456,12 +456,12 @@ package runner
 import (
 	"context"
 
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	repository "surfin/pkg/batch/core/domain/repository"
-	metrics "surfin/pkg/batch/core/metrics"
-	exception "surfin/pkg/batch/support/util/exception"
-	logger "surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // FlowJobRunner is an implementation of JobRunner that executes a job based on its flow definition.
@@ -666,9 +666,9 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 package runner
 
 import (
-	port "surfin/pkg/batch/core/application/port"
-	repository "surfin/pkg/batch/core/domain/repository"
-	metrics "surfin/pkg/batch/core/metrics"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	"go.uber.org/fx"
 )
 
@@ -715,26 +715,26 @@ package main
 import (
 	"context"
 
-	config "surfin/pkg/batch/core/config"
-	bootstrap "surfin/pkg/batch/core/config/bootstrap"
-	jsl "surfin/pkg/batch/core/config/jsl"
-	item "surfin/pkg/batch/component/item"
-	decision "surfin/pkg/batch/core/job/decision"
-	batchlistener "surfin/pkg/batch/listener"
-	split "surfin/pkg/batch/core/job/split"
-	usecase "surfin/pkg/batch/core/application/usecase"
-	metrics "surfin/pkg/batch/core/metrics"
-	supportConfig "surfin/pkg/batch/core/config/support"
-	incrementer "surfin/pkg/batch/core/support/incrementer"
-	"surfin/pkg/batch/support/util/logger"
-	jobRunner "surfin/pkg/batch/core/job/runner"
-	inmemoryRepo "surfin/pkg/batch/infrastructure/repository/inmemory"
-	helloTasklet "surfin/example/hello-world/internal/step"
-	dummy "surfin/pkg/batch/adaptor/database/dummy"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	bootstrap "github.com/tigerroll/surfin/pkg/batch/core/config/bootstrap"
+	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	item "github.com/tigerroll/surfin/pkg/batch/component/item"
+	decision "github.com/tigerroll/surfin/pkg/batch/core/job/decision"
+	batchlistener "github.com/tigerroll/surfin/pkg/batch/listener"
+	split "github.com/tigerroll/surfin/pkg/batch/core/job/split"
+	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	supportConfig "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	incrementer "github.com/tigerroll/surfin/pkg/batch/core/support/incrementer"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	jobRunner "github.com/tigerroll/surfin/pkg/batch/core/job/runner"
+	inmemoryRepo "github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/inmemory"
+	helloTasklet "github.com/tigerroll/surfin/example/hello-world/internal/step"
+	dummy "github.com/tigerroll/surfin/pkg/batch/adaptor/database/dummy"
 	
 	"go.uber.org/fx"
 
-	appjob "surfin/example/hello-world/internal/app/job"
+	appjob "github.com/tigerroll/surfin/example/hello-world/internal/app/job"
 )
 
 // GetApplicationOptions は uber-fx のオプションを構築し、スライスとして返します。
@@ -772,7 +772,7 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 	options = append(options, fx.Invoke(fx.Annotate(startJobExecution, fx.ParamTags("", "", "", "", "", `name:"appCtx"`))))
 	options = append(options, helloTasklet.Module)
 	options = append(options, appjob.Module) // アプリケーション固有の JobBuilder を提供するモジュールを直接追加
-
+	options = append(options, apprunner.Module) // apprunner.Module を追加
 	return options
 }
 ```
@@ -800,7 +800,7 @@ import (
 
 	_ "embed"
 
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	
 	"go.uber.org/fx"
 )

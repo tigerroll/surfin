@@ -1,8 +1,8 @@
 package job
 
 import "go.uber.org/fx"
-import support "surfin/pkg/batch/core/config/support"
-import logger "surfin/pkg/batch/support/util/logger"
+import support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+import logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 // RegisterHelloWorldJobBuilder は作成した JobBuilder を JobFactory に登録します。
 func RegisterHelloWorldJobBuilder(

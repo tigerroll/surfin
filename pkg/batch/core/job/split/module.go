@@ -5,10 +5,10 @@ package split
 import (
 	"go.uber.org/fx"
 
-	port "surfin/pkg/batch/core/application/port"
-	"surfin/pkg/batch/core/config/jsl"
-	"surfin/pkg/batch/core/config/support"
-	"surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	"github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // NewConcreteSplitBuilder creates a builder for a concrete implementation of the core.Split interface.

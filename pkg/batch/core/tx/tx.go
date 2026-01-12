@@ -7,7 +7,7 @@ import (
 	"context"
 	"database/sql"
 
-	"surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 )
 
 // TxExecutor is an interface that defines common write operations executable within a transaction.

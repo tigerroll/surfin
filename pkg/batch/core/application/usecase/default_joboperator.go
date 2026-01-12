@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	model "surfin/pkg/batch/core/domain/model"
-	support "surfin/pkg/batch/core/config/support"
-	jobRepository "surfin/pkg/batch/core/domain/repository"
-	exception "surfin/pkg/batch/support/util/exception"
-	logger "surfin/pkg/batch/support/util/logger"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	jobRepository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // DefaultJobOperator is the default implementation of the JobOperator interface.

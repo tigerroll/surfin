@@ -13,7 +13,7 @@ func TestWeatherDataToStore_TableName(t *testing.T) {
 	}
 }
 
-// 複合主キーのGORMタグの検証は、GORMのマイグレーションテストや
-// 実際のDB操作テストで行うのが理想的ですが、ここでは構造体の定義を確認するに留めます。
-// 構造体のフィールド名とタグの確認は、コンパイル時に行われるため、
-// 実行時のテストとしては TableName の確認が最もシンプルで有効です。
+// Validation of GORM tags for composite primary keys is ideally done through GORM migration tests
+// or actual DB operation tests. Here, we only confirm the struct definition.
+// Since field names and tags are checked at compile time,
+// checking TableName is the simplest and most effective runtime test.

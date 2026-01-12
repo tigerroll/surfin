@@ -6,7 +6,7 @@ package inmemory
 import (
 	"sync"
 
-	"surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
 // InMemoryJobRepository is an in-memory implementation of the JobRepository interface.

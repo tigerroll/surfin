@@ -1,7 +1,7 @@
 package migration
 
 import (
-	"surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 )
 
 // migratorProviderImpl implements MigratorProvider

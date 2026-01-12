@@ -1,7 +1,7 @@
 package job
 
 import (
-	support "surfin/pkg/batch/core/config/support"
+	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	"go.uber.org/fx"
 )
 

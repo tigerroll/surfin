@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"surfin/pkg/batch/core/adaptor"
-	config "surfin/pkg/batch/core/config"
-	"surfin/pkg/batch/core/tx"
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/tx"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

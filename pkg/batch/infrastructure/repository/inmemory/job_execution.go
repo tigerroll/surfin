@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/core/domain/repository"
+	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 )
 
 // SaveJobExecution persists a new JobExecution.

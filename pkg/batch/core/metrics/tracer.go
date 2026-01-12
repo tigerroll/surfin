@@ -3,7 +3,7 @@ package metrics
 import (
 	"context"
 
-	model "surfin/pkg/batch/core/domain/model"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
 // Tracer is an abstract interface for distributed tracing.

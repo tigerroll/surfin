@@ -3,25 +3,25 @@ package main
 import (
 	"context"
 
-	config "surfin/pkg/batch/core/config"
-	bootstrap "surfin/pkg/batch/core/config/bootstrap"
-	jsl "surfin/pkg/batch/core/config/jsl"
-	item "surfin/pkg/batch/component/item"
-	decision "surfin/pkg/batch/core/job/decision"
-	batchlistener "surfin/pkg/batch/listener"
-	split "surfin/pkg/batch/core/job/split"
-	usecase "surfin/pkg/batch/core/application/usecase"
-	metrics "surfin/pkg/batch/core/metrics"
-	supportConfig "surfin/pkg/batch/core/config/support"
-	incrementer "surfin/pkg/batch/core/support/incrementer"
-	logger "surfin/pkg/batch/support/util/logger"
-	inmemoryRepo "surfin/pkg/batch/infrastructure/repository/inmemory"
-	helloTasklet "surfin/example/hello-world/internal/step"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	bootstrap "github.com/tigerroll/surfin/pkg/batch/core/config/bootstrap"
+	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	item "github.com/tigerroll/surfin/pkg/batch/component/item"
+	decision "github.com/tigerroll/surfin/pkg/batch/core/job/decision"
+	batchlistener "github.com/tigerroll/surfin/pkg/batch/listener"
+	split "github.com/tigerroll/surfin/pkg/batch/core/job/split"
+	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	supportConfig "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	incrementer "github.com/tigerroll/surfin/pkg/batch/core/support/incrementer"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	inmemoryRepo "github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/inmemory"
+	helloTasklet "github.com/tigerroll/surfin/example/hello-world/internal/step"
 	
 	"go.uber.org/fx"
 
-	appjob "surfin/example/hello-world/internal/app/job"
-	apprunner "surfin/example/hello-world/internal/app/runner"
+	appjob "github.com/tigerroll/surfin/example/hello-world/internal/app/job"
+	apprunner "github.com/tigerroll/surfin/example/hello-world/internal/app/runner"
 )
 
 // GetApplicationOptions は uber-fx のオプションを構築し、スライスとして返します。

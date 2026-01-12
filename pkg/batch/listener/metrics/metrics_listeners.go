@@ -3,9 +3,9 @@ package metrics
 import (
 	"context"
 
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/core/metrics"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
 )
 
 // --- Job Execution Listener ---

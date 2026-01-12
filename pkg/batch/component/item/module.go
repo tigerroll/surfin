@@ -5,12 +5,12 @@ package item
 import (
 	"go.uber.org/fx"
 
-	port "surfin/pkg/batch/core/application/port"
-	config "surfin/pkg/batch/core/config"
-	jsl "surfin/pkg/batch/core/config/jsl"
-	support "surfin/pkg/batch/core/config/support"
-	job "surfin/pkg/batch/core/domain/repository"
-	"surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // NewNoOpItemReaderComponentBuilder creates a jsl.ComponentBuilder for a No-Op ItemReader.

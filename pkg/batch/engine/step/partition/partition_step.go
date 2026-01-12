@@ -8,12 +8,12 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	repository "surfin/pkg/batch/core/domain/repository"
-	exception "surfin/pkg/batch/support/util/exception"
-	logger "surfin/pkg/batch/support/util/logger"
-	metrics "surfin/pkg/batch/core/metrics"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 )
 
 // PartitionStep is an implementation of core.Step that executes a worker step in parallel partitions.

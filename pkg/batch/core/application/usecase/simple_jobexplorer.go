@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	model "surfin/pkg/batch/core/domain/model"
-	job "surfin/pkg/batch/core/domain/repository"
-	exception "surfin/pkg/batch/support/util/exception"
-	logger "surfin/pkg/batch/support/util/logger"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // SimpleJobExplorer is a simple implementation of the JobExplorer interface.

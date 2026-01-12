@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"surfin/pkg/batch/core/domain/model"
-	config "surfin/pkg/batch/core/config"
-	"surfin/pkg/batch/core/metrics"
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx"
 )

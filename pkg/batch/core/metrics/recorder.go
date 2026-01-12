@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	model "surfin/pkg/batch/core/domain/model"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
 // Span represents a single operation or unit of work in distributed tracing.

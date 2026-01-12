@@ -83,10 +83,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"surfin/example/weather/internal/app" // アプリケーション固有のモジュール
-	"surfin/pkg/batch/core/config"
-	"surfin/pkg/batch/core/config/jsl"
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/example/weather/internal/app" // アプリケーション固有のモジュール
+	"github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx" // Fx (DIコンテナ)
 )
@@ -138,7 +138,7 @@ func getDBProviderOptions() []fx.Option {
     // 例:
     // import (
     //     "go.uber.org/fx"
-    //     "surfin/pkg/batch/adaptor/database/gorm" // gormパッケージをインポート
+    //     "github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm" // gormパッケージをインポート
     // )
     // return []fx.Option{
     //     fx.Provide(fx.Annotate(gorm.NewPostgresProvider, fx.ResultTags(`group:"db_providers"`))),

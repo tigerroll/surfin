@@ -12,9 +12,9 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 
-	"surfin/pkg/batch/core/adaptor"
-	"surfin/example/weather/internal/app"
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/example/weather/internal/app"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	
 	"go.uber.org/fx"
 )

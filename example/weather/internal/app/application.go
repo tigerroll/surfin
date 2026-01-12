@@ -5,34 +5,32 @@ import (
 	"embed"
 	"time"
 
-	model "surfin/pkg/batch/core/domain/model"
-	config "surfin/pkg/batch/core/config"
-	"surfin/pkg/batch/core/config/bootstrap"
-	"surfin/pkg/batch/core/config/jsl"
-	item "surfin/pkg/batch/component/item" // 4.4.1: core/item -> component/item
-	"surfin/pkg/batch/core/job/decision"
-	batchlistener "surfin/pkg/batch/listener" // 4.1.1: core/job/listener -> listener, 名前を統一
-	"surfin/pkg/batch/core/job/split"
-	usecase "surfin/pkg/batch/core/application/usecase" // 修正: launch -> core/application/usecase
-	"surfin/pkg/batch/core/metrics"
-	jobRepo "surfin/pkg/batch/core/domain/repository"
-	supportConfig "surfin/pkg/batch/core/config/support"
-	"surfin/pkg/batch/core/support/incrementer"
-	tasklet "surfin/pkg/batch/component/tasklet/generic" // 4.4.2: core/tasklet -> component/tasklet/generic
-	"surfin/pkg/batch/infrastructure/repository/sql"
-	"surfin/pkg/batch/support/util/logger"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/config/bootstrap"
+	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	item "github.com/tigerroll/surfin/pkg/batch/component/item"
+	"github.com/tigerroll/surfin/pkg/batch/core/job/decision"
+	batchlistener "github.com/tigerroll/surfin/pkg/batch/listener"
+	"github.com/tigerroll/surfin/pkg/batch/core/job/split"
+	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
+	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	jobRepo "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	supportConfig "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	"github.com/tigerroll/surfin/pkg/batch/core/support/incrementer"
+	tasklet "github.com/tigerroll/surfin/pkg/batch/component/tasklet/generic"
+	"github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/sql"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	
-	migrationTasklet "surfin/pkg/batch/component/tasklet/migration"
-	jobRunner "surfin/pkg/batch/core/job/runner" // 追加: JobRunner モジュールをインポート
+	migrationTasklet "github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
+	jobRunner "github.com/tigerroll/surfin/pkg/batch/core/job/runner"
 
 	"go.uber.org/fx"
 	
-	// core "surfin/pkg/batch/core" // 削除
-
-	appJob "surfin/example/weather/internal/job"
-	weatherProcessor "surfin/example/weather/internal/step/processor"
-	weatherReader "surfin/example/weather/internal/step/reader"
-	weatherWriter "surfin/example/weather/internal/step/writer"
+	appJob "github.com/tigerroll/surfin/example/weather/internal/job"
+	weatherProcessor "github.com/tigerroll/surfin/example/weather/internal/step/processor"
+	weatherReader "github.com/tigerroll/surfin/example/weather/internal/step/reader"
+	weatherWriter "github.com/tigerroll/surfin/example/weather/internal/step/writer"
 )
 
 // RunApplication sets up and runs the batch application using uber-fx.
@@ -47,12 +45,6 @@ func RunApplication(appCtx context.Context, envFilePath string, embeddedConfig c
 	// Set log level based on loaded configuration
 	logger.SetLogLevel(cfg.Surfin.System.Logging.Level)
 	logger.Infof("Log level set to: %s", cfg.Surfin.System.Logging.Level)
-
-	// DB接続とTxManagerのオプション生成ロジックは、フレームワークコアに移動したため削除
-	// dbOptions, err := database.CreateNamedDBConnectionAndTxManagerOptions(cfg)
-	// if err != nil {
-	// 	logger.Fatalf("Failed to generate named DB connection options: %v", err)
-	// }
 
 	app := fx.New(
 		fx.Supply(
@@ -71,46 +63,41 @@ func RunApplication(appCtx context.Context, envFilePath string, embeddedConfig c
 			),
 		),
 
-		fx.Options(dbProviderOptions...), // main.go から渡された DB Provider オプションを使用
+		fx.Options(dbProviderOptions...),
 		logger.Module,
 		config.Module,
 		metrics.Module,
 
-		// DB Providerの直接提供はapp.Moduleに集約されたため削除
-		// fx.Provide(fx.Annotate(postgres.NewProvider, fx.ResultTags(database.DBProviderGroup))),
-		// fx.Provide(fx.Annotate(mysql.NewProvider, fx.ResultTags(database.DBProviderGroup))),
-
 		bootstrap.Module,
 		
-		// stepFactory.Module, // 削除: bootstrap.Moduleで提供済み
 		fx.Provide(supportConfig.NewJobFactory),
-		usecase.Module, // 修正: launch -> usecase
+		usecase.Module,
 		
-		// JobRepository の提供 (sql.NewJobRepository を使用)
+		// Provide JobRepository (using sql.NewJobRepository)
 		fx.Provide(fx.Annotate(
 			sql.NewJobRepository,
 			fx.As(new(jobRepo.JobRepository)),
 		)),
-		batchlistener.Module, // joblistenerとsteplistenerを統合
+		batchlistener.Module,
 		decision.Module,
 		split.Module,
-		jobRunner.Module, // 追加: JobRunner の実装を提供
+		jobRunner.Module,
 
 		weatherReader.Module,
 		weatherProcessor.Module,
 		weatherWriter.Module,
 		incrementer.Module,
-		item.Module, // 復活
+		item.Module,
 		tasklet.Module,
-		migrationTasklet.Module, // MigrationTaskletのコンポーネントモジュールを追加
+		migrationTasklet.Module,
 		appJob.Module,
-		Module, // DB Providerの集約を含む
+		Module,
 
 		// Start the main application logic
 		fx.Invoke(fx.Annotate(startJobExecution, fx.ParamTags(
 			"", // lc fx.Lifecycle
 			"", // shutdowner fx.Shutdowner
-			"", // jobLauncher *usecase.SimpleJobLauncher (具体的な型)
+			"", // jobLauncher *usecase.SimpleJobLauncher (concrete type)
 			"", // jobRepository jobRepo.JobRepository
 			"", // cfg *config.Config
 			`name:"appCtx"`, // appCtx context.Context
@@ -156,7 +143,7 @@ func onStartJobExecution(
 				}
 				logger.Infof("Requesting application shutdown after job completion.")
 				
-				// JobExecution IDは Launch 成功後にしか得られないため、ここでは JobLauncher の Unregister は行わない
+				// JobExecution ID is only available after successful Launch, so Unregister is not performed here.
 				
 				if err := shutdowner.Shutdown(); err != nil {
 					logger.Errorf("Failed to shutdown application: %v", err)
@@ -186,11 +173,11 @@ func onStartJobExecution(
 				case <-ctx.Done():
 					logger.Warnf("Application context cancelled. Stopping monitoring for job '%s' (Execution ID: %s).", jobName, jobExecution.ID)
 					
-					// Contextキャンセル時、JobExecutionがまだ終了していない場合は、JobLauncherに停止を要求
+					// If context is cancelled and JobExecution is not yet finished, request stop via JobLauncher.
 					latestExecution, fetchErr := jobRepository.FindJobExecutionByID(context.Background(), jobExecution.ID)
 					if fetchErr == nil && !latestExecution.Status.IsFinished() {
 						logger.Warnf("Job '%s' (Execution ID: %s) was running. Attempting graceful stop via JobOperator.", jobName, jobExecution.ID)
-						// JobOperatorのStopロジックを模倣して CancelFunc を呼び出す
+						// Mimic JobOperator's Stop logic by calling CancelFunc.
 						if cancelFunc, ok := jobLauncher.GetCancelFunc(jobExecution.ID); ok {
 							cancelFunc()
 						}
@@ -207,7 +194,7 @@ func onStartJobExecution(
 						logger.Infof("Job '%s' (Execution ID: %s) finished with status: %s, ExitStatus: %s",
 							jobName, latestExecution.ID, latestExecution.Status, latestExecution.ExitStatus)
 						
-						// JobRunnerのdeferで UnregisterCancelFunc が呼ばれるため、ここでは不要
+						// UnregisterCancelFunc is called by JobRunner's defer, so it's not needed here.
 						return
 					}
 					logger.Debugf("Job '%s' (Execution ID: %s) is still running. Current status: %s", jobName, latestExecution.ID, latestExecution.Status)

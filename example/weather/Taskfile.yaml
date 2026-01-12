@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  APP_MODULE_PATH: surfin/example/weather/cmd/weather
+  APP_MODULE_PATH: ./cmd/weather
   APP_BINARY_NAME: weather-batch
   BUILD_OUTPUT_DIR: ../../dist
 

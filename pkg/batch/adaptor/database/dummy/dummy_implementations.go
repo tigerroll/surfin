@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 
-	"surfin/pkg/batch/core/adaptor"
-	"surfin/pkg/batch/core/config"
-	"surfin/pkg/batch/core/tx"
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/tx"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // dummyTx is a dummy implementation of the tx.Tx interface.

@@ -1,4 +1,4 @@
-module surfin
+module github.com/tigerroll/surfin
 
 go 1.24.2
 

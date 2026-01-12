@@ -4,7 +4,7 @@ import (
 	"context"
 	"io/fs"
 
-	"surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 )
 
 // Fixed table names for migration tracking
