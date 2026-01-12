@@ -25,7 +25,7 @@ type TxExecutor interface {
 	//        Keys are column names, values are corresponding values. Multiple entries are combined with AND.
 	// Returns: The number of affected rows and any error that occurred during the operation.
 	ExecuteUpdate(ctx context.Context, model interface{}, operation string, tableName string, query map[string]interface{}) (rowsAffected int64, err error)
-	
+
 	// ExecuteUpsert performs an UPSERT operation (INSERT OR REPLACE / ON CONFLICT DO UPDATE) on the database.
 	// This operation is executed within the current transaction context.
 	//
@@ -50,7 +50,7 @@ type Tx interface {
 	// name: The unique name for the savepoint to be created.
 	// Returns: An error that occurred during savepoint creation.
 	Savepoint(name string) error
-	
+
 	// RollbackToSavepoint rolls back the transaction to the savepoint with the specified name.
 	// This undoes changes made after the savepoint, but preserves changes made before it.
 	// name: The name of the savepoint to roll back to.

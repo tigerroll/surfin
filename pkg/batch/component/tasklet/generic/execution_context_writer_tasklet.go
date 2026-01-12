@@ -14,16 +14,16 @@ import (
 // ExecutionContextWriterTasklet is a [port.Tasklet] that writes values specified in JSL properties to the [model.ExecutionContext].
 // It is primarily used for testing and debugging purposes.
 type ExecutionContextWriterTasklet struct {
-	id string
-	ec model.ExecutionContext
+	id         string
+	ec         model.ExecutionContext
 	properties map[string]string
 }
 
 // NewExecutionContextWriterTasklet creates a new instance of [ExecutionContextWriterTasklet].
 func NewExecutionContextWriterTasklet(id string, properties map[string]string) port.Tasklet {
 	return &ExecutionContextWriterTasklet{
-		id: id,
-		ec: model.NewExecutionContext(),
+		id:         id,
+		ec:         model.NewExecutionContext(),
 		properties: properties,
 	}
 }
@@ -40,13 +40,13 @@ func (t *ExecutionContextWriterTasklet) Execute(ctx context.Context, stepExecuti
 			logger.Warnf("Property key '%s' is not in 'key.type' format. Skipping.", keyWithType)
 			continue
 		}
-		
+
 		key := parts[0]
 		typeStr := strings.ToLower(parts[1])
-		
+
 		var value interface{}
 		var err error
-		
+
 		switch typeStr {
 		case "string":
 			value = valueStr
@@ -60,18 +60,18 @@ func (t *ExecutionContextWriterTasklet) Execute(ctx context.Context, stepExecuti
 			logger.Warnf("Unknown type '%s' for key '%s'. Treating as string.", typeStr, key)
 			value = valueStr
 		}
-		
+
 		if err != nil {
 			return model.ExitStatusFailed, exception.NewBatchErrorf(t.id, "Failed to convert value '%s' to type '%s' for key '%s': %w", valueStr, typeStr, key, err)
 		}
-		
+
 		t.ec.Put(key, value)
 		logger.Debugf("Wrote to EC: %s = %v (Type: %s)", key, value, typeStr)
 	}
-	
+
 	// Reflect the contents of the ExecutionContext to the StepExecution.
 	stepExecution.ExecutionContext = t.ec
-	
+
 	return model.ExitStatusCompleted, nil
 }
 

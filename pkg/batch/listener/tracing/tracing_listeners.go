@@ -17,7 +17,7 @@ type TracingJobListener struct {
 
 func NewTracingJobListener(tracer metrics.Tracer) port.JobExecutionListener {
 	return &TracingJobListener{
-		tracer: tracer,
+		tracer:          tracer,
 		jobSpanEndFuncs: make(map[string]func()),
 	}
 }
@@ -46,7 +46,7 @@ type TracingStepListener struct {
 
 func NewTracingStepListener(tracer metrics.Tracer) port.StepExecutionListener {
 	return &TracingStepListener{
-		tracer: tracer,
+		tracer:           tracer,
 		stepSpanEndFuncs: make(map[string]func()),
 	}
 }

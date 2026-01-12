@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 )
 
 // HelloWorldTaskletConfig は JSL から渡されるプロパティをバインドするための構造体です。
@@ -17,14 +17,14 @@ type HelloWorldTaskletConfig struct {
 
 // HelloWorldTasklet はシンプルなTaskletの実装です。
 type HelloWorldTasklet struct {
-	config *HelloWorldTaskletConfig
+	config           *HelloWorldTaskletConfig
 	executionContext model.ExecutionContext // Taskletの内部状態を保持するためのExecutionContext
 }
 
 // NewHelloWorldTasklet は HelloWorldTasklet の新しいインスタンスを作成します。
 func NewHelloWorldTasklet(properties map[string]string) (*HelloWorldTasklet, error) {
 	taskletCfg := &HelloWorldTaskletConfig{}
-	
+
 	if err := configbinder.BindProperties(properties, taskletCfg); err != nil { // JSLプロパティを構造体にバインドします。
 		// isSkippable と isRetryable は false に設定
 		return nil, exception.NewBatchError("hello_world_tasklet", "Failed to bind properties", err, false, false)
@@ -35,7 +35,7 @@ func NewHelloWorldTasklet(properties map[string]string) (*HelloWorldTasklet, err
 	}
 
 	return &HelloWorldTasklet{
-		config: taskletCfg,
+		config:           taskletCfg,
 		executionContext: model.NewExecutionContext(),
 	}, nil
 }

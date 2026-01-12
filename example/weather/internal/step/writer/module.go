@@ -34,7 +34,7 @@ func NewWeatherWriterComponentBuilder(p WeatherWriterComponentBuilderParams) jsl
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
 		_ = repo
-		
+
 		// Pass allDBConnections and allTxManagers injected from Fx to NewWeatherWriter.
 		writer, err := NewWeatherWriter(cfg, p.AllDBConnections, p.AllTxManagers, resolver, dbResolver, properties)
 		if err != nil {

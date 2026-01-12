@@ -37,10 +37,10 @@ func (m *MockReader) IncrementReadCount() {
 
 func NewMockReader(items []TestItem, failAt, skipAt int, failCount int) *MockReader {
 	return &MockReader{
-		items:  items,
-		failAt: failAt,
-		skipAt: skipAt,
-		ec:     model.NewExecutionContext(),
+		items:     items,
+		failAt:    failAt,
+		skipAt:    skipAt,
+		ec:        model.NewExecutionContext(),
 		failCount: failCount,
 	}
 }
@@ -90,15 +90,15 @@ func (m *MockReader) Read(ctx context.Context) (TestItem, error) {
 
 // MockProcessor simulates ItemProcessor behavior with controlled failures.
 type MockProcessor struct {
-	failAt int
+	failAt    int
 	failCount int // Number of times to fail retryable errors before succeeding
-	skipAt int
+	skipAt    int
 }
 
 func NewMockProcessor(failAt, skipAt, failCount int) *MockProcessor {
 	return &MockProcessor{
-		failAt: failAt,
-		skipAt: skipAt,
+		failAt:    failAt,
+		skipAt:    skipAt,
 		failCount: failCount,
 	}
 }
@@ -117,22 +117,26 @@ func (m *MockProcessor) Process(ctx context.Context, item TestItem) (TestItem, e
 	}
 	return item, nil
 }
-func (m *MockProcessor) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error { return nil }
+func (m *MockProcessor) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
+	return nil
+}
 func (m *MockProcessor) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	return model.NewExecutionContext(), nil
 }
 
 // MockWriter simulates ItemWriter behavior with controlled failures.
 type MockWriter struct {
-	failAt int
-	failCount int // Number of times to fail retryable errors before succeeding
-	skipAt int
+	failAt       int
+	failCount    int // Number of times to fail retryable errors before succeeding
+	skipAt       int
 	writtenItems []TestItem
 }
 
 func (m *MockWriter) Open(ctx context.Context, ec model.ExecutionContext) error { return nil }
-func (m *MockWriter) Close(ctx context.Context) error { return nil }
-func (m *MockWriter) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error { return nil }
+func (m *MockWriter) Close(ctx context.Context) error                           { return nil }
+func (m *MockWriter) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
+	return nil
+}
 func (m *MockWriter) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	return model.NewExecutionContext(), nil
 }
@@ -144,7 +148,7 @@ func (m *MockWriter) ResetWrittenItems() {
 
 func (m *MockWriter) Write(ctx context.Context, tx tx.Tx, items []TestItem) error {
 	shouldFailTransiently := false
-	
+
 	// Check if any item triggers the transient failure AND we still have failures left
 	if m.failAt != 0 && m.failCount > 0 {
 		for _, item := range items {
@@ -154,13 +158,13 @@ func (m *MockWriter) Write(ctx context.Context, tx tx.Tx, items []TestItem) erro
 			}
 		}
 	}
-	
+
 	if shouldFailTransiently {
 		m.failCount--
 		// Return transient error, triggering chunk rollback/retry
 		return exception.NewBatchError("writer", "transient write failure", errors.New("db deadlock"), false, true)
 	}
-	
+
 	// If no transient failure, proceed with actual writing and checking skippable errors
 	for _, item := range items {
 		if item.ID == m.skipAt {
@@ -188,43 +192,43 @@ func SimulateChunkExecution(
 	maxSkips int,
 ) error {
 	// Simplified transaction simulation: we only track metrics, no actual DB interaction.
-	
+
 	// 1. Read Loop
 	items := make([]TestItem, 0, chunkSize)
-	
+
 	for len(items) < chunkSize {
 		readAttempts := 0
-		
+
 		// Simulate Read Retry Loop
 		for {
 			item, err := reader.Read(ctx)
-			
+
 			// Check for EOF (using the error defined in MockReader)
 			if err != nil && errors.Is(err, port.ErrNoMoreItems) {
 				goto ProcessPhase
 			}
-			
+
 			if err != nil {
 				be, isBatchError := err.(*exception.BatchError)
-				
+
 				if isBatchError && be.IsRetryable() && readAttempts < maxRetries { // maxRetries はリトライ回数
 					readAttempts++
 					// Simulate rollback of read count if necessary (MockReader handles its internal counter)
 					continue // Retry read
 				}
-				
+
 				if isBatchError && be.IsSkippable() && se.SkipReadCount < maxSkips {
 					se.SkipReadCount++
 					se.AddFailureException(err) // エラーを記録
 					reader.IncrementReadCount() // スキップされたアイテムをスキップするために、Readerの内部カウンタを進める
-					goto NextItemRead // Simulate skipping the item and moving to the next read
+					goto NextItemRead           // Simulate skipping the item and moving to the next read
 				}
-				
+
 				// Fatal error or retry limit reached
 				se.MarkAsFailed(err)
 				return err
 			}
-			
+
 			// Successful read
 			se.ReadCount++
 			items = append(items, item)
@@ -240,66 +244,66 @@ ProcessPhase:
 
 	// 2. Process Loop
 	processedItems := make([]TestItem, 0, len(items))
-	
+
 	for _, item := range items {
 		processAttempts := 0
-		
+
 		// Simulate Process Retry Loop
 		for {
 			processedItem, err := processor.Process(ctx, item)
-			
+
 			if err != nil {
 				be, isBatchError := err.(*exception.BatchError)
-				
+
 				if isBatchError && be.IsRetryable() && processAttempts < maxRetries { // maxRetries はリトライ回数
 					processAttempts++
 					continue // Retry process
 				}
-				
+
 				if isBatchError && be.IsSkippable() && se.SkipProcessCount < maxSkips {
 					se.SkipProcessCount++
 					se.AddFailureException(err)
 					se.FilterCount++ // Skipped items are filtered out
-					goto NextItem // Skip to next item
+					goto NextItem    // Skip to next item
 				}
-				
+
 				// Fatal error or retry limit reached
 				se.MarkAsFailed(err)
 				return err
 			}
-			
+
 			// Successful process
 			processedItems = append(processedItems, processedItem)
 			break
 		}
 	NextItem:
 	}
-	
+
 	if len(processedItems) == 0 {
 		return nil
 	}
 
 	// 3. Write Phase (Simplified: only one write attempt, focusing on error type)
 	writeAttempts := 0
-	
+
 	// Simulate Write Retry Loop (Chunk Retry)
 	for {
 		err := writer.Write(ctx, nil, processedItems)
-		
+
 		if err != nil {
 			be, isBatchError := err.(*exception.BatchError)
-			
+
 			if isBatchError && be.IsRetryable() && writeAttempts < maxRetries {
 				writeAttempts++
-				
+
 				// Simulate transaction rollback: clear items written in this chunk
 				writer.ResetWrittenItems()
-				
+
 				// Simulate transaction rollback and chunk retry
 				se.RollbackCount++ // Increment rollback count
-				continue // Retry write (and implicitly, the whole chunk)
+				continue           // Retry write (and implicitly, the whole chunk)
 			}
-			
+
 			if isBatchError && be.IsSkippable() && se.SkipWriteCount < maxSkips {
 				// Skippable write error usually triggers chunk splitting/rollback/re-execution
 				// For this simplified test, we just increment skip count and fail the chunk execution
@@ -309,12 +313,12 @@ ProcessPhase:
 				// Here, we treat it as a failure that needs external handling (like chunk splitting).
 				return errors.New("skippable write error occurred, chunk needs splitting")
 			}
-			
+
 			// Fatal error or retry limit reached
 			se.MarkAsFailed(err)
 			return err
 		}
-		
+
 		// Successful write
 		se.WriteCount += len(processedItems)
 		se.CommitCount++
@@ -329,15 +333,15 @@ func TestFaultTolerance_ReadSkip(t *testing.T) {
 
 	// Items: 1, 2, 3, 4. Skip item 3 (ID=3)
 	items := []TestItem{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}} // 4 items total. Item 3 will fail/skip.
-	reader := NewMockReader(items, 0, 3, 0) // Skip at ID=3, No retryable failure expected
-	
+	reader := NewMockReader(items, 0, 3, 0)                 // Skip at ID=3, No retryable failure expected
+
 	// MockProcessor and MockWriter are used to ensure the flow continues correctly
 	processor := NewMockProcessor(0, 0, 0)
 	writer := &MockWriter{}
 
 	// Max skips: 1, Max retries: 0
 	err := SimulateChunkExecution(ctx, se, reader, processor, writer, 5, 0, 1) // Chunk size 5, but only 4 items available
-	
+
 	assert.NoError(t, err)
 	assert.Equal(t, 3, se.ReadCount, "3 items should be successfully read (ID 1, 2, 4)")
 	assert.Equal(t, 1, se.SkipReadCount, "1 item should be skipped during read")
@@ -352,13 +356,13 @@ func TestFaultTolerance_ReadRetry(t *testing.T) {
 
 	// Items: 1, 2, 3, 4. Fail item 3 (ID=3)
 	items := []TestItem{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}} // 4 items total. Item 3 will fail/retry.
-	reader := NewMockReader(items, 3, 0, 1) // Fail at ID=3 once (failCount=1)
+	reader := NewMockReader(items, 3, 0, 1)                 // Fail at ID=3 once (failCount=1)
 	processor := NewMockProcessor(0, 0, 0)
 	writer := &MockWriter{}
 
 	// Max retries: 1 (Should succeed on the second attempt for item 3)
 	err := SimulateChunkExecution(ctx, se, reader, processor, writer, 4, 1, 0)
-	
+
 	assert.NoError(t, err)
 	assert.Equal(t, 4, se.ReadCount, "4 items should be successfully read (after 1 retry)")
 	assert.Equal(t, 0, se.SkipReadCount)
@@ -379,7 +383,7 @@ func TestFaultTolerance_ProcessSkip(t *testing.T) {
 
 	// Max skips: 1, Max retries: 0
 	err := SimulateChunkExecution(ctx, se, reader, processor, writer, 5, 0, 1)
-	
+
 	assert.NoError(t, err)
 	assert.Equal(t, 5, se.ReadCount)
 	assert.Equal(t, 1, se.SkipProcessCount, "1 item should be skipped during process")
@@ -401,7 +405,7 @@ func TestFaultTolerance_ProcessRetry(t *testing.T) {
 
 	// Max retries: 1 (Should succeed on the second attempt for item 3)
 	err := SimulateChunkExecution(ctx, se, reader, processor, writer, 5, 1, 1)
-	
+
 	assert.NoError(t, err)
 	assert.Equal(t, 5, se.ReadCount)
 	assert.Equal(t, 0, se.SkipProcessCount)
@@ -417,13 +421,13 @@ func TestFaultTolerance_ProcessRetry_Fatal(t *testing.T) {
 
 	// Items: 1, 2, 3, 4, 5. Fail item 3 (ID=3) during process (Retryable error)
 	items := []TestItem{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}, {ID: 5}} // 5 items total
-	reader := NewMockReader(items, 0, 0, 0) // FailCount=0: Reader never fails
-	processor := NewMockProcessor(3, 0, 1) // Fail at ID=3 once (failCount=1)
+	reader := NewMockReader(items, 0, 0, 0)                          // FailCount=0: Reader never fails
+	processor := NewMockProcessor(3, 0, 1)                           // Fail at ID=3 once (failCount=1)
 	writer := &MockWriter{}
 
 	// Max retries: 0 (Should fail immediately)
 	err := SimulateChunkExecution(ctx, se, reader, processor, writer, 5, 0, 1)
-	
+
 	assert.Error(t, err)
 	assert.Equal(t, model.BatchStatusFailed, se.Status)
 	assert.Equal(t, 5, se.ReadCount, "All 5 items should be read before process failure (Chunk Read is atomic)")
@@ -444,11 +448,11 @@ func TestFaultTolerance_WriteSkip_ChunkSplitting(t *testing.T) {
 
 	// Max skips: 1, Max retries: 0
 	err := SimulateChunkExecution(ctx, se, reader, processor, writer, 5, 0, 1)
-	
+
 	// Write skip causes chunk failure requiring external splitting logic (simulated by returning an error)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "skippable write error occurred, chunk needs splitting")
-	
+
 	// Metrics update before returning the error
 	assert.Equal(t, 5, se.ReadCount)
 	assert.Equal(t, 1, se.SkipWriteCount)
@@ -465,17 +469,17 @@ func TestFaultTolerance_WriteRetry(t *testing.T) {
 	items := []TestItem{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}, {ID: 5}} // 5 items total
 	reader := NewMockReader(items, 0, 0, 0)
 	processor := NewMockProcessor(0, 0, 0)
-	
+
 	// Writer fails once at item ID=3 (failCount=1)
 	writer := &MockWriter{failAt: 3, failCount: 1}
-	
+
 	// Max retries: 1 (Should retry the whole chunk once internally and succeed on the second attempt)
-	
+
 	err := SimulateChunkExecution(ctx, se, reader, processor, writer, 5, 1, 0)
-	
+
 	assert.NoError(t, err)
 	assert.Equal(t, 5, se.ReadCount)
 	assert.Equal(t, 5, se.WriteCount)
-	assert.Equal(t, 1, se.RollbackCount) // Rollback count incremented once due to retry
+	assert.Equal(t, 1, se.RollbackCount)  // Rollback count incremented once due to retry
 	assert.Len(t, writer.writtenItems, 5) // Final written items should be 5
 }

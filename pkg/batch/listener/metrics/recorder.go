@@ -25,7 +25,9 @@ func (r *PrometheusMetricRecorder) RecordJobStart(ctx context.Context, execution
 
 // RecordJobEnd records the end of a JobExecution.
 func (r *PrometheusMetricRecorder) RecordJobEnd(ctx context.Context, execution *model.JobExecution) {
-	if execution.EndTime == nil { return }
+	if execution.EndTime == nil {
+		return
+	}
 	duration := execution.EndTime.Sub(execution.StartTime)
 	logger.Infof("Metrics: Job End recorded. JobName: %s, Status: %s, Duration: %s", execution.JobName, execution.Status, duration)
 }
@@ -37,7 +39,9 @@ func (r *PrometheusMetricRecorder) RecordStepStart(ctx context.Context, executio
 
 // RecordStepEnd records the end of a StepExecution.
 func (r *PrometheusMetricRecorder) RecordStepEnd(ctx context.Context, execution *model.StepExecution) {
-	if execution.EndTime == nil { return }
+	if execution.EndTime == nil {
+		return
+	}
 	duration := execution.EndTime.Sub(execution.StartTime)
 	logger.Debugf("Metrics: Step End recorded. StepName: %s, Status: %s, Duration: %s", execution.StepName, execution.Status, duration)
 }
@@ -52,10 +56,12 @@ func (r *PrometheusMetricRecorder) RecordItemProcess(ctx context.Context, stepNa
 func (r *PrometheusMetricRecorder) RecordItemWrite(ctx context.Context, stepName string, count int) {}
 
 // RecordItemSkip records item skips.
-func (r *PrometheusMetricRecorder) RecordItemSkip(ctx context.Context, stepName string, reason string) {}
+func (r *PrometheusMetricRecorder) RecordItemSkip(ctx context.Context, stepName string, reason string) {
+}
 
 // RecordItemRetry records item retries.
-func (r *PrometheusMetricRecorder) RecordItemRetry(ctx context.Context, stepName string, reason string) {}
+func (r *PrometheusMetricRecorder) RecordItemRetry(ctx context.Context, stepName string, reason string) {
+}
 
 // RecordChunkCommit records chunk commits.
 func (r *PrometheusMetricRecorder) RecordChunkCommit(ctx context.Context, stepName string, count int) {

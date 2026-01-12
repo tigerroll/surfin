@@ -38,7 +38,7 @@ func RegisterHelloWorldTaskletBuilder(
 	jf *support.JobFactory,
 	builder jsl.ComponentBuilder,
 ) {
-	jf.RegisterComponentBuilder("helloWorldTasklet", builder) // JSL (job.yaml) の 'ref: helloWorldTasklet' と一致するキーでビルダを登録します。
+	jf.RegisterComponentBuilder("helloWorldTasklet", builder)                                                        // JSL (job.yaml) の 'ref: helloWorldTasklet' と一致するキーでビルダを登録します。
 	logger.Debugf("ComponentBuilder for HelloWorldTasklet registered with JobFactory. JSL ref: 'helloWorldTasklet'") // この行を追加
 }
 

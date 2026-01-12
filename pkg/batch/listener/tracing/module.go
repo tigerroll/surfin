@@ -1,13 +1,13 @@
 package tracing
 
 import (
-	"go.uber.org/fx"
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	"github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	"go.uber.org/fx"
 )
 
 // NewTracingJobListenerBuilder creates a ComponentBuilder for TracingJobListener.
@@ -35,8 +35,8 @@ func NewTracingStepListenerBuilder(tracer metrics.Tracer) jsl.StepExecutionListe
 // AllTracingListenerBuilders is a struct to receive all tracing listener builders from Fx.
 type AllTracingListenerBuilders struct {
 	fx.In
-	JobListenerBuilder    jsl.JobExecutionListenerBuilder `name:"tracingJobListener"`
-	StepListenerBuilder   jsl.StepExecutionListenerBuilder `name:"tracingStepListener"`
+	JobListenerBuilder  jsl.JobExecutionListenerBuilder  `name:"tracingJobListener"`
+	StepListenerBuilder jsl.StepExecutionListenerBuilder `name:"tracingStepListener"`
 }
 
 // RegisterAllTracingListeners registers all tracing listener builders with the JobFactory.

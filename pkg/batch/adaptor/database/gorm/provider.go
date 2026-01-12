@@ -43,18 +43,18 @@ func GetDialectorFactory(dbType string) (DialectorFactory, error) {
 
 // BaseProvider provides common functionality for DBProvider implementations.
 type BaseProvider struct {
-	cfg *config.Config
+	cfg    *config.Config
 	dbType string
 	// Map to hold connections managed by this provider (name -> DBConnection)
 	connections map[string]adaptor.DBConnection
-	mu sync.RWMutex
+	mu          sync.RWMutex
 }
 
 // NewBaseProvider creates a new BaseProvider.
 func NewBaseProvider(cfg *config.Config, dbType string) *BaseProvider {
 	return &BaseProvider{
-		cfg: cfg,
-		dbType: dbType,
+		cfg:         cfg,
+		dbType:      dbType,
 		connections: make(map[string]adaptor.DBConnection),
 	}
 }

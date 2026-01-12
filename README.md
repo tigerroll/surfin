@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/surfin-logo.png" alt="Surfin Logo" width="200">
+  <img src="docs/images/surfin-logo.png" alt="Surfin Logo" width="150">
 </p>
 
 # 🌊 Surfin - Batch framework

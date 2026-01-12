@@ -17,12 +17,12 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm/postgres"
 	"github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm/sqlite"
 	migrationfs "github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration/filesystem"
-	
+
 	"go.uber.org/fx"
 )
 
 // DBProviderMap is used by main.go to dynamically select providers.
-var DBProviderMap = map[string]func(cfg *config.Config) adaptor.DBProvider {
+var DBProviderMap = map[string]func(cfg *config.Config) adaptor.DBProvider{
 	"postgres": postgres.NewProvider,
 	"redshift": postgres.NewProvider, // Redshift also uses PostgresProvider
 	"mysql":    mysql.NewProvider,
@@ -32,7 +32,7 @@ var DBProviderMap = map[string]func(cfg *config.Config) adaptor.DBProvider {
 // MigrationFSMapParams defines the dependencies for NewMigrationFSMap.
 type MigrationFSMapParams struct {
 	fx.In
-	WeatherAppFS fs.FS `name:"weatherAppFS"` // Provided by the anonymous provider below
+	WeatherAppFS fs.FS `name:"weatherAppFS"`          // Provided by the anonymous provider below
 	FrameworkFS  fs.FS `name:"frameworkMigrationsFS"` // Provided by migrationfs.Module
 }
 
@@ -42,9 +42,9 @@ func NewMigrationFSMap(p MigrationFSMapParams) map[string]fs.FS {
 
 	// 1. Add Framework FS
 	// Framework FS is provided with the name "frameworkMigrationsFS"
-	frameworkFSName := "frameworkMigrationsFS" 
+	frameworkFSName := "frameworkMigrationsFS"
 	if p.FrameworkFS != nil {
-		fsMap[frameworkFSName] = p.FrameworkFS 
+		fsMap[frameworkFSName] = p.FrameworkFS
 	}
 
 	// 2. Add Application FS
@@ -78,7 +78,7 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 	allConnections := make(map[string]adaptor.DBConnection)
 	allTxManagers := make(map[string]tx.TransactionManager)
 	allProviders := make(map[string]adaptor.DBProvider)
-	
+
 	// Map providers by DB type
 	providerMap := make(map[string]adaptor.DBProvider)
 	for _, provider := range p.DBProviders {
@@ -105,10 +105,10 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to get connection for '%s' using provider '%s': %w", name, provider.Type(), err)
 		}
-		
+
 		// Once connection is established, create TxManager
 		txManager := p.TxFactory.NewTransactionManager(conn)
-		
+
 		allConnections[name] = conn
 		allTxManagers[name] = txManager
 		logger.Debugf("Initialized DB Connection and TxManager for: %s (%s)", name, dbConfig.Type)
@@ -120,7 +120,7 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 			logger.Infof("Closing all database connections...")
 			var wg sync.WaitGroup
 			var lastErr error
-			
+
 			// Close connections for each provider
 			for _, provider := range p.DBProviders {
 				wg.Add(1)
@@ -197,7 +197,7 @@ func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, n
 	if err != nil {
 		return nil, fmt.Errorf("failed to get connection '%s': %w", name, err)
 	}
-	
+
 	// Expect GetConnection to return the latest valid connection
 	// conn.RefreshConnection(ctx) // Optional: call RefreshConnection to ensure the connection is valid
 
@@ -213,13 +213,13 @@ var Module = fx.Options(
 	// Provide the aggregated map[string]adaptor.DBConnection and map[string]tx.TransactionManager
 	// NewDBConnectionsAndTxManagers also provides map[string]adaptor.DBProvider
 	fx.Provide(NewDBConnectionsAndTxManagers),
-	
+
 	// Provide the specific metadata TxManager required by JobFactory
 	fx.Provide(fx.Annotate(
 		NewMetadataTxManager,
 		fx.ResultTags(`name:"metadata"`), // Named instance required by JobFactoryParams
 	)),
-	
+
 	// Provide the concrete DBConnectionResolver implementation
 	fx.Provide(fx.Annotate(
 		NewDefaultDBConnectionResolver,
@@ -247,7 +247,7 @@ var Module = fx.Options(
 			fx.ResultTags(`name:"weatherAppFS"`),
 		),
 	),
-	
+
 	// Provide the aggregated map[string]fs.FS
 	fx.Provide(fx.Annotate(
 		NewMigrationFSMap,

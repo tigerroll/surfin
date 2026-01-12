@@ -12,7 +12,7 @@ import (
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	
+
 	item "github.com/tigerroll/surfin/pkg/batch/engine/step/item"
 )
 
@@ -50,14 +50,14 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 	var txAdapter tx.Tx
 	var err error
 	var txStartedByExecutor bool = false // Tracks if the Executor started the transaction.
-	
+
 	// T_TX_DEC: Inject MetricRecorder and Tracer into the Step
 	step.SetMetricRecorder(e.recorder)
 	step.SetTracer(e.tracer)
-	
+
 	// T_TX_DEC_3: Variable to hold suspended transaction
 	var suspendedTx tx.Tx
-	
+
 	// T_TX_DEC_6: Savepoint name
 	var savepointName string
 
@@ -67,7 +67,7 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 	// T_TX_DEC: Get transaction options and propagation attribute from Step
 	var txOpts *sql.TxOptions
 	var propagation string = "REQUIRED" // Default value
-	
+
 	if stepWithOptions, ok := step.(interface {
 		GetTransactionOptions() *sql.TxOptions
 		GetPropagation() string // Assume TaskletStep has this method
@@ -86,7 +86,7 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 	if !isChunkStep {
 		// Get existing transaction from context
 		existingTx, hasExistingTx := ctx.Value("tx").(tx.Tx)
-		
+
 		switch propagation {
 		case "REQUIRED", "": // REQUIRED or default (empty string)
 			if hasExistingTx {
@@ -103,7 +103,7 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 				txStartedByExecutor = true
 				logger.Debugf("Propagation REQUIRED: Starting new transaction for Worker Step '%s'.", workerStepName)
 			}
-		
+
 		case "REQUIRES_NEW":
 			// Always start a new transaction regardless of whether an existing transaction exists
 			if hasExistingTx {
@@ -111,7 +111,7 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 				suspendedTx = existingTx
 				logger.Debugf("Propagation REQUIRES_NEW: Suspending existing transaction for Worker Step '%s'.", workerStepName)
 			}
-			
+
 			txAdapter, err = e.txManager.Begin(ctx, txOpts)
 			if err != nil {
 				e.tracer.RecordError(ctx, "simple_executor", err)
@@ -119,7 +119,7 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 			}
 			txStartedByExecutor = true
 			logger.Debugf("Propagation REQUIRES_NEW: Starting new transaction for Worker Step '%s'.", workerStepName)
-			
+
 		case "NOT_SUPPORTED":
 			// Does not support transactions
 			if hasExistingTx {
@@ -132,7 +132,7 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 				logger.Debugf("Propagation NOT_SUPPORTED: No transaction active for Worker Step '%s'.", workerStepName)
 			}
 			// txAdapter remains nil
-			
+
 		case "SUPPORTS": // T_TX_DEC_4: Join existing transaction if present, otherwise no transaction
 			if hasExistingTx {
 				txAdapter = existingTx
@@ -142,7 +142,7 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 				logger.Debugf("Propagation SUPPORTS: No existing transaction found. Running without transaction for Worker Step '%s'.", workerStepName)
 			}
 			// txAdapter remains existingTx or nil. txStartedByExecutor remains false.
-			
+
 		case "NEVER": // T_TX_DEC_4: No external transaction must exist
 			if hasExistingTx {
 				// Error because external transaction exists
@@ -150,7 +150,7 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 			}
 			// Execute without transaction
 			logger.Debugf("Propagation NEVER: No transaction active for Worker Step '%s'.", workerStepName)
-			
+
 		case "MANDATORY": // T_TX_DEC_5: External transaction is mandatory
 			if !hasExistingTx {
 				// Error because external transaction does not exist
@@ -160,13 +160,13 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 			txAdapter = existingTx
 			logger.Debugf("Propagation MANDATORY: Joining existing transaction for Worker Step '%s'.", workerStepName)
 			// txStartedByExecutor remains false
-			
+
 		case "NESTED": // T_TX_DEC_6: Nested transaction (savepoint)
 			if hasExistingTx {
 				// Create a savepoint within the existing transaction
 				txAdapter = existingTx
 				savepointName = "SP_" + stepExecution.ID // Use StepExecution ID to create a unique savepoint name
-				
+
 				if spErr := txAdapter.Savepoint(savepointName); spErr != nil {
 					// Savepoint creation failure is fatal
 					return stepExecution, exception.NewBatchError("simple_executor", fmt.Sprintf("Propagation NESTED: Failed to create savepoint '%s' for Worker Step '%s'", savepointName, workerStepName), spErr, false, false)
@@ -183,12 +183,12 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 				txStartedByExecutor = true
 				logger.Debugf("Propagation NESTED: Starting new transaction (acting as REQUIRED) for Worker Step '%s'.", workerStepName)
 			}
-			
+
 		default:
 			// Unsupported propagation attribute is an error
 			return stepExecution, exception.NewBatchErrorf("simple_executor", "Unsupported transaction propagation attribute: %s", propagation)
 		}
-		
+
 		// If a transaction was started, create a new context
 		if txAdapter != nil {
 			ctx = context.WithValue(ctx, "tx", txAdapter)
@@ -224,10 +224,10 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 		}
 	} else if txAdapter != nil && (propagation == "REQUIRED" || propagation == "" || propagation == "SUPPORTS" || propagation == "MANDATORY" || propagation == "NESTED") && !txStartedByExecutor {
 		// If joined an existing transaction with REQUIRED, SUPPORTS, MANDATORY, NESTED, commit/rollback is delegated externally
-		
+
 		if propagation == "NESTED" {
 			// For NESTED, if no error, release savepoint (GORM automatically releases on commit, so do nothing here)
-			
+
 			if err != nil {
 				// If an error occurred during Step execution, rollback to savepoint
 				if rbErr := txAdapter.RollbackToSavepoint(savepointName); rbErr != nil {
@@ -240,28 +240,28 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 				// External transaction is still active, so return the error
 				return stepExecution, err
 			}
-			
+
 			// If successful, savepoint is automatically committed (depends on GORM behavior)
 			logger.Debugf("Propagation NESTED: Transaction management delegated to external caller (Savepoint '%s' released/committed) for Worker Step '%s'.", savepointName, workerStepName)
-			
+
 		} else {
 			// For REQUIRED, SUPPORTS, MANDATORY
 			logger.Debugf("Propagation %s: Transaction management delegated to external caller for Worker Step '%s'.", propagation, workerStepName)
 		}
-		
+
 	} else if isChunkStep && err == nil {
 		// If ChunkStep succeeded, no external transaction was started, so do nothing.
 	} else if isChunkStep && err != nil {
 		// If ChunkStep failed, it has already been rolled back internally.
 	}
-	
+
 	// T_TX_DEC_3: Restore suspended transaction
 	if suspendedTx != nil {
 		// For REQUIRES_NEW or NOT_SUPPORTED, restore the suspended transaction to the context
 		// NOTE: Go's Context is immutable, so only logging is performed here
 		logger.Debugf("Restoring suspended transaction context for Worker Step '%s'.", workerStepName)
 	}
-	
+
 	logger.Infof("Partition Step Executor: Worker Step '%s' completed. Status: %s", workerStepName, stepExecution.Status)
 	return stepExecution, nil
 }

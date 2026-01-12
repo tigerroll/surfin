@@ -9,7 +9,7 @@ func RegisterHelloWorldJobBuilder(
 	jf *support.JobFactory,
 	builder support.JobBuilder,
 ) {
-	jf.RegisterJobBuilder("helloWorldJob", builder) // JobFactory に JobBuilder を登録
+	jf.RegisterJobBuilder("helloWorldJob", builder)                                                   // JobFactory に JobBuilder を登録
 	logger.Debugf("JobBuilder for helloWorldJob registered with JobFactory. JSL id: 'helloWorldJob'") // JSL (job.yaml) の 'id: helloWorldJob' と一致するキーでビルダを登録します。
 }
 
@@ -22,7 +22,7 @@ func provideHelloWorldJobBuilder() support.JobBuilder {
 // Module は helloWorldJob コンポーネントの Fx オプションを定義します。
 var Module = fx.Options(
 	fx.Provide(fx.Annotate(
-		provideHelloWorldJobBuilder, // provideHelloWorldJobBuilder 関数が support.JobBuilder 型を返します
+		provideHelloWorldJobBuilder,           // provideHelloWorldJobBuilder 関数が support.JobBuilder 型を返します
 		fx.ResultTags(`name:"helloWorldJob"`), // JobFactory がこの名前で JobBuilder を取得できるようにタグ付け
 	)),
 	fx.Invoke(fx.Annotate(

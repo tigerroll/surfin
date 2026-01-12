@@ -56,10 +56,10 @@ func (w *PostgresRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, t
 // TruncateHourlyForecast deletes all data from the hourly_forecast table.
 func (w *PostgresRepositoryWrapper) TruncateHourlyForecast(ctx context.Context) error {
 	const op = "PostgresRepositoryWrapper.TruncateHourlyForecast"
-	
+
 	// Use ExecuteUpdate for DELETE operation
 	dummyEntity := weather_entity.WeatherDataToStore{}
-	
+
 	// DELETE FROM hourly_forecast
 	// ExecuteUpdate generates a DELETE query that deletes the entire table if no WHERE clause is provided.
 	// Explicitly pass the table name.
@@ -112,10 +112,10 @@ func (w *MySQLRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx t
 // TruncateHourlyForecast deletes all data from the hourly_forecast table.
 func (w *MySQLRepositoryWrapper) TruncateHourlyForecast(ctx context.Context) error {
 	const op = "MySQLRepositoryWrapper.TruncateHourlyForecast"
-	
+
 	// Use ExecuteUpdate for DELETE operation
 	dummyEntity := weather_entity.WeatherDataToStore{}
-	
+
 	// DELETE FROM hourly_forecast
 	// Explicitly pass the table name.
 	_, err := w.dbConn.ExecuteUpdate(ctx, &dummyEntity, "DELETE", dummyEntity.TableName(), nil)
@@ -165,10 +165,10 @@ func (w *SQLiteRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx 
 
 func (w *SQLiteRepositoryWrapper) TruncateHourlyForecast(ctx context.Context) error {
 	const op = "SQLiteRepositoryWrapper.TruncateHourlyForecast"
-	
+
 	// Use ExecuteUpdate for DELETE operation
 	dummyEntity := weather_entity.WeatherDataToStore{}
-	
+
 	// DELETE FROM hourly_forecast
 	// Explicitly pass the table name.
 	_, err := w.dbConn.ExecuteUpdate(ctx, &dummyEntity, "DELETE", dummyEntity.TableName(), nil)

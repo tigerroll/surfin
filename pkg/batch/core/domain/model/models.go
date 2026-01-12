@@ -123,7 +123,7 @@ func (ec *ExecutionContext) Scan(value interface{}) error {
 	default:
 		return fmt.Errorf("unsupported Scan type for ExecutionContext: %T", value)
 	}
-	
+
 	if len(b) == 0 {
 		*ec = make(ExecutionContext)
 		return nil // Return empty map if the byte slice is empty
@@ -168,7 +168,7 @@ func (jp *JobParameters) Scan(value interface{}) error {
 	default:
 		return fmt.Errorf("unsupported Scan type for JobParameters: %T", value)
 	}
-	
+
 	if len(b) == 0 {
 		jp.Params = make(map[string]interface{})
 		return nil // Return empty map if the byte slice is empty
@@ -211,7 +211,7 @@ func (fl *FailureList) Scan(value interface{}) error {
 	default:
 		return fmt.Errorf("unsupported Scan type for FailureList: %T", value)
 	}
-	
+
 	if len(b) == 0 {
 		*fl = make(FailureList, 0)
 		return nil // Return empty list if the byte slice is empty
@@ -315,7 +315,7 @@ func (se *StepExecution) CopyForRestart(newJobExecutionID string) *StepExecution
 		newSE.Status = BatchStatusStarting
 		newSE.ExitStatus = ExitStatusUnknown
 		newSE.StartTime = time.Now() // Set new start time upon creation for the restarted step
-		newSE.EndTime = nil           // Reset end time for the restarted step
+		newSE.EndTime = nil          // Reset end time for the restarted step
 		// Stats remain 0 (default) for the restarted step
 	}
 
@@ -328,13 +328,13 @@ func (se *StepExecution) DebugString() string {
 	if se.EndTime != nil {
 		endTimeStr = se.EndTime.Format(time.RFC3339Nano)
 	}
-	
+
 	return fmt.Sprintf(
 		"&{ID:%s StepName:%s JobExecutionID:%s StartTime:%s EndTime:%s Status:%s ExitStatus:%s Failures:%v ReadCount:%d WriteCount:%d CommitCount:%d RollbackCount:%d FilterCount:%d SkipReadCount:%d SkipProcessCount:%d SkipWriteCount:%d ExecutionContext: (omitted, size: %d) LastUpdated:%s Version:%d}",
-		se.ID, se.StepName, se.JobExecutionID, se.StartTime.Format(time.RFC3339Nano), 
-		endTimeStr, se.Status, se.ExitStatus, se.Failures, 
-		se.ReadCount, se.WriteCount, se.CommitCount, se.RollbackCount, se.FilterCount, 
-		se.SkipReadCount, se.SkipProcessCount, se.SkipWriteCount, len(se.ExecutionContext), 
+		se.ID, se.StepName, se.JobExecutionID, se.StartTime.Format(time.RFC3339Nano),
+		endTimeStr, se.Status, se.ExitStatus, se.Failures,
+		se.ReadCount, se.WriteCount, se.CommitCount, se.RollbackCount, se.FilterCount,
+		se.SkipReadCount, se.SkipProcessCount, se.SkipWriteCount, len(se.ExecutionContext),
 		se.LastUpdated.Format(time.RFC3339Nano), se.Version,
 	)
 }
@@ -412,7 +412,7 @@ func (fd *FlowDefinition) GetTransitionRule(from string, exitStatus ExitStatus, 
 
 // ExecutionContextPromotion defines the promotion settings from StepExecutionContext to JobExecutionContext.
 type ExecutionContextPromotion struct {
-	Keys         []string          `yaml:"keys,omitempty"`
+	Keys []string `yaml:"keys,omitempty"`
 	// JobLevelKeys is a map for renaming promoted keys at the job level.
 	JobLevelKeys map[string]string `yaml:"job-level-keys,omitempty"`
 }
@@ -505,7 +505,7 @@ func (ec ExecutionContext) GetNested(key string) (interface{}, bool) {
 	if val, ok := ec.Get(key); ok {
 		return val, true
 	}
-	
+
 	var currentMap interface{} = ec
 	var ok bool = true
 
@@ -681,7 +681,7 @@ func deepEqualWithNumericTolerance(a, b interface{}) bool {
 		bFloat := toFloat64(b)
 		return aFloat == bFloat
 	}
-	
+
 	// Otherwise, use strict DeepEqual
 	return reflect.DeepEqual(a, b)
 }

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 
 	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
 )
@@ -33,11 +33,11 @@ type WeatherProcessorConfig struct {
 }
 
 type WeatherProcessor struct {
-	config   *config.Config
-	resolver core.ExpressionResolver
+	config           *config.Config
+	resolver         core.ExpressionResolver
 	executionContext model.ExecutionContext
-	properties map[string]string
-	processorConfig *WeatherProcessorConfig
+	properties       map[string]string
+	processorConfig  *WeatherProcessorConfig
 }
 
 // NewWeatherProcessor simplifies the signature by removing DB-related dependencies.
@@ -46,20 +46,20 @@ func NewWeatherProcessor(
 	resolver core.ExpressionResolver,
 	properties map[string]string,
 ) (*WeatherProcessor, error) {
-	
+
 	processorCfg := &WeatherProcessorConfig{}
-	
+
 	// Automatic binding of JSL properties
 	if err := configbinder.BindProperties(properties, processorCfg); err != nil {
 		return nil, exception.NewBatchError("weather_processor", "Failed to bind properties", err, false, false)
 	}
 
 	return &WeatherProcessor{
-		config: cfg,
-		resolver: resolver,
+		config:           cfg,
+		resolver:         resolver,
 		executionContext: model.NewExecutionContext(),
-		properties: properties,
-		processorConfig: processorCfg,
+		properties:       properties,
+		processorConfig:  processorCfg,
 	}, nil
 }
 

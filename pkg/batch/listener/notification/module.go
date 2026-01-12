@@ -1,19 +1,19 @@
 package notification
 
 import (
-	"go.uber.org/fx"
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	coreport "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
-	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	"github.com/tigerroll/surfin/pkg/batch/core/ports"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	"go.uber.org/fx"
 )
 
 // NewNotificationJobListenerBuilder creates a ComponentBuilder for NotificationJobListener.
 func NewNotificationJobListenerBuilder(notifier ports.Notifier) jsl.NotificationListenerBuilder {
 	return func(
-		_ *config.Config, 
+		_ *config.Config,
 		_ map[string]string,
 	) (coreport.JobExecutionListener, error) {
 		listener := NewNotificationListenerImpl(notifier)
@@ -25,7 +25,7 @@ func NewNotificationJobListenerBuilder(notifier ports.Notifier) jsl.Notification
 type NotificationListenerParams struct {
 	fx.In
 	JobFactory *support.JobFactory
-	Builder jsl.NotificationListenerBuilder `name:"notificationJobListener"`
+	Builder    jsl.NotificationListenerBuilder `name:"notificationJobListener"`
 }
 
 // RegisterNotificationListener registers the notification listener builder with the JobFactory.

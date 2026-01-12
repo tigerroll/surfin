@@ -2,10 +2,10 @@
 package postgres
 
 import (
+	gormadaptor "github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"gorm.io/driver/postgres"
-	gormadaptor "github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm"
 	"gorm.io/gorm"
 )
 

@@ -7,19 +7,19 @@ import (
 	"reflect"
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
-	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
-	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
-	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // ExecutionContextItemWriter is an ItemWriter that stores the number of items written to the ExecutionContext.
 // It is primarily used for testing and debugging.
 type ExecutionContextItemWriter[I any] struct {
-	ec model.ExecutionContext
+	ec  model.ExecutionContext
 	key string // Key to store the count in the ExecutionContext.
 }
 
@@ -29,7 +29,7 @@ func NewExecutionContextItemWriter[I any](key string) port.ItemWriter[I] {
 		key = "writer.write_count"
 	}
 	return &ExecutionContextItemWriter[I]{
-		ec: model.NewExecutionContext(),
+		ec:  model.NewExecutionContext(),
 		key: key,
 	}
 }
@@ -50,17 +50,17 @@ func (w *ExecutionContextItemWriter[I]) Write(ctx context.Context, tx tx.Tx, ite
 	if !ok {
 		currentCount = 0
 	}
-	
+
 	newCount := currentCount + len(items)
 	w.ec.Put(w.key, newCount)
-	
+
 	logger.Debugf("ExecutionContextItemWriter: Updated count to %d.", newCount)
-	
+
 	// Log item contents for debugging.
 	for i, item := range items {
 		logger.Debugf("Item %d: Type=%s, Value=%+v", i, reflect.TypeOf(item), item)
 	}
-	
+
 	return nil
 }
 

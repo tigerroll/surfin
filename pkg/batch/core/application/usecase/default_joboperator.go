@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	jobRepository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -18,7 +18,7 @@ type DefaultJobOperator struct {
 	jobRepository jobRepository.JobRepository
 	jobFactory    *support.JobFactory
 	jobLauncher   *SimpleJobLauncher // Concrete implementation of usecase.JobLauncher
-	jobExplorer   JobExplorer // usecase.JobExplorer
+	jobExplorer   JobExplorer        // usecase.JobExplorer
 }
 
 // Verify that DefaultJobOperator implements the JobOperator interface.

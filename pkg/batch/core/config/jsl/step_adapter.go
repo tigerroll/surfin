@@ -3,15 +3,15 @@ package jsl
 import (
 	"context"
 	"fmt"
-	"reflect"
-	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	step_factory "github.com/tigerroll/surfin/pkg/batch/engine/step/factory"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	"reflect"
 
 	yaml "gopkg.in/yaml.v3"
 )
@@ -24,7 +24,7 @@ func resolveComponentRefProperties(resolver core.ExpressionResolver, ref *Compon
 	if ref == nil || len(ref.Properties) == 0 {
 		return ref.Properties, nil // Return as is if no properties
 	}
-	
+
 	resolvedProps := make(map[string]string, len(ref.Properties))
 	for key, value := range ref.Properties {
 		// Use context.Background() since JobExecution/StepExecution are nil during JSL converter execution.
@@ -79,9 +79,9 @@ func ConvertJSLToCoreFlow(
 		}
 
 		var (
-			jslStep    Step
+			jslStep     Step
 			jslDecision Decision
-			jslSplit   Split
+			jslSplit    Split
 		)
 
 		// Attempt to unmarshal as Step
@@ -214,7 +214,7 @@ func ConvertJSLToCoreFlow(
 				if err != nil {
 					return nil, err
 				}
-				
+
 				// Update ComponentRef with resolved properties
 				resolvedReaderRef := jslStep.Reader
 				resolvedReaderRef.Properties = resolvedReaderProps
@@ -344,11 +344,11 @@ func ConvertJSLToCoreFlow(
 					StepExecListeners []core.StepExecutionListener
 					CoreECPromotion   *model.ExecutionContextPromotion
 				}{
-					IsPartition: true,
-					JSLStep:     jslStep,
-					Partitioner: partitioner,
+					IsPartition:       true,
+					JSLStep:           jslStep,
+					Partitioner:       partitioner,
 					StepExecListeners: stepExecListeners,
-					CoreECPromotion: coreECPromotion,
+					CoreECPromotion:   coreECPromotion,
 				}
 				logger.Debugf("Flow element '%s' (Partition Controller) temporarily saved construction info.", id)
 
@@ -583,7 +583,7 @@ func ConvertJSLToCoreFlow(
 						workerStepJSL.ID,
 						t,
 						[]core.StepExecutionListener{}, // Worker Step does not have listeners
-						nil, // EC Promotion is unnecessary
+						nil,                            // EC Promotion is unnecessary
 						workerStepJSL.IsolationLevel,
 						workerStepJSL.Propagation,
 					)

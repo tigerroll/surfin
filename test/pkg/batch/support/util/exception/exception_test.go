@@ -121,7 +121,7 @@ func TestIsTemporaryAndIsFatal(t *testing.T) {
 func TestIsErrorOfType(t *testing.T) {
 	// Register custom error for testing
 	exception.RegisterErrorType("CustomErrorType", &CustomError{})
-	
+
 	// 1. Sentinel Error Match (OptimisticLockingFailureException)
 	olfe := exception.NewOptimisticLockingFailureException("repo", "update failed", nil)
 	assert.True(t, exception.IsErrorOfType(olfe, exception.OptimisticLockingFailureException))

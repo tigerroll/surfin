@@ -11,9 +11,9 @@ import (
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 )
 
 // PartitionStep is an implementation of core.Step that executes a worker step in parallel partitions.
@@ -28,8 +28,8 @@ type PartitionStep struct {
 	promotion              *model.ExecutionContextPromotion
 	stepExecutor           port.StepExecutor // SimpleStepExecutor or RemoteStepExecutor
 	// Fields to satisfy Step interface requirements (PartitionStep itself usually doesn't record, but holds to pass to Worker)
-	metricRecorder         metrics.MetricRecorder
-	tracer                 metrics.Tracer
+	metricRecorder metrics.MetricRecorder
+	tracer         metrics.Tracer
 }
 
 // NewPartitionStep creates a new PartitionStep instance.
@@ -92,7 +92,7 @@ func (s *PartitionStep) GetTransactionOptions() *sql.TxOptions {
 // PartitionStep is a controller step and does not require a transaction boundary for its execution.
 func (s *PartitionStep) GetPropagation() string {
 	// JSL does not define a propagation attribute for Partition Step itself, so it returns an empty string.
-	return "" 
+	return ""
 }
 
 // notifyBeforeStep calls the BeforeStep method of registered StepExecutionListeners.
@@ -135,21 +135,21 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 	// 4. Execute each partition in parallel.
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(partitionContexts))
-	
+
 	// List of Worker StepExecutions (for aggregation).
 	workerExecutions := make(chan *model.StepExecution, len(partitionContexts))
 
 	for partitionName, partitionEC := range partitionContexts {
 		wg.Add(1)
-		
+
 		// Create Worker StepExecution.
 		workerExecutionID := uuid.New().String()
 		workerExecution := model.NewStepExecution(workerExecutionID, jobExecution, s.workerStep.StepName())
 		workerExecution.ExecutionContext = partitionEC
-		
+
 		// Add Worker StepExecution to JobExecution (JobExecution persistence is handled by JobRunner).
 		jobExecution.AddStepExecution(workerExecution)
-		
+
 		// Persist Worker StepExecution (initial state).
 		if err := s.jobRepository.SaveStepExecution(ctx, workerExecution); err != nil {
 			logger.Errorf("PartitionStep '%s': Failed to save Worker StepExecution '%s': %v", s.id, workerExecutionID, err)
@@ -157,22 +157,22 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 			wg.Done()
 			continue
 		}
-		
+
 		logger.Debugf("PartitionStep '%s': Starting worker '%s' (Worker StepExecution ID: %s).", s.id, partitionName, workerExecutionID)
 
 		go func(workerExec *model.StepExecution) {
 			defer wg.Done()
-			
+
 			// Execute the Worker Step using the StepExecutor.
 			completedWorkerExec, execErr := s.stepExecutor.ExecuteStep(ctx, s.workerStep, jobExecution, workerExec)
-			
+
 			if execErr != nil {
 				logger.Errorf("PartitionStep '%s': Worker '%s' failed: %v", s.id, workerExec.StepName, execErr)
 				errChan <- execErr
 			} else {
 				logger.Infof("PartitionStep '%s': Worker '%s' completed with status: %s", s.id, workerExec.StepName, completedWorkerExec.Status)
 			}
-			
+
 			// Send the completed Worker StepExecution for aggregation.
 			workerExecutions <- completedWorkerExec
 		}(workerExecution)
@@ -187,21 +187,21 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 	for err := range errChan {
 		combinedError = errors.Join(combinedError, err)
 	}
-	
+
 	// Aggregate Worker Execution Context (Promotion should be done on Controller Execution Context, but here we aggregate Worker statistics).
 	totalRead := 0
 	totalWrite := 0
-	
+
 	// Track aggregated ExitStatus.
 	var aggregatedExitStatus model.ExitStatus = model.ExitStatusCompleted
-	
+
 	// Initialize map to store aggregated Worker EC.
 	aggregatedEC := model.NewExecutionContext()
-	
+
 	for workerExec := range workerExecutions {
 		totalRead += workerExec.ReadCount
 		totalWrite += workerExec.WriteCount
-		
+
 		// Logic to reflect Worker's ExitStatus in Controller's ExitStatus.
 		if workerExec.Status == model.BatchStatusFailed || workerExec.Status == model.BatchStatusAbandoned {
 			// If there is a failure or abandonment, the Controller also fails.
@@ -225,14 +225,14 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 			aggregatedEC[k] = v
 		}
 	}
-	
+
 	// Save aggregated results to Controller Execution Context.
 	controllerExecution.ReadCount = totalRead
 	controllerExecution.WriteCount = totalWrite
-	
+
 	// Set aggregated EC to Controller Execution.
 	controllerExecution.ExecutionContext = aggregatedEC
-	
+
 	// 6. Update Controller StepExecution status.
 	if combinedError != nil {
 		// If there was a worker failure, wrap the aggregated error and return it.

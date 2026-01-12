@@ -27,7 +27,8 @@ var registryMutex sync.RWMutex
 //
 // name: A unique identifier for the error type (string referenced in JSL).
 // prototype: An instance of the error to be registered. Used for comparison with errors.Is.
-//            For example, `errors.New("...")` or an instance of a custom error type (`&MyError{}`).
+//
+//	For example, `errors.New("...")` or an instance of a custom error type (`&MyError{}`).
 //
 // If prototype is nil or name is empty, this function will panic.
 func RegisterErrorType(name string, prototype error) {
@@ -311,14 +312,14 @@ var ErrOptimisticLockingFailure = errors.New(OptimisticLockingFailureException)
 func init() {
 	// Register sentinel errors so that errors.Is can detect them by constant name.
 	RegisterErrorType(OptimisticLockingFailureException, ErrOptimisticLockingFailure)
-	
+
 	// --- Registration of common error types that may be referenced in JSL ---
 	// Common network-related error names
 	RegisterErrorType("io.EOF", errors.New("io.EOF"))
 	RegisterErrorType("net.OpError", errors.New("net.OpError"))
 	RegisterErrorType("context.DeadlineExceeded", context.DeadlineExceeded)
 	RegisterErrorType("context.Canceled", context.Canceled)
-	
+
 	// Common database-related error names
 	RegisterErrorType("sql.ErrNoRows", sql.ErrNoRows)
 }

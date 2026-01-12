@@ -3,8 +3,8 @@ package processor
 import (
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
-	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 

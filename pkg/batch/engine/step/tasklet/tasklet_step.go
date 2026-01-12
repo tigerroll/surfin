@@ -7,8 +7,8 @@ import (
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
-	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
@@ -20,13 +20,13 @@ type TaskletStep struct {
 	jobRepository          repository.JobRepository
 	stepExecutionListeners []port.StepExecutionListener
 	promotion              *model.ExecutionContextPromotion
-	
+
 	// T_TX_DEC: Addition of transaction attributes
-	isolationLevel         sql.IsolationLevel
-	propagation            string // Holds values like REQUIRED, REQUIRES_NEW as strings
-	
-	metricRecorder         metrics.MetricRecorder
-	tracer                 metrics.Tracer
+	isolationLevel sql.IsolationLevel
+	propagation    string // Holds values like REQUIRED, REQUIRES_NEW as strings
+
+	metricRecorder metrics.MetricRecorder
+	tracer         metrics.Tracer
 }
 
 // NewTaskletStep creates a new TaskletStep instance.
@@ -146,7 +146,7 @@ func (s *TaskletStep) Execute(ctx context.Context, jobExecution *model.JobExecut
 
 	// 4. Execute Tasklet (transaction management delegated to StepExecutor)
 	var exitStatus model.ExitStatus
-	
+
 	// Execute Tasklet business logic
 	exitStatus, err = s.tasklet.Execute(ctx, stepExecution)
 

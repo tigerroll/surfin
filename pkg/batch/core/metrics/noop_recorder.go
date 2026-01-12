@@ -18,24 +18,34 @@ func NewNoOpMetricRecorder() MetricRecorder {
 
 // RecordJobStart does nothing.
 func (r *NoOpMetricRecorder) RecordJobStart(ctx context.Context, execution *model.JobExecution) {}
+
 // RecordJobEnd does nothing.
-func (r *NoOpMetricRecorder) RecordJobEnd(ctx context.Context, execution *model.JobExecution)   {}
+func (r *NoOpMetricRecorder) RecordJobEnd(ctx context.Context, execution *model.JobExecution) {}
+
 // RecordStepStart does nothing.
 func (r *NoOpMetricRecorder) RecordStepStart(ctx context.Context, execution *model.StepExecution) {}
+
 // RecordStepEnd does nothing.
-func (r *NoOpMetricRecorder) RecordStepEnd(ctx context.Context, execution *model.StepExecution)   {}
+func (r *NoOpMetricRecorder) RecordStepEnd(ctx context.Context, execution *model.StepExecution) {}
+
 // RecordItemRead does nothing.
-func (r *NoOpMetricRecorder) RecordItemRead(ctx context.Context, stepName string)                {}
+func (r *NoOpMetricRecorder) RecordItemRead(ctx context.Context, stepName string) {}
+
 // RecordItemProcess does nothing.
-func (r *NoOpMetricRecorder) RecordItemProcess(ctx context.Context, stepName string)             {}
+func (r *NoOpMetricRecorder) RecordItemProcess(ctx context.Context, stepName string) {}
+
 // RecordItemWrite does nothing.
-func (r *NoOpMetricRecorder) RecordItemWrite(ctx context.Context, stepName string, count int)    {}
+func (r *NoOpMetricRecorder) RecordItemWrite(ctx context.Context, stepName string, count int) {}
+
 // RecordItemSkip does nothing.
 func (r *NoOpMetricRecorder) RecordItemSkip(ctx context.Context, stepName string, reason string) {}
+
 // RecordItemRetry does nothing.
 func (r *NoOpMetricRecorder) RecordItemRetry(ctx context.Context, stepName string, reason string) {}
+
 // RecordChunkCommit does nothing.
-func (r *NoOpMetricRecorder) RecordChunkCommit(ctx context.Context, stepName string, count int)  {}
+func (r *NoOpMetricRecorder) RecordChunkCommit(ctx context.Context, stepName string, count int) {}
+
 // RecordDuration does nothing.
 func (r *NoOpMetricRecorder) RecordDuration(ctx context.Context, name string, duration time.Duration, tags map[string]string) {
 }
@@ -66,6 +76,7 @@ func (t *NoOpTracer) StartStepSpan(ctx context.Context, execution *model.StepExe
 func (t *NoOpTracer) RecordError(ctx context.Context, module string, err error) {}
 
 // RecordEvent records an event in the current Span.
-func (t *NoOpTracer) RecordEvent(ctx context.Context, name string, attributes map[string]interface{}) {}
+func (t *NoOpTracer) RecordEvent(ctx context.Context, name string, attributes map[string]interface{}) {
+}
 
 var _ Tracer = (*NoOpTracer)(nil)

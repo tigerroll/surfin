@@ -3,8 +3,8 @@ package job
 import (
 	"context"
 
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"

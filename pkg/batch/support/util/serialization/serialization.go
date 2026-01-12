@@ -146,7 +146,7 @@ func UnmarshalFailures(data []byte, msgs *[]string) error {
 		logger.Debugf("Failures is nil or empty data. Returning empty slice.")
 		return nil
 	}
-	
+
 	err := json.Unmarshal(data, msgs)
 	if err != nil {
 		logger.Errorf("Failed to deserialize Failures: %v", err)

@@ -2,9 +2,9 @@ package logging
 
 import (
 	"go.uber.org/fx"
-	
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -13,7 +13,7 @@ import (
 // NewLoggingJobListenerBuilder creates a ComponentBuilder for LoggingJobListener.
 func NewLoggingJobListenerBuilder() jsl.JobExecutionListenerBuilder {
 	return func(
-		_ *config.Config, 
+		_ *config.Config,
 		properties map[string]string,
 	) (port.JobExecutionListener, error) {
 		return NewLoggingJobListener(properties), nil
@@ -23,7 +23,7 @@ func NewLoggingJobListenerBuilder() jsl.JobExecutionListenerBuilder {
 // NewLoggingStepListenerBuilder creates a ComponentBuilder for LoggingStepListener.
 func NewLoggingStepListenerBuilder() jsl.StepExecutionListenerBuilder {
 	return func(
-		_ *config.Config, 
+		_ *config.Config,
 		properties map[string]string,
 	) (port.StepExecutionListener, error) {
 		return NewLoggingStepListener(properties), nil
@@ -33,7 +33,7 @@ func NewLoggingStepListenerBuilder() jsl.StepExecutionListenerBuilder {
 // NewLoggingChunkListenerBuilder creates a ComponentBuilder for LoggingChunkListener.
 func NewLoggingChunkListenerBuilder() jsl.ChunkListenerBuilder {
 	return func(
-		_ *config.Config, 
+		_ *config.Config,
 		properties map[string]string,
 	) (port.ChunkListener, error) {
 		return NewLoggingChunkListener(properties), nil
@@ -43,7 +43,7 @@ func NewLoggingChunkListenerBuilder() jsl.ChunkListenerBuilder {
 // NewLoggingItemReadListenerBuilder creates a ComponentBuilder for LoggingItemReadListener.
 func NewLoggingItemReadListenerBuilder() jsl.ItemReadListenerBuilder {
 	return func(
-		_ *config.Config, 
+		_ *config.Config,
 		properties map[string]string,
 	) (port.ItemReadListener, error) {
 		return NewLoggingItemReadListener(properties), nil
@@ -53,7 +53,7 @@ func NewLoggingItemReadListenerBuilder() jsl.ItemReadListenerBuilder {
 // NewLoggingItemProcessListenerBuilder creates a ComponentBuilder for LoggingItemProcessListener.
 func NewLoggingItemProcessListenerBuilder() jsl.ItemProcessListenerBuilder {
 	return func(
-		_ *config.Config, 
+		_ *config.Config,
 		properties map[string]string,
 	) (port.ItemProcessListener, error) {
 		return NewLoggingItemProcessListener(properties), nil
@@ -63,7 +63,7 @@ func NewLoggingItemProcessListenerBuilder() jsl.ItemProcessListenerBuilder {
 // NewLoggingItemWriteListenerBuilder creates a ComponentBuilder for LoggingItemWriteListener.
 func NewLoggingItemWriteListenerBuilder() jsl.ItemWriteListenerBuilder {
 	return func(
-		_ *config.Config, 
+		_ *config.Config,
 		properties map[string]string,
 	) (port.ItemWriteListener, error) {
 		return NewLoggingItemWriteListener(properties), nil
@@ -73,7 +73,7 @@ func NewLoggingItemWriteListenerBuilder() jsl.ItemWriteListenerBuilder {
 // NewLoggingSkipListenerBuilder creates a ComponentBuilder for LoggingSkipListener.
 func NewLoggingSkipListenerBuilder() jsl.SkipListenerBuilder {
 	return func(
-		_ *config.Config, 
+		_ *config.Config,
 		properties map[string]string,
 	) (port.SkipListener, error) {
 		return NewLoggingSkipListener(properties), nil
@@ -83,7 +83,7 @@ func NewLoggingSkipListenerBuilder() jsl.SkipListenerBuilder {
 // NewLoggingRetryItemListenerBuilder creates a ComponentBuilder for LoggingRetryItemListener.
 func NewLoggingRetryItemListenerBuilder() jsl.LoggingRetryItemListenerBuilder {
 	return func(
-		_ *config.Config, 
+		_ *config.Config,
 		properties map[string]string,
 	) (port.RetryItemListener, error) {
 		return NewLoggingRetryItemListener(properties), nil
@@ -93,14 +93,14 @@ func NewLoggingRetryItemListenerBuilder() jsl.LoggingRetryItemListenerBuilder {
 // AllListenerBuilders is a struct to receive all listener builders from Fx.
 type AllListenerBuilders struct {
 	fx.In
-	JobListenerBuilder    jsl.JobExecutionListenerBuilder `name:"loggingJobListener"`
-	StepListenerBuilder   jsl.StepExecutionListenerBuilder `name:"loggingStepListener"`
-	ChunkListenerBuilder  jsl.ChunkListenerBuilder `name:"loggingChunkListener"`
-	ItemReadListenerBuilder jsl.ItemReadListenerBuilder `name:"loggingItemReadListener"`
-	ItemProcessListenerBuilder jsl.ItemProcessListenerBuilder `name:"loggingItemProcessListener"`
-	ItemWriteListenerBuilder jsl.ItemWriteListenerBuilder `name:"loggingItemWriteListener"`
-	SkipListenerBuilder   jsl.SkipListenerBuilder `name:"loggingSkipListener"`
-	RetryItemListenerBuilder jsl.LoggingRetryItemListenerBuilder `name:"loggingRetryItemListener"`
+	JobListenerBuilder         jsl.JobExecutionListenerBuilder     `name:"loggingJobListener"`
+	StepListenerBuilder        jsl.StepExecutionListenerBuilder    `name:"loggingStepListener"`
+	ChunkListenerBuilder       jsl.ChunkListenerBuilder            `name:"loggingChunkListener"`
+	ItemReadListenerBuilder    jsl.ItemReadListenerBuilder         `name:"loggingItemReadListener"`
+	ItemProcessListenerBuilder jsl.ItemProcessListenerBuilder      `name:"loggingItemProcessListener"`
+	ItemWriteListenerBuilder   jsl.ItemWriteListenerBuilder        `name:"loggingItemWriteListener"`
+	SkipListenerBuilder        jsl.SkipListenerBuilder             `name:"loggingSkipListener"`
+	RetryItemListenerBuilder   jsl.LoggingRetryItemListenerBuilder `name:"loggingRetryItemListener"`
 }
 
 // RegisterAllListeners registers all listener builders with the JobFactory.
@@ -134,7 +134,7 @@ var Module = fx.Options(
 	fx.Provide(fx.Annotate(NewLoggingSkipListenerBuilder, fx.ResultTags(`name:"loggingSkipListener"`))),
 	// Retry Item Listener
 	fx.Provide(fx.Annotate(NewLoggingRetryItemListenerBuilder, fx.ResultTags(`name:"loggingRetryItemListener"`))),
-	
+
 	// Register all builders
 	fx.Invoke(RegisterAllListeners),
 )

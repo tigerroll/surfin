@@ -5,28 +5,28 @@ import (
 	"embed"
 	"time"
 
-	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	item "github.com/tigerroll/surfin/pkg/batch/component/item"
+	tasklet "github.com/tigerroll/surfin/pkg/batch/component/tasklet/generic"
+	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/config/bootstrap"
 	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
-	item "github.com/tigerroll/surfin/pkg/batch/component/item"
-	"github.com/tigerroll/surfin/pkg/batch/core/job/decision"
-	batchlistener "github.com/tigerroll/surfin/pkg/batch/listener"
-	"github.com/tigerroll/surfin/pkg/batch/core/job/split"
-	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
-	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
-	jobRepo "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	supportConfig "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	jobRepo "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	"github.com/tigerroll/surfin/pkg/batch/core/job/decision"
+	"github.com/tigerroll/surfin/pkg/batch/core/job/split"
+	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	"github.com/tigerroll/surfin/pkg/batch/core/support/incrementer"
-	tasklet "github.com/tigerroll/surfin/pkg/batch/component/tasklet/generic"
 	"github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/sql"
+	batchlistener "github.com/tigerroll/surfin/pkg/batch/listener"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	
+
 	migrationTasklet "github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
 	jobRunner "github.com/tigerroll/surfin/pkg/batch/core/job/runner"
 
 	"go.uber.org/fx"
-	
+
 	appJob "github.com/tigerroll/surfin/example/weather/internal/job"
 	weatherProcessor "github.com/tigerroll/surfin/example/weather/internal/step/processor"
 	weatherReader "github.com/tigerroll/surfin/example/weather/internal/step/reader"
@@ -69,10 +69,10 @@ func RunApplication(appCtx context.Context, envFilePath string, embeddedConfig c
 		metrics.Module,
 
 		bootstrap.Module,
-		
+
 		fx.Provide(supportConfig.NewJobFactory),
 		usecase.Module,
-		
+
 		// Provide JobRepository (using sql.NewJobRepository)
 		fx.Provide(fx.Annotate(
 			sql.NewJobRepository,
@@ -95,11 +95,11 @@ func RunApplication(appCtx context.Context, envFilePath string, embeddedConfig c
 
 		// Start the main application logic
 		fx.Invoke(fx.Annotate(startJobExecution, fx.ParamTags(
-			"", // lc fx.Lifecycle
-			"", // shutdowner fx.Shutdowner
-			"", // jobLauncher *usecase.SimpleJobLauncher (concrete type)
-			"", // jobRepository jobRepo.JobRepository
-			"", // cfg *config.Config
+			"",              // lc fx.Lifecycle
+			"",              // shutdowner fx.Shutdowner
+			"",              // jobLauncher *usecase.SimpleJobLauncher (concrete type)
+			"",              // jobRepository jobRepo.JobRepository
+			"",              // cfg *config.Config
 			`name:"appCtx"`, // appCtx context.Context
 		))),
 	)
@@ -114,12 +114,12 @@ func RunApplication(appCtx context.Context, envFilePath string, embeddedConfig c
 
 // startJobExecution is invoked by Fx to begin the batch job execution.
 func startJobExecution(
-    lc fx.Lifecycle,
-    shutdowner fx.Shutdowner,
-    jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
-    jobRepository jobRepo.JobRepository,
-    cfg *config.Config,
-    appCtx context.Context,
+	lc fx.Lifecycle,
+	shutdowner fx.Shutdowner,
+	jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
+	jobRepository jobRepo.JobRepository,
+	cfg *config.Config,
+	appCtx context.Context,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: onStartJobExecution(jobLauncher, jobRepository, cfg, shutdowner, appCtx),
@@ -129,11 +129,11 @@ func startJobExecution(
 
 // onStartJobExecution is an Fx Hook helper function that starts job execution upon application startup.
 func onStartJobExecution(
-    jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
-    jobRepository jobRepo.JobRepository,
-    cfg *config.Config,
-    shutdowner fx.Shutdowner,
-    appCtx context.Context,
+	jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
+	jobRepository jobRepo.JobRepository,
+	cfg *config.Config,
+	shutdowner fx.Shutdowner,
+	appCtx context.Context,
 ) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		go func() {
@@ -142,9 +142,9 @@ func onStartJobExecution(
 					logger.Errorf("Panic recovered in job execution: %v", r)
 				}
 				logger.Infof("Requesting application shutdown after job completion.")
-				
+
 				// JobExecution ID is only available after successful Launch, so Unregister is not performed here.
-				
+
 				if err := shutdowner.Shutdown(); err != nil {
 					logger.Errorf("Failed to shutdown application: %v", err)
 				}
@@ -172,7 +172,7 @@ func onStartJobExecution(
 				select {
 				case <-ctx.Done():
 					logger.Warnf("Application context cancelled. Stopping monitoring for job '%s' (Execution ID: %s).", jobName, jobExecution.ID)
-					
+
 					// If context is cancelled and JobExecution is not yet finished, request stop via JobLauncher.
 					latestExecution, fetchErr := jobRepository.FindJobExecutionByID(context.Background(), jobExecution.ID)
 					if fetchErr == nil && !latestExecution.Status.IsFinished() {
@@ -193,7 +193,7 @@ func onStartJobExecution(
 					if latestExecution.Status.IsFinished() {
 						logger.Infof("Job '%s' (Execution ID: %s) finished with status: %s, ExitStatus: %s",
 							jobName, latestExecution.ID, latestExecution.Status, latestExecution.ExitStatus)
-						
+
 						// UnregisterCancelFunc is called by JobRunner's defer, so it's not needed here.
 						return
 					}

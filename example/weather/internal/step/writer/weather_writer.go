@@ -6,14 +6,14 @@ import (
 
 	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
 	appRepo "github.com/tigerroll/surfin/example/weather/internal/repository"
-	batch_config "github.com/tigerroll/surfin/pkg/batch/core/config"
-	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
-	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	batch_config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	
+
 	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 )
 
@@ -27,18 +27,18 @@ type WeatherWriterConfig struct {
 type WeatherItemWriter struct {
 	TxManager tx.TransactionManager
 	Repo      appRepo.WeatherRepository // Repository resolved at runtime.
-	
-	AllDBConnections   map[string]adaptor.DBConnection
-	DBResolver         port.DBConnectionResolver
-	Config             *batch_config.Config
-	TargetDBName       string // Target DB name resolved from JSL properties. 
-	
+
+	AllDBConnections map[string]adaptor.DBConnection
+	DBResolver       port.DBConnectionResolver
+	Config           *batch_config.Config
+	TargetDBName     string // Target DB name resolved from JSL properties.
+
 	// stepExecutionContext holds the reference to the Step's ExecutionContext.
-	stepExecutionContext model.ExecutionContext 
+	stepExecutionContext model.ExecutionContext
 	// writerState holds the writer's internal state.
-	writerState          model.ExecutionContext
-	resolver             port.ExpressionResolver
-	dbResolver           port.DBConnectionResolver
+	writerState model.ExecutionContext
+	resolver    port.ExpressionResolver
+	dbResolver  port.DBConnectionResolver
 }
 
 // Verify that WeatherItemWriter implements the core.ItemWriter[any] interface.
@@ -53,7 +53,7 @@ func NewWeatherWriter(
 	dbResolver port.DBConnectionResolver,
 	properties map[string]string,
 ) (*WeatherItemWriter, error) {
-	
+
 	writerCfg := &WeatherWriterConfig{}
 	if err := configbinder.BindProperties(properties, writerCfg); err != nil {
 		return nil, exception.NewBatchError("weather_writer", "Failed to bind properties", err, false, false)
@@ -67,32 +67,31 @@ func NewWeatherWriter(
 	if dbName == "" {
 		dbName = "workload" // Default value
 	}
-	
+
 	// TxManager is mandatory.
 	txManager, ok := allTxManagers[dbName]
 	if !ok {
 		return nil, fmt.Errorf("transaction manager '%s' not found", dbName)
 	}
-	
+
 	// Check for DBConnection existence (used during Open).
 	_, ok = allDBConnections[dbName]
 	if !ok {
 		return nil, fmt.Errorf("database connection '%s' not found", dbName)
 	}
 
-
 	return &WeatherItemWriter{
 		TxManager: txManager,
 		// Repo is initialized in Open.
-		
+
 		AllDBConnections: allDBConnections,
-		DBResolver: dbResolver,
-		Config: cfg,
-		TargetDBName: dbName,
-		
-		resolver:  resolver,
+		DBResolver:       dbResolver,
+		Config:           cfg,
+		TargetDBName:     dbName,
+
+		resolver:             resolver,
 		stepExecutionContext: model.NewExecutionContext(),
-		writerState:          model.NewExecutionContext(), 
+		writerState:          model.NewExecutionContext(),
 	}, nil
 }
 
@@ -104,15 +103,15 @@ func (w *WeatherItemWriter) Open(ctx context.Context, ec model.ExecutionContext)
 	default:
 	}
 	logger.Debugf("WeatherItemWriter.Open is called.")
-	
+
 	conn, ok := w.AllDBConnections[w.TargetDBName]
 	if !ok {
 		return fmt.Errorf("database connection '%s' not found", w.TargetDBName)
 	}
-	
+
 	// Select the appropriate repository implementation based on the connection type.
 	dbType := conn.Type()
-	
+
 	switch dbType {
 	case "postgres", "redshift":
 		w.Repo = appRepo.NewPostgresWeatherRepository(conn, dbType) // Initialize repository
@@ -123,7 +122,7 @@ func (w *WeatherItemWriter) Open(ctx context.Context, ec model.ExecutionContext)
 	default:
 		return fmt.Errorf("unsupported database type '%s'", dbType)
 	}
-	
+
 	// Set stepExecutionContext and restore internal state from EC.
 	w.stepExecutionContext = ec
 	return w.restoreWriterStateFromExecutionContext(ctx)
@@ -156,7 +155,7 @@ func (w *WeatherItemWriter) Write(ctx context.Context, tx tx.Tx, items []any) er
 		logger.Debugf("No valid items to write after type conversion.")
 		return nil
 	}
-	
+
 	if w.Repo == nil {
 		return exception.NewBatchError("weather_writer", "WeatherRepository is not initialized (was Open called?)", nil, true, false)
 	}
@@ -204,7 +203,7 @@ func (w *WeatherItemWriter) GetExecutionContext(ctx context.Context) (model.Exec
 	default:
 	}
 	logger.Debugf("WeatherWriter.GetExecutionContext is called.")
-	
+
 	// Save internal state to "writer_context" in the Step ExecutionContext.
 	if err := w.saveWriterStateToExecutionContext(ctx); err != nil {
 		return nil, err
@@ -228,9 +227,9 @@ func (w *WeatherItemWriter) restoreWriterStateFromExecutionContext(ctx context.C
 		writerCtx = model.NewExecutionContext()
 		w.stepExecutionContext.Put("writer_context", writerCtx)
 	}
-	
+
 	// The writer currently holds no special internal state, but copies writerState.
-	w.writerState = writerCtx.Copy() 
+	w.writerState = writerCtx.Copy()
 	logger.Debugf("WeatherWriter: Internal state restored.")
 	return nil
 }

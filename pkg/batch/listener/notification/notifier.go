@@ -6,7 +6,7 @@ import (
 	"time"
 
 	coreport "github.com/tigerroll/surfin/pkg/batch/core/application/port" // JobExecutionListener, NotificationListener
-	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model" // JobExecution, BatchStatus
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"        // JobExecution, BatchStatus
 	"github.com/tigerroll/surfin/pkg/batch/core/ports"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
@@ -36,7 +36,7 @@ func (n *DummyNotifier) NotifyJobCompletion(ctx context.Context, execution *mode
 		duration,
 		len(execution.Failures),
 	)
-	
+
 	if execution.Status == model.BatchStatusCompleted {
 		logger.Infof(message)
 	} else {
@@ -69,7 +69,8 @@ type NotificationListenerAdapter struct {
 }
 
 // BeforeJob exists to satisfy JobExecutionListener requirements but does nothing.
-func (a *NotificationListenerAdapter) BeforeJob(ctx context.Context, jobExecution *model.JobExecution) {}
+func (a *NotificationListenerAdapter) BeforeJob(ctx context.Context, jobExecution *model.JobExecution) {
+}
 
 // AfterJob calls the NotificationListener's OnJobCompletion.
 func (a *NotificationListenerAdapter) AfterJob(ctx context.Context, jobExecution *model.JobExecution) {
