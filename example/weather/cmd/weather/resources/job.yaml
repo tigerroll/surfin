@@ -1,0 +1,144 @@
+id: weatherJob # Match config.Batch.JobName
+name: Weather Data Processing Job
+description: This job fetches weather data, processes it, and stores it.
+incrementer: # Add
+  ref: "timestampIncrementer" # Add: Generates unique parameters using a timestamp every time
+listeners:
+  - ref: loggingJobListener # Listener name registered in JobFactory
+
+flow:
+  start-element: migrateMetadataStep # Starting element of the flow (Changed from fetchWeatherDataStep)
+  elements:
+    migrateMetadataStep: # ADDED: Step to run framework migrations
+      id: migrateMetadataStep
+      tasklet:
+        ref: migrationTasklet
+        properties:
+          dbRef: "metadata" # JobRepositoryが使用するDB接続名
+          migrationFSName: "frameworkMigrationsFS" # フレームワークのマイグレーションFS名
+          migrationDir: "postgres" # PostgreSQLのマイグレーションファイルが格納されているディレクトリ
+          isFramework: "true" # フレームワークマイグレーションであることを示す
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          to: migrateWorkloadStep # 成功したら次のステップへ
+        - on: FAILED
+          fail: true
+          
+    migrateWorkloadStep: # ADDED: Step to run application migrations for workload DB (sqlite)
+      id: migrateWorkloadStep
+      tasklet:
+        ref: migrationTasklet
+        properties:
+          dbRef: "metadata" # ワークロードDB接続名
+          migrationFSName: "weatherAppFS" # アプリケーションのマイグレーションFS名
+          migrationDir: "postgres" # SQLiteのマイグレーションファイルが格納されているディレクトリ
+          isFramework: "false" # アプリケーションマイグレーションであることを示す
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          to: fetchWeatherDataStep # 成功したらデータ処理ステップへ
+        - on: FAILED
+          fail: true
+
+    fetchWeatherDataStep:
+      id: fetchWeatherDataStep
+      reader:
+        ref: weatherItemReader
+        # database: workload # Change: Reader does not use DB, remove unnecessary property
+      processor:
+        ref: weatherItemProcessor
+      writer: # データベースに書き込む
+        ref: weatherItemWriter
+        properties:
+          targetDBName: "metadata" # Writerが使用するターゲットDB名を指定
+      chunk:
+        item-count: 50 # Use config.Batch.ChunkSize
+        commit-interval: 1
+      listeners: # Step level listeners
+        - ref: loggingStepListener
+      item-read-listeners: # Enable item read listeners
+        - ref: loggingItemReadListener
+      item-process-listeners: # Enable item process listeners
+        - ref: loggingItemProcessListener
+      item-write-listeners: # Enable item write listeners
+        - ref: loggingItemWriteListener
+      skip-listeners: # Item skip listeners
+        - ref: loggingSkipListener
+      retry-item-listeners: # Item retry listeners
+        - ref: loggingRetryItemListener
+      chunk-listeners: # Add
+        - ref: loggingChunkListener
+      execution-context-promotion: # Promote reader state to Job EC (Moved from promoteExecutionContextStep)
+        keys:
+          - "reader_context" # Promote the entire context saved by WeatherReader
+          - "decision.condition" # Promote the condition set by the tasklet (This key is set by the reader/processor/writer if needed, but typically set by a Tasklet or Decision)
+      transitions:
+        - on: COMPLETED # If the step completes successfully
+          to: checkConditionDecision # Transition directly to Decision
+        - on: FAILED # If the step fails
+          fail: true # Terminate the entire job as failed
+          
+    # promoteExecutionContextStep: # DELETED: Functionality merged into fetchWeatherDataStep
+    #   id: promoteExecutionContextStep
+    #   tasklet:
+    #     ref: executionContextWriterTasklet
+    #     properties:
+    #       key: "decision.condition"
+    #       value: "true" # This value is checked in the Decision step
+    #   execution-context-promotion: # Promote StepExecutionContext values to JobExecutionContext
+    #     keys:
+    #       - "reader_context" # Promote the entire context saved by WeatherReader
+    #       - "decision.condition"
+    #   listeners:
+    #     - ref: loggingStepListener
+    #   transitions:
+    #     - on: COMPLETED
+    #       to: checkConditionDecision # Transition to the existing Decision
+    #     - on: FAILED
+    #       fail: true
+          
+    checkConditionDecision: # ConditionalDecision element
+      id: checkConditionDecision
+      ref: conditionalDecision # Add: Reference to Decision Builder
+      properties:
+        conditionKey: "decision.condition" # Key to retrieve from ExecutionContext
+        expectedValue: "true"             # COMPLETED if it matches this value
+        defaultStatus: "FAILED"           # Default status if no match or key not found
+      transitions:
+        - on: COMPLETED # If decision.condition is "true"
+          to: randomFailTaskletStep # To the existing randomFailTaskletStep
+        - on: FAILED # If decision.condition is not "true", or key not found
+          to: anotherRandomFailTaskletStep # To another path
+          
+    randomFailTaskletStep:
+      id: randomFailTaskletStep
+      tasklet:
+        ref: randomFailTasklet # Change: ref name
+        properties:
+          message: "Condition was TRUE! Executing randomFailTaskletStep."
+      listeners: # Step level listeners (TaskletStep also has StepExecutionListener)
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          end: true
+        - on: FAILED
+          fail: true
+          
+    anotherRandomFailTaskletStep:
+      id: anotherRandomFailTaskletStep
+      tasklet:
+        ref: randomFailTasklet # Change: ref name
+        properties:
+          message: "Condition was FALSE or not found! Executing anotherRandomFailTaskletStep."
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          end: true
+        - on: FAILED
+          fail: true
+  transition-rules:
+    # Existing transition rules are deleted or commented out here because they are defined within the element definitions (depending on JSL specification, they might be redundant if defined in elements)

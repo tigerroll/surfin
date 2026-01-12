@@ -1,0 +1,38 @@
+version: '3'
+
+vars:
+  APP_MODULE_PATH: surfin/example/hello-world/cmd/hello-world
+  APP_BINARY_NAME: hello-world
+  BUILD_OUTPUT_DIR: ../../dist
+
+tasks:
+  default:
+    desc: "List tasks for the hello-world application."
+    cmds: [task --list]
+
+  build:
+    desc: "Build the hello-world application executable."
+    cmds:
+      - go build -v -gcflags="all=-N -l" -o {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}} {{.APP_MODULE_PATH}}
+      - echo "Built {{.APP_BINARY_NAME}} to {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"
+    generates: ["{{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"]
+    sources:
+      - "./cmd/hello-world/**/*.go"
+      - "./internal/**/*.go"
+      - "./cmd/hello-world/resources/application.yaml"
+      - "./cmd/hello-world/resources/job.yaml"
+
+  run:
+    desc: "Run the hello-world application."
+    deps: [build]
+    cmds: ["{{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"]
+    env:
+      BATCH_LOG_LEVEL: DEBUG
+
+  clean:
+    desc: "Remove build artifacts for hello-world application."
+    cmds: ["rm -f {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"]
+
+  test:
+    desc: "Run tests for the hello-world application."
+    cmds: ["go test ./internal/... -v -count=1"]

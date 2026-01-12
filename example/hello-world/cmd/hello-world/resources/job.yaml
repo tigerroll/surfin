@@ -1,0 +1,20 @@
+id: helloWorldJob
+name: Hello World Batch Job
+description: This job simply prints "Hello, World!" to the console.
+
+flow:
+  start-element: helloWorldStep
+  elements:
+    helloWorldStep:
+      id: helloWorldStep
+      tasklet:
+        ref: helloWorldTasklet
+        properties:
+          message: "Hello, Surfin Batch World!"
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          end: true
+        - on: FAILED
+          fail: true

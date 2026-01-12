@@ -1,0 +1,63 @@
+services:
+  surfin:
+    container_name: surfin
+    build: container/development
+    platform: linux/amd64
+    ports:
+      - "4000:4000"
+      - "2345:2345"
+    environment:
+      TZ: 'Asia/Tokyo'
+    env_file:
+      - .env
+    privileged: true
+    tty: true
+    stdin_open: true
+    restart: always
+    volumes:
+      - type: bind
+        source: ~/.config/gcloud
+        target: /root/.config/gcloud
+      - type: bind
+        source: .
+        target: /opt/surfin
+    working_dir: /opt/surfin
+    networks:
+      - surfin-network
+
+  mysql:
+    container_name: mysql
+    image: "mysql:8.0.28-debian"
+    platform: linux/amd64
+    ports:
+      - "3308:3306"
+    environment:
+      MYSQL_DATABASE: main
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_USER: weather
+      MYSQL_PASSWORD: weather
+      TZ: 'Asia/Tokyo'
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    networks:
+      - surfin-network
+
+  postgres:
+    container_name: postgres
+    image: "postgres:latest"
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: main
+      POSTGRES_USER: weather
+      POSTGRES_PASSWORD: weather
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_SSLMODE: disable
+      TZ: 'Asia/Tokyo'
+    restart: always
+    networks:
+      - surfin-network
+
+networks:
+  surfin-network:
+    driver: bridge

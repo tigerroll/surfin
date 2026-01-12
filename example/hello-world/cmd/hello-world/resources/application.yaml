@@ -1,0 +1,22 @@
+surfin:
+  system:
+    timezone: Asia/Tokyo
+    logging: # ログレベルをDEBUGに設定
+      level: DEBUG
+  batch:
+    job_name: helloWorldJob
+    polling_interval_seconds: 5
+    chunk_size: 1000
+    item_retry:
+      max_attempts: 3
+      initial_interval: 100
+      retryable_exceptions:
+        - "BatchError"
+    item_skip:
+      skip_limit: 10
+      skippable_exceptions:
+        - "BatchError" # In-memory DB のため、datasources および infrastructure セクションは不要
+  security:
+    masked_parameter_keys:
+      - "password"
+      - "api_key"

@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS batch_job_execution (
+    id VARCHAR(36) PRIMARY KEY,
+    job_instance_id VARCHAR(36) NOT NULL,
+    job_name VARCHAR(255) NOT NULL,
+    parameters TEXT NOT NULL,
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NULL,
+    status VARCHAR(30) NOT NULL,
+    exit_status VARCHAR(30) NOT NULL,
+    exit_code INT NOT NULL,
+    failures TEXT NULL,
+    version INT NOT NULL,
+    create_time DATETIME NOT NULL,
+    last_updated DATETIME NOT NULL,
+    execution_context TEXT NULL,
+    current_step_name VARCHAR(255) NULL,
+    restart_count INT NOT NULL,
+    INDEX idx_job_instance_id (job_instance_id),
+    CONSTRAINT fk_job_exec_instance FOREIGN KEY (job_instance_id) REFERENCES batch_job_instance(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -1,0 +1,45 @@
+version: '3'
+
+vars:
+  APP_MODULE_PATH: surfin/example/weather/cmd/weather
+  APP_BINARY_NAME: weather-batch
+  BUILD_OUTPUT_DIR: ../../dist
+
+tasks:
+  default:
+    desc: "List tasks for the weather application."
+    cmds:
+      - task --list
+
+  build:
+    desc: "Build the weather application executable."
+    cmds:
+      - go build -v -gcflags="all=-N -l" -o {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}} {{.APP_MODULE_PATH}}
+      - echo "Built {{.APP_BINARY_NAME}} to {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"
+    generates:
+      - "{{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"
+    sources:
+      - "./cmd/weather/**/*.go"
+      - "./pkg/**/*.go"
+      - "./cmd/weather/resources/application.yaml"
+      - "./cmd/weather/resources/job.yaml"
+      - "./cmd/weather/resources/migrations/*.sql"
+
+  run:
+    desc: "Run the weather application."
+    deps: [build]
+    cmds:
+      - cd ../../ && ./dist/{{.APP_BINARY_NAME}}
+    env:
+      BATCH_LOG_LEVEL: DEBUG
+      # ENV_FILE_PATH: .env
+
+  clean:
+    desc: "Remove build artifacts for weather app."
+    cmds:
+      - rm -f {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}
+
+  test:
+    desc: "Run tests for the weather application."
+    cmds:
+      - go test ./internal/... -v -count=1
