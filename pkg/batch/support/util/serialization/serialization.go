@@ -4,9 +4,9 @@ package serialization
 import (
 	"encoding/json"
 
-	config "surfin/pkg/batch/core/config"
-	"surfin/pkg/batch/support/util/exception"
-	logger "surfin/pkg/batch/support/util/logger"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // GetMaskedJobParametersMap creates a copy of JobParameters and masks sensitive information based on configuration.

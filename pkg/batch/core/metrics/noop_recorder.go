@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	model "surfin/pkg/batch/core/domain/model"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
 // NoOpMetricRecorder is an implementation of MetricRecorder that does nothing.

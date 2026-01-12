@@ -4,23 +4,23 @@ import (
 	"context"
 	"fmt"
 
-	weather_entity "surfin/example/weather/internal/domain/entity"
-	appRepo "surfin/example/weather/internal/repository"
-	batch_config "surfin/pkg/batch/core/config"
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/core/adaptor"
-	tx "surfin/pkg/batch/core/tx"
-	"surfin/pkg/batch/support/util/exception"
-	logger "surfin/pkg/batch/support/util/logger"
+	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
+	appRepo "github.com/tigerroll/surfin/example/weather/internal/repository"
+	batch_config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	
-	configbinder "surfin/pkg/batch/support/util/configbinder"
+	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 )
 
-// Writer固有の設定構造体 (JSLプロパティバインディング用)
+// WeatherWriterConfig is a configuration struct specific to the Writer (for JSL property binding).
 type WeatherWriterConfig struct {
 	TargetDBName string `yaml:"targetDBName,omitempty"`
-	Database     string `yaml:"database,omitempty"` // 互換性のため
+	Database     string `yaml:"database,omitempty"` // For compatibility
 }
 
 // WeatherItemWriter implements core.ItemWriter for writing weather data.
@@ -251,14 +251,14 @@ func (w *WeatherItemWriter) saveWriterStateToExecutionContext(ctx context.Contex
 	}
 
 	// Save internal state to writerCtx.
-	// 現在、writerCtx に保存するwriter固有の内部状態はありません。
-	// 必要であればここに記述します。
+	// Currently, there is no writer-specific internal state to save to writerCtx.
+	// Add it here if needed in the future.
 
 	// Set the decision.condition for the job flow directly on the stepExecutionContext.
 	// This key will be promoted to JobExecutionContext by the framework if configured in JSL.
 	// IMPORTANT: Also set it on w.writerState so that GetExecutionContext returns it.
 	writerCtx.Put("decision.condition", "true")
-	w.writerState.Put("decision.condition", "true") // ADDED: w.writerState にも設定
+	w.writerState.Put("decision.condition", "true")
 
 	logger.Debugf("WeatherWriter: Internal state saved to ExecutionContext.")
 	return nil

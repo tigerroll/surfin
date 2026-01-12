@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	"time"
 
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	metrics "surfin/pkg/batch/core/metrics"
-	repository "surfin/pkg/batch/core/domain/repository"
-	exception "surfin/pkg/batch/support/util/exception"
-	logger "surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // TaskletStep is an implementation of core.Step for Tasklet-oriented processing.

@@ -3,7 +3,7 @@ package repository
 import (
 	"errors"
 	"context"
-	model "surfin/pkg/batch/core/domain/model"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
 // CheckpointDataRepository defines operations for persisting and retrieving checkpoint data.

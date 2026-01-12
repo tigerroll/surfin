@@ -5,12 +5,12 @@ import (
 	_ "database/sql"
 	"fmt"
 
-	"surfin/pkg/batch/core/adaptor"
-	tx "surfin/pkg/batch/core/tx"
-	"surfin/pkg/batch/support/util/exception"
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
-	weather_entity "surfin/example/weather/internal/domain/entity"
+	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
 )
 
 type WeatherRepository interface {
@@ -37,11 +37,11 @@ func (w *PostgresRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, t
 	}
 	logger.Debugf("PostgresRepositoryWrapper.BulkInsertWeatherData: Using DB Type: %s. Attempting Bulk Insert via Tx.", w.dbType)
 
-	// ExecuteUpsert を使用して ON CONFLICT DO NOTHING を実行
+	// Use ExecuteUpsert to perform ON CONFLICT DO NOTHING
 	conflictCols := []string{"time", "latitude", "longitude"}
 	updateCols := []string{} // DO NOTHING
 
-	// items[0].TableName() でテーブル名を取得
+	// Get table name using items[0].TableName()
 	rowsAffected, err := tx.ExecuteUpsert(ctx, &items, items[0].TableName(), conflictCols, updateCols)
 
 	if err != nil {
@@ -57,12 +57,12 @@ func (w *PostgresRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, t
 func (w *PostgresRepositoryWrapper) TruncateHourlyForecast(ctx context.Context) error {
 	const op = "PostgresRepositoryWrapper.TruncateHourlyForecast"
 	
-	// T_GORM_2: ExecuteUpdate の DELETE 操作を使用
+	// Use ExecuteUpdate for DELETE operation
 	dummyEntity := weather_entity.WeatherDataToStore{}
 	
 	// DELETE FROM hourly_forecast
-	// ExecuteUpdate は DELETE 操作の場合、WHERE句がなくてもテーブル全体を削除する DELETE クエリを生成する
-	// テーブル名を明示的に渡す
+	// ExecuteUpdate generates a DELETE query that deletes the entire table if no WHERE clause is provided.
+	// Explicitly pass the table name.
 	_, err := w.dbConn.ExecuteUpdate(ctx, &dummyEntity, "DELETE", dummyEntity.TableName(), nil)
 
 	if err != nil {
@@ -93,11 +93,11 @@ func (w *MySQLRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx t
 	}
 	logger.Debugf("MySQLRepositoryWrapper.BulkInsertWeatherData: Using DB Type: %s. Attempting Bulk Insert via Tx.", w.dbType)
 
-	// ExecuteUpsert を使用して ON DUPLICATE KEY UPDATE を実行
+	// Use ExecuteUpsert to perform ON DUPLICATE KEY UPDATE
 	conflictCols := []string{"time", "latitude", "longitude"}
 	updateCols := []string{"weather_code", "temperature_2m", "collected_at"} // DO UPDATE
 
-	// items[0].TableName() でテーブル名を取得
+	// Get table name using items[0].TableName()
 	rowsAffected, err := tx.ExecuteUpsert(ctx, &items, items[0].TableName(), conflictCols, updateCols)
 
 	if err != nil {
@@ -113,11 +113,11 @@ func (w *MySQLRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx t
 func (w *MySQLRepositoryWrapper) TruncateHourlyForecast(ctx context.Context) error {
 	const op = "MySQLRepositoryWrapper.TruncateHourlyForecast"
 	
-	// T_GORM_2: ExecuteUpdate の DELETE 操作を使用
+	// Use ExecuteUpdate for DELETE operation
 	dummyEntity := weather_entity.WeatherDataToStore{}
 	
 	// DELETE FROM hourly_forecast
-	// テーブル名を明示的に渡す
+	// Explicitly pass the table name.
 	_, err := w.dbConn.ExecuteUpdate(ctx, &dummyEntity, "DELETE", dummyEntity.TableName(), nil)
 
 	if err != nil {
@@ -148,11 +148,11 @@ func (w *SQLiteRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx 
 	}
 	logger.Debugf("SQLiteRepositoryWrapper.BulkInsertWeatherData: Using DB Type: %s. Attempting Bulk Insert via Tx.", w.dbType)
 
-	// ExecuteUpsert を使用して ON CONFLICT DO NOTHING を実行
+	// Use ExecuteUpsert to perform ON CONFLICT DO NOTHING
 	conflictCols := []string{"time", "latitude", "longitude"}
 	updateCols := []string{} // DO NOTHING
 
-	// items[0].TableName() でテーブル名を取得
+	// Get table name using items[0].TableName()
 	rowsAffected, err := tx.ExecuteUpsert(ctx, &items, items[0].TableName(), conflictCols, updateCols)
 
 	if err != nil {
@@ -166,11 +166,11 @@ func (w *SQLiteRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx 
 func (w *SQLiteRepositoryWrapper) TruncateHourlyForecast(ctx context.Context) error {
 	const op = "SQLiteRepositoryWrapper.TruncateHourlyForecast"
 	
-	// T_GORM_2: ExecuteUpdate の DELETE 操作を使用
+	// Use ExecuteUpdate for DELETE operation
 	dummyEntity := weather_entity.WeatherDataToStore{}
 	
 	// DELETE FROM hourly_forecast
-	// テーブル名を明示的に渡す
+	// Explicitly pass the table name.
 	_, err := w.dbConn.ExecuteUpdate(ctx, &dummyEntity, "DELETE", dummyEntity.TableName(), nil)
 
 	if err != nil {

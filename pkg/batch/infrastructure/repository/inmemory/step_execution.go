@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/core/domain/repository"
+	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 )
 
 // SaveStepExecution persists a new StepExecution.

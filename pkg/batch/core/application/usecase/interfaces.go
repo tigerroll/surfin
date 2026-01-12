@@ -3,7 +3,7 @@ package usecase
 import (
 	"context"
 
-	model "surfin/pkg/batch/core/domain/model"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
 // JobOperator is an interface for performing operations on running jobs (e.g., restart, stop, abandon).

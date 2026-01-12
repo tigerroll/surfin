@@ -1,7 +1,7 @@
 package split
 
 import (
-	port "surfin/pkg/batch/core/application/port"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 )
 
 // ConcreteSplit is a concrete implementation of the Split interface.

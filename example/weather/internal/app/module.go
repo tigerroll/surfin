@@ -6,28 +6,25 @@ import (
 	"fmt"
 	"io/fs"
 	"sync"
-	// "time" // 削除
 
-	"surfin/pkg/batch/core/adaptor"
-	config "surfin/pkg/batch/core/config"
-	tx "surfin/pkg/batch/core/tx" // 修正: 新しいパスを使用
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
-	gormadaptor "surfin/pkg/batch/adaptor/database/gorm" // パッケージ名を gormadaptor としてインポート
-	"surfin/pkg/batch/adaptor/database/gorm/mysql"
-	"surfin/pkg/batch/adaptor/database/gorm/postgres"
-	"surfin/pkg/batch/adaptor/database/gorm/sqlite"
-	migrationfs "surfin/pkg/batch/component/tasklet/migration/filesystem"
+	gormadaptor "github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm"
+	"github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm/mysql"
+	"github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm/postgres"
+	"github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm/sqlite"
+	migrationfs "github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration/filesystem"
 	
-	// surfin/pkg/batch/core/configuration/bootstrap のインポートは不要になりました
-
 	"go.uber.org/fx"
 )
 
-// DBProviderMap は、main.go が動的にプロバイダを選択するために使用されます。
+// DBProviderMap is used by main.go to dynamically select providers.
 var DBProviderMap = map[string]func(cfg *config.Config) adaptor.DBProvider {
 	"postgres": postgres.NewProvider,
-	"redshift": postgres.NewProvider, // Redshift も PostgresProvider を使用
+	"redshift": postgres.NewProvider, // Redshift also uses PostgresProvider
 	"mysql":    mysql.NewProvider,
 	"sqlite":   sqlite.NewProvider,
 }
@@ -66,34 +63,34 @@ type DBConnectionsAndTxManagersParams struct {
 	Cfg       *config.Config
 	// Fx automatically collects all components tagged with adaptor.DBProviderGroup into a slice.
 	DBProviders []adaptor.DBProvider `group:"db_providers"`
-	// TransactionManagerFactory を注入
+	// Inject the TransactionManagerFactory
 	TxFactory tx.TransactionManagerFactory
 }
 
-// NewDBConnectionsAndTxManagers は、設定ファイルに定義されたすべてのデータソースに対して、
-// 適切な DBProvider を使用して接続とトランザクションマネージャを確立し、マップとして提供します。
+// NewDBConnectionsAndTxManagers establishes connections and transaction managers for all data sources defined in the configuration file,
+// using the appropriate DBProvider, and provides them as maps.
 func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 	map[string]adaptor.DBConnection,
 	map[string]tx.TransactionManager,
-	map[string]adaptor.DBProvider, // DBProviderのマップも提供する
+	map[string]adaptor.DBProvider, // Also provide a map of DBProviders
 	error,
 ) {
 	allConnections := make(map[string]adaptor.DBConnection)
 	allTxManagers := make(map[string]tx.TransactionManager)
 	allProviders := make(map[string]adaptor.DBProvider)
 	
-	// ProviderをDBタイプでマップする
+	// Map providers by DB type
 	providerMap := make(map[string]adaptor.DBProvider)
 	for _, provider := range p.DBProviders {
 		providerMap[provider.Type()] = provider
-		allProviders[provider.Type()] = provider // DBタイプでプロバイダを保存
+		allProviders[provider.Type()] = provider // Store providers by DB type
 	}
 
-	// 設定ファイルに定義されたすべてのデータソースをループ処理
+	// Loop through all data sources defined in the configuration file
 	for name, dbConfig := range p.Cfg.Surfin.Datasources {
 		provider, ok := providerMap[dbConfig.Type]
 		if !ok {
-			// PostgresProviderはRedshiftも扱うため、ここでは厳密なチェックを避ける
+			// PostgresProvider also handles Redshift, so strict checking is avoided here.
 			if dbConfig.Type == "redshift" {
 				provider, ok = providerMap["postgres"]
 			}
@@ -103,14 +100,13 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 			}
 		}
 
-		// Providerを使用して接続を取得
+		// Get connection using the provider
 		conn, err := provider.GetConnection(name)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to get connection for '%s' using provider '%s': %w", name, provider.Type(), err)
 		}
 		
-		// 接続が確立されたら、TxManagerを作成
-		// 抽象ファクトリを使用して TxManager を作成する
+		// Once connection is established, create TxManager
 		txManager := p.TxFactory.NewTransactionManager(conn)
 		
 		allConnections[name] = conn
@@ -118,19 +114,19 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 		logger.Debugf("Initialized DB Connection and TxManager for: %s (%s)", name, dbConfig.Type)
 	}
 
-	// Fxライフサイクルにフックを追加し、シャットダウン時にすべての接続を閉じる
+	// Add a hook to the Fx lifecycle to close all connections during shutdown.
 	p.Lifecycle.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
 			logger.Infof("Closing all database connections...")
 			var wg sync.WaitGroup
 			var lastErr error
 			
-			// プロバイダごとに接続を閉じる
+			// Close connections for each provider
 			for _, provider := range p.DBProviders {
 				wg.Add(1)
 				go func(p adaptor.DBProvider) {
 					defer wg.Done()
-					// 接続のクローズはプロバイダに委譲
+					// Connection closing is delegated to the provider
 					if err := p.CloseAll(); err != nil {
 						logger.Errorf("Failed to close connections for provider %s: %v", p.Type(), err)
 						lastErr = err
@@ -161,10 +157,10 @@ type DefaultDBConnectionResolver struct {
 }
 
 // NewDefaultDBConnectionResolver creates a new DefaultDBConnectionResolver.
-// 循環参照を解消するため、DBProvidersをリストとして受け取り、内部でマップに変換します。
+// To resolve circular dependencies, DBProviders are received as a list and converted to a map internally.
 func NewDefaultDBConnectionResolver(p struct {
 	fx.In
-	DBProviders []adaptor.DBProvider `group:"db_providers"` // リストとして受け取る
+	DBProviders []adaptor.DBProvider `group:"db_providers"` // Receive as a list
 	Cfg         *config.Config
 }) adaptor.DBConnectionResolver {
 	providerMap := make(map[string]adaptor.DBProvider)
@@ -186,7 +182,7 @@ func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, n
 
 	provider, ok := r.providers[dbConfig.Type]
 	if !ok {
-		// Redshift のような特殊なケースを考慮
+		// Consider special cases like Redshift
 		if dbConfig.Type == "redshift" {
 			provider, ok = r.providers["postgres"]
 		}
@@ -195,15 +191,15 @@ func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, n
 		}
 	}
 
-	// Provider を使用して接続を取得
-	// Provider は内部で接続プールを管理し、必要に応じて RefreshConnection を呼び出す
+	// Get connection using the provider
+	// The provider manages the connection pool internally and calls RefreshConnection as needed.
 	conn, err := provider.GetConnection(name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get connection '%s': %w", name, err)
 	}
 	
-	// 接続が有効であることを確認するために RefreshConnection を呼び出す (オプションだが、ここでは省略)
-	// conn.RefreshConnection(ctx) // GetConnection が最新の有効な接続を返すことを期待
+	// Expect GetConnection to return the latest valid connection
+	// conn.RefreshConnection(ctx) // Optional: call RefreshConnection to ensure the connection is valid
 
 	return conn, nil
 }
@@ -212,16 +208,16 @@ func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, n
 // Add application-specific dependency injection settings here.
 var Module = fx.Options(
 	// DB Provider Modules
-	gormadaptor.Module, // NewGormTransactionManagerFactory の提供のみ
+	gormadaptor.Module, // Only provides NewGormTransactionManagerFactory
 
 	// Provide the aggregated map[string]adaptor.DBConnection and map[string]tx.TransactionManager
-	// NewDBConnectionsAndTxManagers は map[string]adaptor.DBProvider も提供する
-	fx.Provide(NewDBConnectionsAndTxManagers), // 修正
+	// NewDBConnectionsAndTxManagers also provides map[string]adaptor.DBProvider
+	fx.Provide(NewDBConnectionsAndTxManagers),
 	
 	// Provide the specific metadata TxManager required by JobFactory
 	fx.Provide(fx.Annotate(
 		NewMetadataTxManager,
-		fx.ResultTags(`name:"metadata"`), // JobFactoryParamsが要求する名前付きインスタンス
+		fx.ResultTags(`name:"metadata"`), // Named instance required by JobFactoryParams
 	)),
 	
 	// Provide the concrete DBConnectionResolver implementation
@@ -257,5 +253,5 @@ var Module = fx.Options(
 		NewMigrationFSMap,
 		fx.ResultTags(`name:"allMigrationFS"`),
 	)),
-	migrationfs.Module, // フレームワークマイグレーションFSの提供をアプリケーション側で明示的に行う
+	migrationfs.Module, // Explicitly provide framework migration FS on the application side
 )

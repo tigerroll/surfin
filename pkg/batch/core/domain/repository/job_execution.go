@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/support/util/exception"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 )
 
 // ErrJobExecutionNotFound is the error returned when a JobExecution is not found.

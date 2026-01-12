@@ -3,10 +3,10 @@ package sqlite
 
 import (
 	"errors"
-	"surfin/pkg/batch/core/adaptor"
-	"surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"gorm.io/driver/sqlite"
-	gormadaptor "surfin/pkg/batch/adaptor/database/gorm"
+	gormadaptor "github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm"
 	"gorm.io/gorm"
 )
 

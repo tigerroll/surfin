@@ -6,7 +6,7 @@ import (
 	"context"
 	"database/sql"
 
-	config "surfin/pkg/batch/core/config"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 )
 
 // DBExecutor is an interface that defines common write operations for a database.

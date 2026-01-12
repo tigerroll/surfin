@@ -1,7 +1,7 @@
 package sql
 
 import (
-	"surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
 // --- Mapper functions ---

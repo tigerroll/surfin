@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
-	"surfin/pkg/batch/core/adaptor"
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database"

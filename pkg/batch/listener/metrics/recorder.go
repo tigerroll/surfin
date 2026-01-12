@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/core/metrics"
-	"surfin/pkg/batch/support/util/logger"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // PrometheusMetricRecorder is a concrete implementation that records metrics to external systems like Prometheus.

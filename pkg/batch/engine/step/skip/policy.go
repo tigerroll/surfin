@@ -1,7 +1,7 @@
 package skip
 
 import (
-	"surfin/pkg/batch/support/util/exception"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 )
 
 // SkipPolicy is an interface that defines the logic for determining whether to skip an error that occurred during item processing.

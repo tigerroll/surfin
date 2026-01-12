@@ -2,9 +2,9 @@ package bootstrap
 
 import (
 	"context"
-	"surfin/pkg/batch/core/config"
-	jsl "surfin/pkg/batch/core/config/jsl"
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/config"
+	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx"
 )

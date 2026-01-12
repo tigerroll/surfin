@@ -7,16 +7,16 @@ import (
 	"io"
 	"fmt"
 
-	config "surfin/pkg/batch/core/config"
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	metrics "surfin/pkg/batch/core/metrics"
-	repository "surfin/pkg/batch/core/domain/repository"
-	"surfin/pkg/batch/engine/step/retry"
-	"surfin/pkg/batch/engine/step/skip"
-	exception "surfin/pkg/batch/support/util/exception"
-	logger "surfin/pkg/batch/support/util/logger"
-	tx "surfin/pkg/batch/core/tx"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	"github.com/tigerroll/surfin/pkg/batch/engine/step/retry"
+	"github.com/tigerroll/surfin/pkg/batch/engine/step/skip"
+	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 )
 
 // ChunkStep is an implementation of core.Step for chunk-oriented processing.

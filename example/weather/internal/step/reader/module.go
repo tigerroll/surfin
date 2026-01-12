@@ -1,12 +1,12 @@
 package reader
 
 import (
-	core "surfin/pkg/batch/core/application/port"
-	config "surfin/pkg/batch/core/config"
-	jsl "surfin/pkg/batch/core/config/jsl"
-	support "surfin/pkg/batch/core/config/support"
-	job "surfin/pkg/batch/core/domain/repository"
-	"surfin/pkg/batch/support/util/logger"
+	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx"
 )
@@ -18,7 +18,7 @@ type NewWeatherReaderComponentBuilderParams struct {
 
 // NewWeatherReaderComponentBuilder creates a jsl.ComponentBuilder for the weatherReader.
 // This function is called by Fx as a provider.
-func NewWeatherReaderComponentBuilder() jsl.ComponentBuilder { // p を削除
+func NewWeatherReaderComponentBuilder() jsl.ComponentBuilder {
 	// Returns the actual builder function that JobFactory calls to construct the component.
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,

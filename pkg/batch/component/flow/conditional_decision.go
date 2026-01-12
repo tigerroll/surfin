@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	logger "surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // ConditionalDecision is a more flexible implementation of the Decision interface.

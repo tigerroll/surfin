@@ -2,9 +2,9 @@ package expression
 
 import (
 	"context"
-	model "surfin/pkg/batch/core/domain/model"
-	port "surfin/pkg/batch/core/application/port"
-	"surfin/pkg/batch/support/util/logger"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	"strings"
 )
 

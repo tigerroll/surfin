@@ -3,9 +3,9 @@ package tracing
 import (
 	"context"
 
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/core/metrics"
-	"surfin/pkg/batch/support/util/logger"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // OpenTelemetryTracer is an implementation for integrating with distributed tracing systems like OpenTelemetry.

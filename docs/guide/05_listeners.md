@@ -45,8 +45,8 @@ package logging
 
 import (
 	"context"
-	"surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // LoggingJobListener は JobExecutionListener の実装例です。
@@ -93,13 +93,13 @@ func (l *LoggingItemReadListener) OnReadError(ctx context.Context, err error) {
 package logging
 
 import (
-	"surfin/pkg/batch/core/config/jsl"
-	"surfin/pkg/batch/core/config/support"
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	"github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx"
-	config "surfin/pkg/batch/core/config"
-	port "surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 )
 
 // NewLoggingJobListenerBuilder は JobExecutionListener の ComponentBuilder を作成します。

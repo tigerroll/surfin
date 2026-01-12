@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/support/util/exception"
-	"surfin/pkg/batch/support/util/logger"
-	configbinder "surfin/pkg/batch/support/util/configbinder"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 )
 
 // HelloWorldTaskletConfig は JSL から渡されるプロパティをバインドするための構造体です。

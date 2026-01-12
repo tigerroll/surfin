@@ -1,9 +1,7 @@
 surfin:
-  # ===================================================================
-  # I. データソース設定 (複数のデータベース)
-  # ===================================================================
+  # Data source settings (multiple databases)
   datasources:
-    # 1. フレームワークのメタデータ用データベース (Postgres)
+    # Framework metadata database (Postgres)
     metadata:
       type: "postgres"
       host: "postgres"
@@ -13,13 +11,13 @@ surfin:
       password: "weather"
       schema: "public"
       sslmode: "disable"
-      # コネクションプール設定
+      # Connection pool settings
       pool:
         max_open_conns: 10
         max_idle_conns: 5
         conn_max_lifetime_minutes: 5
 
-    # 2. アプリケーションの業務データ用データベース (Postgres)
+    # Application workload database (Postgres)
     workload:
       type: "postgres"
       host: "postgres"
@@ -29,13 +27,13 @@ surfin:
       password: "weather"
       schema: "public"
       sslmode: "disable"
-      # コネクションプール設定
+      # Connection pool settings
       pool:
         max_open_conns: 10
         max_idle_conns: 5
         conn_max_lifetime_minutes: 5
 
-    # 3. アプリケーションの業務データ用データベース (MySQL)
+    # Application workload database (MySQL)
     mysql:
       type: "mysql"
       host: "mysql"
@@ -45,30 +43,28 @@ surfin:
       password: "weather"
       schema: "main"
       sslmode: "disable"
-      # コネクションプール設定
+      # Connection pool settings
       pool:
         max_open_conns: 10
         max_idle_conns: 5
         conn_max_lifetime_minutes: 5
 
-    # 4. ローカル開発/テスト用の SQLite データベース
+    # SQLite database for local development/testing
     sqlite:
       type: "sqlite"
-      database: "surfin.db" # ファイルパス
+      database: "surfin.db" # File path
       pool:
         max_open_conns: 1
         max_idle_conns: 1
         conn_max_lifetime_minutes: 0
 
-  # ===================================================================
-  # II. バッチフレームワーク設定
-  # ===================================================================
+  # Batch framework settings
   batch:
-    polling_interval_seconds: 3600 # ポーリング間隔（秒）
-    api_endpoint: "https://api.open-meteo.com/v1" # Open-Meteo APIのベースURL
-    api_key: "" #"your_api_key"
+    polling_interval_seconds: 3600 # Polling interval (seconds)
+    api_endpoint: "https://api.open-meteo.com/v1" # Open-Meteo API base URL
+    api_key: ""
     job_name: "weatherJob"
-    # ステップレベルのリトライ設定 (チャンク処理全体)
+    # Step-level retry settings (for the entire chunk process)
     retry:
       max_attempts: 3
       initial_interval: 1
@@ -76,26 +72,22 @@ surfin:
       factor: 2
       circuit_breaker_threshold: 3
       circuit_breaker_reset_interval: 60
-    # アイテムレベルのリトライ設定
+    # Item-level retry settings
     item_retry:
       max_attempts: 3
       retryable_exceptions: ["io.EOF", "net.OpError"]
-    # アイテムレベルのスキップ設定
+    # Item-level skip settings
     item_skip:
       skip_limit: 5
       skippable_exceptions: ["json.UnmarshalTypeError"]
     chunk_size: 50
 
-  # ===================================================================
-  # III. システム全体設定
-  # ===================================================================
+  # System-wide settings
   system:
     timezone: "Asia/Tokyo"
     logging:
       level: "DEBUG"
       
-  # ===================================================================
-  # IV. インフラストラクチャ設定
-  # ===================================================================
+  # Infrastructure settings
   infrastructure:
-    job_repository_db_ref: "metadata" # JobRepositoryが使用するDB接続名
+    job_repository_db_ref: "metadata" # DB connection name used by JobRepository

@@ -1,10 +1,10 @@
 package listener
 
 import (
-	"surfin/pkg/batch/listener/logging"
-	"surfin/pkg/batch/listener/metrics"
-	"surfin/pkg/batch/listener/tracing"
-	"surfin/pkg/batch/listener/notification"
+	"github.com/tigerroll/surfin/pkg/batch/listener/logging"
+	"github.com/tigerroll/surfin/pkg/batch/listener/metrics"
+	"github.com/tigerroll/surfin/pkg/batch/listener/tracing"
+	"github.com/tigerroll/surfin/pkg/batch/listener/notification"
 
 	"go.uber.org/fx"
 )

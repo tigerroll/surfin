@@ -1,7 +1,7 @@
 package expression
 
 import (
-	port "surfin/pkg/batch/core/application/port"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"go.uber.org/fx"
 )
 

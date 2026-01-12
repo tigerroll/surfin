@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	config "surfin/pkg/batch/core/config"
-	core "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/support/util/exception"
-	"surfin/pkg/batch/support/util/logger"
-	configbinder "surfin/pkg/batch/support/util/configbinder"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 
-	weather_entity "surfin/example/weather/internal/domain/entity"
+	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
 )
 
 var tokyoLocation *time.Location
@@ -26,10 +26,9 @@ func init() {
 	}
 }
 
-// Processor固有の設定構造体 (JSLプロパティバインディング用)
+// WeatherProcessorConfig is a configuration struct specific to the Processor (for JSL property binding).
+// It is currently empty but may be extended in the future.
 type WeatherProcessorConfig struct {
-	// 例: APIキーやエンドポイントはReaderが持つため、Processorはカスタムロジック用の設定を持つ
-	// 現在は空だが、将来のために定義
 	DummySetting string `yaml:"dummySetting,omitempty"`
 }
 
@@ -38,7 +37,7 @@ type WeatherProcessor struct {
 	resolver core.ExpressionResolver
 	executionContext model.ExecutionContext
 	properties map[string]string
-	processorConfig *WeatherProcessorConfig // 追加
+	processorConfig *WeatherProcessorConfig
 }
 
 // NewWeatherProcessor simplifies the signature by removing DB-related dependencies.
@@ -50,7 +49,7 @@ func NewWeatherProcessor(
 	
 	processorCfg := &WeatherProcessorConfig{}
 	
-	// JSLプロパティを自動バインディング (T3)
+	// Automatic binding of JSL properties
 	if err := configbinder.BindProperties(properties, processorCfg); err != nil {
 		return nil, exception.NewBatchError("weather_processor", "Failed to bind properties", err, false, false)
 	}
@@ -60,7 +59,7 @@ func NewWeatherProcessor(
 		resolver: resolver,
 		executionContext: model.NewExecutionContext(),
 		properties: properties,
-		processorConfig: processorCfg, // 設定
+		processorConfig: processorCfg,
 	}, nil
 }
 

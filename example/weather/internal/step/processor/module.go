@@ -1,12 +1,12 @@
 package processor
 
 import (
-	core "surfin/pkg/batch/core/application/port"
-	config "surfin/pkg/batch/core/config"
-	support "surfin/pkg/batch/core/config/support"
-	jsl "surfin/pkg/batch/core/config/jsl"
-	job "surfin/pkg/batch/core/domain/repository"
-	"surfin/pkg/batch/support/util/logger"
+	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx"
 )

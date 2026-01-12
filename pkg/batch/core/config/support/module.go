@@ -2,7 +2,7 @@ package support
 
 import (
 	"go.uber.org/fx"
-	port "surfin/pkg/batch/core/application/port"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 )
 
 // PartitionerBuildersParams is an Fx parameter struct for aggregating PartitionerBuilders.

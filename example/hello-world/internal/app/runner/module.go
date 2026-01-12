@@ -1,9 +1,9 @@
 package runner
 
 import (
-	port "surfin/pkg/batch/core/application/port"
-	repository "surfin/pkg/batch/core/domain/repository"
-	metrics "surfin/pkg/batch/core/metrics"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	"go.uber.org/fx"
 )
 

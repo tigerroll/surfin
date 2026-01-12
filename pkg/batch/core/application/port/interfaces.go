@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	tx "surfin/pkg/batch/core/tx"
-	model "surfin/pkg/batch/core/domain/model"
-	metrics "surfin/pkg/batch/core/metrics"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 )
 
 // Standard errors

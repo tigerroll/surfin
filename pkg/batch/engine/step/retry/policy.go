@@ -1,7 +1,7 @@
 package retry
 
 import (
-	"surfin/pkg/batch/support/util/exception"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 )
 
 // RetryPolicy is an interface that defines retry logic.

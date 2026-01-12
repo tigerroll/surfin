@@ -13,7 +13,7 @@ Surfin Batch Frameworkは、アイテム処理中に発生する一時的なエ�
 カスタムコンポーネント（Reader, Processor, Writer）内でエラーを発生させる際は、フレームワークの `exception.BatchError` を使用して、そのエラーの性質を明示的に定義することを強く推奨します。
 
 ```go
-import "surfin/pkg/batch/support/util/exception"
+import "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 import "errors"
 
 // リトライ可能なエラーの作成

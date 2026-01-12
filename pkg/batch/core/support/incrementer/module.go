@@ -3,11 +3,11 @@ package incrementer
 import (
 	"go.uber.org/fx"
 
-	port "surfin/pkg/batch/core/application/port"
-	config "surfin/pkg/batch/core/config"
-	jsl "surfin/pkg/batch/core/config/jsl"
-	support "surfin/pkg/batch/core/config/support"
-	"surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // NewRunIDIncrementerComponentBuilder provides a jsl.JobParametersIncrementerBuilder for RunIDIncrementer.

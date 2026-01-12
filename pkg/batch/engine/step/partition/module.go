@@ -1,13 +1,13 @@
 package partition
 
 import (
-	port "surfin/pkg/batch/core/application/port"
-	config "surfin/pkg/batch/core/config"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"go.uber.org/fx"
-	metrics "surfin/pkg/batch/core/metrics"
-	"surfin/pkg/batch/component/partitioner"
-	remote "surfin/pkg/batch/infrastructure/remote"
-	tx "surfin/pkg/batch/core/tx"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	"github.com/tigerroll/surfin/pkg/batch/component/partitioner"
+	remote "github.com/tigerroll/surfin/pkg/batch/infrastructure/remote"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 )
 
 // StepExecutorProviderParams defines the dependencies required to select a StepExecutor.

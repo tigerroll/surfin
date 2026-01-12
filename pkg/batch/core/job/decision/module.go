@@ -2,11 +2,11 @@ package decision
 
 import (
 	"go.uber.org/fx"
-	port "surfin/pkg/batch/core/application/port"
-	"surfin/pkg/batch/core/config/jsl"
-	"surfin/pkg/batch/core/config/support"
-	flowComponent "surfin/pkg/batch/component/flow" // New implementation path
-	"surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	"github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	flowComponent "github.com/tigerroll/surfin/pkg/batch/component/flow" // New implementation path
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // NewConditionalDecisionBuilder creates a builder for the generic ConditionalDecision.

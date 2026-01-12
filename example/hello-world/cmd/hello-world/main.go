@@ -9,11 +9,11 @@ import (
 
 	_ "embed"
 
-	config "surfin/pkg/batch/core/config"
-	model "surfin/pkg/batch/core/domain/model"
-	jobRepo "surfin/pkg/batch/core/domain/repository"
-	usecase "surfin/pkg/batch/core/application/usecase"
-	"surfin/pkg/batch/support/util/logger"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	jobRepo "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	
 	"go.uber.org/fx"
 )

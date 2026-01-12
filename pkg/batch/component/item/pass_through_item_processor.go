@@ -3,9 +3,9 @@ package item
 import (
 	"context"
 
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/support/util/logger"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // PassThroughItemProcessor is an implementation of [port.ItemProcessor] that returns the input item as the output item as is.

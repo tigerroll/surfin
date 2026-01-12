@@ -5,14 +5,14 @@ import (
 	"io/fs"
 	"strings"
 
-	"surfin/pkg/batch/core/adaptor"
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	repository "surfin/pkg/batch/core/domain/repository"
-	config "surfin/pkg/batch/core/config"
-	tx "surfin/pkg/batch/core/tx"
-	"surfin/pkg/batch/support/util/exception"
-	"surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // MigrationTasklet executes database migrations using provided fs.FS resources.

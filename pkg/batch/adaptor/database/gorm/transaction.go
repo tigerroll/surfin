@@ -8,8 +8,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"surfin/pkg/batch/core/adaptor"
-	tx "surfin/pkg/batch/core/tx"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 )
 
 // GormTxAdapter implements tx.Tx and is used by GormTransactionManager.
