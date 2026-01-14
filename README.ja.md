@@ -1,9 +1,8 @@
 <p align="center">
   <img src="docs/images/surfin-logo.png" alt="Surfin Logo" width="150"/>
 </p>
-<center>
-  [English](README.md) | [日本語](README.ja.md)
-</center>
+
+[English](README.md) | 日本語
 
 # 🌊 Surfin - Batch framework
 
