@@ -1,5 +1,11 @@
 <p align="center">
-  <img src="docs/images/surfin-logo.png" alt="Surfin Logo" width="150">
+  <img src="docs/images/surfin-logo.png" alt="Surfin Logo" width="150"/>
+</p>
+<p align="center">
+  [English](README.md) | [日本語](README.ja.md)
+</p>
+<p align="center">
+  [English](README.md) | [日本語](README.ja.md)
 </p>
 
 # 🌊 Surfin - Batch framework
@@ -8,72 +14,68 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tigerroll/surfin)](https://goreportcard.com/report/github.com/tigerroll/surfin)
 
-**JSR-352 にインスパイアされた Go 言語による軽量バッチフレームワーク**
+**A lightweight batch framework for Go, inspired by JSR-352.**
 
-**Surfin - Batch framework** は、堅牢性、スケーラビリティ、および運用容易性を最優先に開発を進めています。宣言的なジョブ定義 (JSL) とクリーンなアーキテクチャにより、複雑なデータ処理タスクを効率的かつ信頼性の高い方法で実行します。
+**Surfin - Batch framework** is being developed with robustness, scalability, and operational ease as top priorities. With declarative job definitions (JSL) and a clean architecture, it efficiently and reliably executes complex data processing tasks.
 
 ---
 
 ## 🌟 Why Choose Surfin?
 
-*  **🚀 Go Performance:** Go 言語のネイティブな並行処理とパフォーマンスを最大限に活用
-*  **🏗️ Convention over Configuration (CoC):** 規約（CoC）による統治でボイラープレートを排除し、最小限の実装で堅牢性を担保
-*  **✨ Observable:** Prometheus/OpenTelemetry をコアに統合し、規約に従うだけで、分散トレーシングとメトリクス収集がを実現
-*  **🛠️ Flexible:** 動的DBルーティングとUber Fx (DI) により、複雑なインフラとカスタム要件に柔軟に対応
-*  **🔒 Robust:** 永続メタデータ、楽観的ロック、高粒度なエラー処理（リトライ/スキップ）によるフォールトトレランス機能
-*  **🎯 JSR-352 Compliant:** 業界標準のバッチ処理モデル（JSR-352）にインスパイアされた実装
-*  **📈 Scalable:** Remote Worker 連携による分散実行と Partition の抽象化により、大規模なデータセットに対応
+*  **🚀 Go Performance:** Leverages Go's native concurrency and performance to the fullest.
+*  **🏗️ Convention over Configuration (CoC):** Eliminates boilerplate code through Convention over Configuration (CoC), ensuring robustness with minimal implementation.
+*  **✨ Observable:** Integrates Prometheus/OpenTelemetry at its core, enabling distributed tracing and metrics collection simply by following conventions.
+*  **🛠️ Flexible:** Supports dynamic DB routing and Uber Fx (DI) for flexible adaptation to complex infrastructures and custom requirements.
+*  **🔒 Robust:** Provides fault tolerance features through persistent metadata, optimistic locking, and fine-grained error handling (retry/skip).
+*  **🎯 JSR-352 Compliant:** Implements a batch processing model inspired by the industry standard (JSR-352).
+*  **📈 Scalable:** Supports large-scale datasets through distributed execution via remote worker integration and abstraction of Partitioning.
 
 ---
 
 ## 🛠️  Key Features
 
-### ⚙️ コア機能とフロー制御
+### ⚙️ Core Features and Flow Control
+*   **Declarative Job Definition (JSL)**: Define jobs, steps, components, and transitions declaratively using YAML-based JSL.
+*   **Chunk/Tasklet Model**: Supports chunk-oriented processing with `ItemReader`, `ItemProcessor`, `ItemWriter`, and `Tasklet` for single-task execution.
+*   **Advanced Flow Control**: Build complex job flows with conditional branching (`Decision`), parallel execution (`Split`), and flexible transition rules (`Transition`).
+*   **Listener Model**: Custom logic can be injected into Job, Step, Chunk, and Item lifecycle events.
 
-*   **宣言的ジョブ定義 (JSL)**: YAML ベースの JSL により、ジョブ、ステップ、コンポーネント、トランジションを宣言的に定義。
-*   **チャンク/タスクレットモデル**: `ItemReader`, `ItemProcessor`, `ItemWriter` によるチャンク指向処理と、単一タスク実行のための `Tasklet` をサポート。
-*   **高度なフロー制御**: 条件分岐 (`Decision`)、並列実行 (`Split`)、および柔軟な遷移ルール (`Transition`) による複雑なジョブフローの構築。
-*   **リスナーモデル**: Job, Step, Chunk, Item の各ライフサイクルイベントにカスタムロジックを挿入可能。
+### 🛡️ Robustness and Metadata Management
+*   **Restartability**: Failed jobs can be accurately restarted from their interruption point using `JobRepository` and `ExecutionContext`.
+*   **Fault Tolerance**: Supports item-level **retry** and **skip** policies. Automatically applies chunk-splitting skip logic for write errors.
+*   **Optimistic Locking**: Implements optimistic locking at the metadata repository layer to ensure data consistency in distributed environments.
+*   **Sensitive Information Masking**: Automatically masks sensitive information when `JobParameters` are persisted and logged.
 
-### 🛡️ 堅牢性とメタデータ管理
+### ✨ Operational Ease and Observability
+*   **OpenTelemetry/Prometheus Integration:** Integrates distributed tracing (automatic Job/Step Span generation) and metrics collection (MetricRecorder) into the framework's core. Ensures reliable monitoring even for short-lived batches and provides a foundation for integration with Remote Schedulers.
+*   **Fine-grained Error Policy:** Supports declarative retry/skip strategies based on error characteristics (Transient, Skippable).
 
-*   **再起動可能性**: `JobRepository` と `ExecutionContext` により、失敗したジョブを中断点から正確に再開可能。
-*   **フォールトトレランス**: アイテムレベルの**リトライ**および**スキップ**ポリシーをサポート。書き込みエラー時にはチャンク分割によるスキップロジックを自動適用。
-*   **楽観的ロック**: メタデータリポジトリ層に楽観的ロックを実装し、分散環境でのデータ整合性を保証。
-*   **機密情報マスキング**: `JobParameters` の永続化およびログ出力時に、機密情報を自動的にマスキング。
-
-### ✨ 運用容易性とオブザーバビリティ
-
-*   **OpenTelemetry/Prometheus 統合:** フレームワークのコアに分散トレーシング（Job/Step Span 自動生成）とメトリクス収集（MetricRecorder）を統合。短命なバッチでも確実な監視を保証し、Remote Scheduler との連携基盤を提供。
-*   **高粒度なエラーポリシー:** エラーの特性（Transient, Skippable）に基づく、宣言的なリトライ/スキップ戦略の設定をサポート。
-
-### 🌐 スケーラビリティとインフラストラクチャ
-
-*   **動的DI**: Uber Fx による依存性注入を採用し、コンポーネントの動的な構築とライフサイクル管理を実現。
-*   **動的データソースルーティング**: 実行コンテキストに基づいて、複数のデータソース（Postgres, MySQL など）を動的に切り替える機構をサポート。
-*   **分散実行抽象化**: `Partitioner` と `StepExecutor` の抽象化により、ローカル実行からリモートワーカー（Kubernetes Job など）への実行委譲をサポート。
+### 🌐 Scalability and Infrastructure
+*   **Dynamic DI**: Adopts Uber Fx for dependency injection, enabling dynamic component construction and lifecycle management.
+*   **Dynamic Data Source Routing**: Supports dynamic switching between multiple data sources (Postgres, MySQL, etc.) based on execution context.
+*   **Distributed Execution Abstraction**: Abstraction of `Partitioner` and `StepExecutor` supports delegation of execution from local to remote workers (e.g., Kubernetes Job).
 
 ---
 
 ## 🚀 Getting Started
 
-Surfin を使用した最小構成のアプリケーションを構築するには、以下のガイドを参照してください。
+Refer to the following guide to build a minimal application using Surfin.
 
 👉 **[tutorial - "Hello, Wold!"](docs/tutorial/hello-world.md)**
 
 ## 📚 Documentation & Usage
 
-より詳細な機能、設定、および複雑なジョブフローの構築については、以下のドキュメントを参照してください。
+For more detailed features, configurations, and building complex job flows, refer to the following documentation.
 
-*   **[アーキテクチャと設計原則](docs/architecture)**: フレームワークのアーキテクチャ、設計原則、およびプロジェクト構造に関する詳細情報を参照してください。
-*   **[Surfin バッチアプリケーションの作成ガイド](docs/guide/usage.md)**: JSL、カスタムコンポーネント、リスナー、フロー制御の完全なガイド。
-*   **[実装ロードマップ](docs/strategy/adapter_and_component_roadmap.md)**: フレームワークの設計目標と達成状況。
+*   **[Architecture and Design Principles](docs/architecture)**: Refer to detailed information on the framework's architecture, design principles, and project structure.
+*   **[Guide to Creating Surfin Batch Applications](docs/guide/usage.md)**: A complete guide to JSL, custom components, listeners, and flow control.
+*   **[Implementation Roadmap](docs/strategy/adapter_and_component_roadmap.md)**: The framework's design goals and progress.
 
 ---
 
 ## 🆘 Support
 
-ご質問や問題が発生した場合は、GitHub Issues をご利用ください。
+If you have any questions or encounter issues, please use GitHub Issues.
 
 *   **GitHub Issues**: [Report bugs or request features](https://github.com/tigerroll/surfin/issues)
 ----
