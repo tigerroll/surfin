@@ -17,31 +17,6 @@ const (
 	LogLevelSilent LogLevel = "SILENT"
 )
 
-// PoolConfig holds database connection pool settings.
-type PoolConfig struct { // PoolConfig defines connection pool settings for databases.
-	MaxOpenConns           int `yaml:"max_open_conns"`
-	MaxIdleConns           int `yaml:"max_idle_conns"`
-	ConnMaxLifetimeMinutes int `yaml:"conn_max_lifetime_minutes"`
-}
-
-// MigrationConfig holds database migration settings.
-// NOTE: This struct is removed based on the refactoring plan (Phase 1.2).
-// DatabaseConfig holds database connection settings.
-type DatabaseConfig struct {
-	Type      string     `yaml:"type"`                 // Database type (e.g., "postgres", "mysql", "sqlite").
-	Host      string     `yaml:"host"`                 // Database host address.
-	Port      int        `yaml:"port"`                 // Database port number.
-	Database  string     `yaml:"database"`             // Database name.
-	User      string     `yaml:"user"`                 // Database user.
-	Password  string     `yaml:"password"`             // Database password.
-	Schema    string     `yaml:"schema,omitempty"`     // Schema name for PostgreSQL/Redshift.
-	Sslmode   string     `yaml:"sslmode"`              // SSL mode for the connection.
-	ProjectID string     `yaml:"project_id,omitempty"` // Project ID for Google Cloud databases.
-	DatasetID string     `yaml:"dataset_id,omitempty"` // Dataset ID for Google Cloud databases.
-	TableID   string     `yaml:"table_id,omitempty"`   // Table ID for Google Cloud databases.
-	Pool      PoolConfig `yaml:"pool"`                 // Connection pool settings.
-	// Migration MigrationConfig `yaml:"migration"` // Removed based on refactoring plan
-}
 
 // The ConnectionString() and GetDialector() methods have been removed.
 
@@ -103,12 +78,29 @@ type InfrastructureConfig struct {
 }
 
 // SurfinConfig holds all configuration under the "surfin" top-level key.
+// It now uses a generic AdaptorConfigs map to hold configurations for various adaptors.
 type SurfinConfig struct {
-	Datasources    map[string]DatabaseConfig `yaml:"datasources"`
-	Batch          BatchConfig               `yaml:"batch"`
-	System         SystemConfig              `yaml:"system"`
-	Infrastructure InfrastructureConfig      `yaml:"infrastructure"` // Infrastructure configuration.
-	Security       SecurityConfig            `yaml:"security"`       // Security configuration.
+	// AdaptorConfigs holds configurations for various adaptors (e.g., database, storage).
+	// The structure is: adaptor_type -> adaptor_specific_config_map.
+	// Example:
+	// adaptor_configs:
+	//   database:
+	//     datasources:
+	//       metadata:
+	//         type: postgres
+	//         host: localhost
+	//         ...
+	//   storage:
+	//     datasources:
+	//       default_gcs:
+	//         type: gcs
+	//         bucket_name: my-bucket
+	//         ...
+	AdaptorConfigs map[string]map[string]interface{} `yaml:"adaptor_configs"`
+	Batch          BatchConfig                       `yaml:"batch"`
+	System         SystemConfig                      `yaml:"system"`
+	Infrastructure InfrastructureConfig              `yaml:"infrastructure"` // Infrastructure configuration.
+	Security       SecurityConfig                    `yaml:"security"`       // Security configuration.
 }
 
 type Config struct {
@@ -141,53 +133,61 @@ func NewConfig() *Config {
 				ChunkSize:              10,                   // Default chunk size.
 				StepExecutorRef:        "simpleStepExecutor", // Default is local execution.
 				MetricsAsyncBufferSize: 100,                  // Default buffer size for asynchronous metrics.
-				ItemRetry: ItemRetryConfig{ // Default item retry configuration.
-					MaxAttempts:     3,
-					InitialInterval: 1000, // Default value (e.g., 1000ms).
-					RetryableExceptions: []string{ // Default retryable exceptions.
-						"*surfin/pkg/batch/support/util/exception.TemporaryNetworkError",
-						"net.OpError",
-						"context.DeadlineExceeded",
-						"context.Canceled",
-					},
+				ItemRetry: ItemRetryConfig{
+					MaxAttempts:         3,
+					InitialInterval:     1000,
+					RetryableExceptions: []string{"*surfin/pkg/batch/support/util/exception.TemporaryNetworkError", "net.OpError", "context.DeadlineExceeded", "context.Canceled"},
 				},
-				ItemSkip: ItemSkipConfig{ // Default item skip configuration.
-					SkipLimit: 0, // Default is no skipping.
-					SkippableExceptions: []string{ // Default skippable exceptions.
-						"*surfin/pkg/batch/support/util/exception.DataConversionError",
-						"json.UnmarshalTypeError",
-					},
+				ItemSkip: ItemSkipConfig{
+					SkipLimit:           0,
+					SkippableExceptions: []string{"*surfin/pkg/batch/support/util/exception.DataConversionError", "json.UnmarshalTypeError"},
 				},
 			},
-			Datasources: map[string]DatabaseConfig{ // Default values for the Datasources map.
-				"metadata": { // Default configuration for the framework metadata database.
-					Type:     "postgres",
-					Host:     "localhost",
-					Port:     5432,
-					Database: "batch_metadata",
-					User:     "batch_user",
-					Password: "batch_password",
-					Sslmode:  "disable",
-					Pool: PoolConfig{
-						MaxOpenConns:           10,
-						MaxIdleConns:           5,
-						ConnMaxLifetimeMinutes: 5,
+			AdaptorConfigs: map[string]map[string]interface{}{ // Initialize AdaptorConfigs
+				"database": { // Database adaptor configurations
+					"datasources": map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"type":     "postgres",
+							"host":     "localhost",
+							"port":     5432,
+							"database": "batch_metadata",
+							"user":     "batch_user",
+							"password": "batch_password",
+							"sslmode":  "disable",
+							"pool": map[string]interface{}{
+								"max_open_conns":            10,
+								"max_idle_conns":            5,
+								"conn_max_lifetime_minutes": 5,
+							},
+						},
+						"workload": map[string]interface{}{
+							"type":     "postgres",
+							"host":     "localhost",
+							"port":     5433,
+							"database": "app_data",
+							"user":     "app_user",
+							"password": "app_password",
+							"sslmode":  "disable",
+							"pool": map[string]interface{}{
+								"max_open_conns":            10,
+								"max_idle_conns":            5,
+								"conn_max_lifetime_minutes": 5,
+							},
+						},
 					},
 				},
-				"workload": { // Default configuration for the application data database.
-					Type:     "postgres",
-					Host:     "localhost",
-					Port:     5433, // Another port or host
-					Database: "app_data",
-					User:     "app_user",
-					Password: "app_password",
-					Sslmode:  "disable",
-					Pool: PoolConfig{
-						MaxOpenConns:           10,
-						MaxIdleConns:           5,
-						ConnMaxLifetimeMinutes: 5,
+				"storage": { // ストレージアダプターの設定
+					"datasources": map[string]interface{}{
+						"default_gcs": map[string]interface{}{
+							"type":            "gcs",
+							"bucket_name":     "your-default-gcs-bucket",
+							"credentials_file": "", // Empty string means use default GCP authentication.
+							"hive_partition": map[string]interface{}{
+								"enable_hive_partitioning":     false,
+								"hive_partition_prefix_format": "",
+							},
+						},
 					},
-					// Migration config removed
 				},
 			},
 			Infrastructure: InfrastructureConfig{ // Default values.
