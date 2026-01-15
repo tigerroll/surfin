@@ -33,9 +33,15 @@
 *   **パス:**
     *   S3: `pkg/batch/adaptor/storage/s3/`
     *   GCS: `pkg/batch/adaptor/storage/gcs/`
+*   **共通インターフェースパス:** `pkg/batch/core/adaptor/storage.go`
+*   **個別アダプターパス:**
+    *   S3: `pkg/batch/adaptor/storage/s3/` (例: `s3_adapter.go`)
+    *   GCS: `pkg/batch/adaptor/storage/gcs/` (例: `gcs_adapter.go`)
 *   **内容:**
-    *   S3およびGCSそれぞれに対応するアダプターを実装します。
+    *   `pkg/batch/core/adaptor/storage.go` に、`ObjectStorageAdapter` という汎用的なオブジェクトストレージ操作インターフェースを定義します。
+    *   S3およびGCSそれぞれに対応するアダプター（例: `gcsAdapter`）は、この `ObjectStorageAdapter` インターフェースを実装します。
     *   ファイル（JSON, Parquetなど）のアップロード、ダウンロード、リスト、削除などの基本操作をサポートします。
+    *   **設定:** `pkg/batch/core/config/config.go` に、`Datasources` と同様に、名前付きのオブジェクトストレージ接続設定（例: `StorageConnections map[string]StorageConfig`）を追加することを検討します。これにより、複数のストレージ接続を一元的に管理し、名前で解決できるようになります。
 
 ### 3.3. Redshift アダプター
 
