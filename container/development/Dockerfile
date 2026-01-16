@@ -33,6 +33,7 @@ RUN dnf install -y \
     git \
     gcc \
     make \
+    patch \
     bzip2-devel \
     libffi-devel \
     openssl-devel \
