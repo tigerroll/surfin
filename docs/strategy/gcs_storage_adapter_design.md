@@ -57,9 +57,9 @@ graph LR
 
         | メソッド名 | 説明 |
         |---|---|
-        | `Upload`       | 指定されたバケットとオブジェクト名にデータをアップロードします。`data` はアップロードするデータのストリームです。|
-        | `Download`     | 指定されたバケットとオブジェクト名からデータをダウンロードします。ダウンロードしたデータのストリームを返します。このストリームは使用後に必ずクローズする必要があります。|
-        | `ListObjects`  | 指定されたバケットとプレフィックス内のオブジェクトをリストし、オブジェクト名のリストを返します。|
+        | `Upload`       | 指定されたバケットとオブジェクト名にデータをアップロードします。`data` はアップロードするデータのストリームです。`contentType` はアップロードするデータのMIMEタイプを指定します。 |
+        | `Download`     | 指定されたバケットとオブジェクト名からデータをダウンロードします。ダウンロードしたデータのストリームを返します。このストリームは使用後に必ずクローズする必要があります。 |
+        | `ListObjects`  | 指定されたバケットとプレフィックス内のオブジェクトをリストし、オブジェクト名をコールバック関数 `fn` に渡して逐次処理します。これにより、メモリ負荷を抑えつつ大量のオブジェクトを扱えます。 |
         | `DeleteObject` | 指定されたバケットとオブジェクト名を削除します。|
         | `Close`        | アダプターが保持するリソース（例: 内部のクライアント接続）を解放します。|
         | `Config`       | このアダプターが使用している設定（`pkg/batch/adaptor/storage/config.StorageConfig`）を返します。|
@@ -67,6 +67,23 @@ graph LR
 ### 5.2. GCSアダプター実装
 
 *   **ファイルパス**: `pkg/batch/adaptor/storage/gcs/adapter.go`
+*   **推奨されるインターフェース修正案 (Go)**:
+
+    ```go
+    type ObjectStorageAdapter interface {
+        // Upload に context, contentType を追加
+        Upload(ctx context.Context, bucket, objectName string, data io.Reader, contentType string) error
+
+        // Download も context 対応
+        Download(ctx context.Context, bucket, objectName string) (io.ReadCloser, error)
+
+        // ListObjects はスライスではなく、1件ずつ処理できるコールバック型などにする
+        ListObjects(ctx context.Context, bucket, prefix string, fn func(objectName string) error) error
+
+        DeleteObject(ctx context.Context, bucket, objectName string) error
+        Close() error
+    }
+    ```
 *   **パッケージ**: `gcs`
 *   **実装構造体**: `gcsAdapter`
     *   内部に `*storage.Client` (Google Cloud Storage Go SDKのクライアント) と、`pkg/batch/adaptor/storage/config.StorageConfig` を保持します。
@@ -164,3 +181,30 @@ surfin:
     *   `Upload`、`Download`、`ListObjects`、`DeleteObject` メソッド内で、`HivePartitionConfig` の設定に基づいて、オブジェクト名やプレフィックスを動的に構築または解釈するロジックを実装する必要があります。`hive_partition_prefix_format` は `time.Format` のような形式文字列を想定しています。
 *   **エラーハンドリング**:
     *   設定のデコード失敗や、GCSクライアントの初期化失敗など、アダプターの初期化段階でのエラーハンドリングを適切に行う必要があります。
+
+## 9. 課題と修正指針
+
+本セクションでは、GCSアダプターの設計における具体的な課題と、それに対する修正指針を詳述します。
+
+### 1. HIVEパーティションパスの決定権
+
+| 項目 | 説明 |
+|---|---|
+| **課題** | 現状の設計ではアダプター内部でパスを生成するため、「昨日のデータを再処理する」際に、<br/>実行当日（今日）の日付パスが作られてしまうリスクがある。 |
+| **対策** | **■ インターフェースの変更** <br/>・ `Upload` メソッドに `partitionPath` を直接渡すか、パス生成ユーティリティをアダプターから切り離す。|
+| **対策** | **■ 責任の所在** <br/> ・ビジネスロジックを持つ「バッチコア側」が書き込み先を決定し、<br/>アダプターは指定された場所に忠実に書き込む役割に徹する。|
+
+### 2. Parquet採用に伴うアップロードフロー
+
+| 項目 | 説明 |
+|---|---|
+| **課題** | Parquetはファイル末尾にメタデータを書き込む特性があるため、<br/>全データが確定するまでGCSへの書き込みを完了できない。|
+| **対策** | **■ バッファリング戦略** <br/> ・`ItemWriter` が `bytes.Buffer` や一時ファイルに一旦書き込むバッファリング戦略をとる。|
+| **対策** | **■ アダプターへの受け渡し** <br/> ・完成したデータの `io.Reader` をアダプターの `Upload` に渡すフローを基本設計とする。|
+
+### 3. リソース解放とエラーハンドリングの強化
+
+| 項目 | 説明 |
+|---|---|
+| **課題** | 書き込み中のエラーにより、中途半端なオブジェクトが残る可能性がある。|
+| **対策** | すべてのメソッドに `context.Context` を持たせ、Cloud Runのタイムアウトや<br/>中断時にSDKのWriterを適切にクローズ（キャンセル）できるようにする。|

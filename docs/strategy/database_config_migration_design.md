@@ -24,6 +24,10 @@
 *   `SurfinConfig` 内の `Datasources` フィールドを削除し、代わりに汎用的な `AdaptorConfigs map[string]map[string]interface{}` フィールドを導入しました。これにより、YAML設定ファイル上では、アダプターの種類（例: `database`, `storage` など）をキーとして、その配下に各アダプター固有の設定を柔軟に記述できるようになります。
 *   **`InfrastructureConfig` 構造体は削除されず、`SurfinConfig` 内の `Infrastructure` フィールドも維持されます。`job_repository_db_ref` のデフォルト値は、引き続き `InfrastructureConfig` 内で設定されます。**
 *   `job_repository_db_ref` の値を取得するためのヘルパー関数 `config.GetJobRepositoryDBRef()` は追加されません。
+*   **`NewConfig()` 関数におけるデフォルト値の変更**:
+    *   フレームワークのデフォルト設定として、`AdaptorConfigs` 内の `database` カテゴリに `metadata` 接続のみを定義するよう変更しました。
+    *   この `metadata` 接続のデフォルトタイプは `dummy` となります。これは、設定ファイルが提供されない「DB Less」モードでの動作を想定しており、`hello-world` のようなシンプルなアプリケーションが追加設定なしで動作できるようにするためです。
+    *   `workload` 接続は、デフォルト設定からは削除されました。アプリケーション固有のデータベース接続が必要な場合は、YAML設定ファイルで明示的に定義する必要があります。
 
 ### 3.3. データベースアダプターでの設定解釈
 
@@ -44,7 +48,7 @@ surfin:
   # ... その他のフレームワーク共通設定
   infrastructure: # Infrastructure settings
     job_repository_db_ref: "metadata" # JobRepositoryが使用するDB接続名
-  adaptor_configs:
+  adaptor: # アダプター設定のトップレベルキーを"adaptor"に変更
     database: # データベースアダプターの設定
       datasources:
         metadata:
