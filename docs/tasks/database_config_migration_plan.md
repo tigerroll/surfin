@@ -3,6 +3,7 @@
 ## 1. はじめに
 
 本ドキュメントは、`docs/strategy/database_config_migration_design.md` に記載されたデータベース設定管理の再設計を、既存の動作を維持しつつ段階的に実施するための具体的なタスクと手順を定義します。
+**注記**: `MigrationTasklet` は `JobRepository` のインスタンスを保持していますが、その内部ロジック（特に `Execute` メソッド）では直接 `JobRepository` の機能に依存していません。この既存の実装は、本移行計画によって変更されないものとします。
 
 ## 2. 目的
 
@@ -126,24 +127,38 @@
 3.  **ビルド確認**:
     `go build ./...` を実行し、ビルドエラーがないことを確認します。
 
-### ステップ 3: データベースアダプターでの設定解釈の変更
+### ステップ 3: データベースアダプターでの設定解釈とインターフェースの型変更
 
-このステップでは、データベースアダプターが新しい `AdaptorConfigs` 構造から設定を読み込むように変更します。
+このステップでは、データベースアダプターが新しい `AdaptorConfigs` 構造から設定を読み込むように変更し、それに伴い `DBConnection` インターフェースの型も更新します。
 
 1.  **`pkg/batch/adaptor/database/gorm/provider.go` の変更**:
-    `BaseProvider` の初期化ロジック（`NewBaseProvider` や `NewGORMProvider` など、設定を受け取る箇所）を変更し、`*config.Config` オブジェクトから `cfg.Surfin.AdaptorConfigs["database"]` を抽出し、`mapstructure` を使用して `adaptor_database_config.DatabaseConfig` にデコードするようにします。
+    `BaseProvider.createAndStoreConnection` メソッドを修正し、`p.cfg.Surfin.Datasources` の代わりに `p.cfg.Surfin.AdaptorConfigs` から設定を読み込むようにします。
     *   `pkg/batch/adaptor/database/config` パッケージをインポートします。
-    *   `mapstructure.Decode` を使用して、`map[string]interface{}` を `map[string]adaptor_database_config.DatabaseConfig` に変換します。
-    *   **重要**: この段階では、まだ `DBConnection` インターフェースの `Config()` メソッドの戻り値の型は変更しません。アダプター内部での設定読み込みロジックのみを変更します。
-2.  **テストと動作確認**:
-    データベース接続を必要とする既存のテストや、簡単なバッチジョブを実行し、新しい設定読み込みパスでデータベース接続が正しく確立され、動作することを確認します。
-    *   YAML設定ファイルで、`surfin.adaptor.database` の形式でデータベース設定を記述し、それが正しく読み込まれることを確認します。
-
-### ステップ 4: インターフェースおよび実装の型変更
-
-このステップで、`DBConnection` インターフェースの型を変更し、それに伴う全ての参照を更新します。
-
-1.  **`DBConnection` インターフェースの `Config()` メソッドの戻り値の型変更**:
+    *   `createAndStoreConnection` メソッド内で、`dbConfig, ok := p.cfg.Surfin.Datasources[name]` の行を削除し、代わりに `p.cfg.Surfin.AdaptorConfigs["database"][name]` から `mapstructure.Decode` を使用して `adaptor_database_config.DatabaseConfig` にデコードするように変更します。
+        ```go
+        // pkg/batch/adaptor/database/gorm/provider.go (createAndStoreConnection メソッド内)
+        import (
+            adaptor_database_config "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
+            "github.com/mitchellh/mapstructure" // 追加
+        )
+        // ...
+        var dbConfig adaptor_database_config.DatabaseConfig // 新しい型
+        rawConfig, ok := p.cfg.Surfin.AdaptorConfigs["database"][name]
+        if !ok {
+            return nil, fmt.Errorf("database configuration '%s' not found in adaptor.database configs", name)
+        }
+        if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
+            return nil, fmt.Errorf("failed to decode database config for '%s': %w", name, err)
+        }
+        // ... (dbConfig を使用する後続のロジックはそのまま)
+        ```
+    *   `DialectorFactory` のシグネチャを `func(cfg adaptor_database_config.DatabaseConfig) (gorm.Dialector, error)` に変更します。
+    *   これに伴い、`RegisterDialector` および `GetDialectorFactory` のシグネチャも変更します。
+    *   各データベースドライバの `provider.go` (PostgreSQL, MySQL, SQLite) の `init()` 関数内の `gormadaptor.RegisterDialector` の呼び出しを、新しいシグネチャに合わせて修正します。
+    *   `NewGormDBAdapter` 関数の `cfg` 引数の型を `adaptor_database_config.DatabaseConfig` に変更します。
+    *   `GormDBAdapter` 構造体の `cfg` フィールドの型を `adaptor_database_config.DatabaseConfig` に変更します。
+    *   `GormDBAdapter.Config()` メソッドの戻り値の型を `adaptor_database_config.DatabaseConfig` に変更します。
+2.  **`DBConnection` インターフェースの `Config()` メソッドの戻り値の型変更**:
     `pkg/batch/core/adaptor/database.go` の `DBConnection` インターフェースの `Config()` メソッドの戻り値の型を、`config.DatabaseConfig` から `adaptor_database_config.DatabaseConfig` に変更します。
     ```go
     // pkg/batch/core/adaptor/database.go
@@ -155,16 +170,41 @@
     	// ...
     }
     ```
-2.  **関連する実装の型参照の更新**:
-    この変更により発生する全てのビルドエラーを修正します。具体的には、以下のファイルやパッケージで `DatabaseConfig` の参照パスを `pkg/batch/adaptor/database/config.DatabaseConfig` に更新します。
-    *   `pkg/batch/adaptor/database/gorm/adapter.go`
-    *   `pkg/batch/adaptor/database/gorm/provider.go`
-    *   各データベースドライバの `provider.go` (PostgreSQL, MySQL, SQLiteなど)
-    *   `pkg/batch/adaptor/database/dummy/dummy_implementations.go`
-3.  **ビルド確認**:
+3.  **`pkg/batch/adaptor/database/dummy/dummy_implementations.go` の修正**:
+    `dummyDBConnection.Config()` メソッドの戻り値の型を `adaptor_database_config.DatabaseConfig` に変更します。
+4.  **ビルド確認**:
     `go build ./...` を実行し、ビルドエラーがないことを確認します。
-4.  **テストと動作確認**:
-    既存のテストおよびバッチジョブを実行し、全ての機能が正常に動作することを確認します。
+5.  **テストと動作確認**:
+    データベース接続を必要とする既存のテストや、簡単なバッチジョブを実行し、新しい設定読み込みパスでデータベース接続が正しく確立され、動作することを確認します。
+    *   YAML設定ファイルで、`surfin.adaptor.database` の形式でデータベース設定を記述し、それが正しく読み込まれることを確認します。
+
+### ステップ 4: `MigrationTasklet` の修正
+
+このステップでは、`MigrationTasklet` が新しい `AdaptorConfigs` 構造からデータベース設定を読み込むように変更します。
+
+     `MigrationTasklet` の `Execute` メソッド内で、データベース設定 (`dbConfig`) を取得している箇所を、新しい `t.cfg.Surfin.AdaptorConfigs` 構造から取得するように修正します。
+     具体的には、`dbConfig, ok := t.cfg.Surfin.Datasources[t.dbConnectionName]` の行を、`t.cfg.Surfin.AdaptorConfigs["database"][t.dbConnectionName]` から `mapstructure` を使用して `adaptor_database_config.DatabaseConfig` にデコードするように変更します。
+     ```go
+     // pkg/batch/component/tasklet/migration/tasklet.go (Execute メソッド内)
+     import (
+         adaptor_database_config "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
+         "github.com/mitchellh/mapstructure" // 追加
+     )
+     // ...
+     var dbConfig adaptor_database_config.DatabaseConfig // 新しい型
+     rawConfig, ok := t.cfg.Surfin.AdaptorConfigs["database"][t.dbConnectionName]
+     if !ok {
+         return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Database configuration '%s' not found in adaptor.database configs", t.dbConnectionName)
+     }
+     if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
+         return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Failed to decode database config for '%s': %w", name, err)
+     }
+     // ... (dbConfig を使用する後続のロジックはそのまま)
+     ```
+ 4.  **ビルド確認**:
+     `go build ./...` を実行し、ビルドエラーがないことを確認します。
+ 5.  **テストと動作確認**:
+     既存のテストおよびバッチジョブを実行し、全ての機能が正常に動作することを確認します。特に、`dummy` タイプの `metadata` 接続が正しく機能すること、および `workload` 接続が必要な場合はYAMLで明示的に定義する必要があることを確認します。
 
 ### ステップ 5: `core/config.go` から `Datasources` フィールドの削除とデフォルト値の最終調整
 
