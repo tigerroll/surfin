@@ -90,6 +90,7 @@ surfin:
 *   `pkg/batch/core/config/config.go`: `PoolConfig` および `DatabaseConfig` の削除、`Datasources` から `AdaptorConfigs` への変更。`InfrastructureConfig` は維持され、`job_repository_db_ref` のデフォルト値も維持されます。`GetJobRepositoryDBRef()` ヘルパー関数は追加されません。
 *   `pkg/batch/adaptor/database` 配下の全ファイル: `DatabaseConfig` の型定義、設定解釈ロジック、および関連するインターフェースの実装。
 *   `pkg/batch/component/tasklet/migration/tasklet.go`: データベース設定の取得ロジックが、新しい `AdaptorConfigs` 構造から取得するように変更が必要です。
+    **注記**: `MigrationTasklet` は `JobRepository` のインスタンスを保持していますが、その内部ロジック（特に `Execute` メソッド）では直接 `JobRepository` の機能に依存していません。この既存の実装は、本移行計画によって変更されないものとします。
 *   `JobRepository` の初期化など、`job_repository_db_ref` を利用する箇所: `GlobalConfig.Surfin.Infrastructure.JobRepositoryDBRef` を直接参照するように変更が必要です（もし `GetJobRepositoryDBRef()` を使用していた場合）。
 *   `github.com/mitchellh/mapstructure` ライブラリが新たに導入されました。
 *   ダミーDB実装 (`pkg/batch/adaptor/database/dummy/dummy_implementations.go`) は、`Config()` メソッドの戻り値の型変更の影響を受けましたが、それ以外の直接的な影響はありません。
