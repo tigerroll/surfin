@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -106,6 +107,22 @@ func (t *GormTxAdapter) Savepoint(name string) error {
 func (t *GormTxAdapter) RollbackToSavepoint(name string) error {
 	return t.db.RollbackTo(name).Error
 }
+
+// IsTableNotExistError implements tx.TxExecutor.
+func (t *GormTxAdapter) IsTableNotExistError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Note: GormTxAdapter does not directly hold dbType, but it operates on a GORM DB instance.
+	// For simplicity, we'll use a common check or assume the underlying DB type.
+	// A more robust solution might involve passing the dbType from the manager or connection.
+	errMsg := err.Error()
+	// These checks cover common SQL errors for table not found across different DBs.
+	return (strings.Contains(errMsg, "relation \"") && strings.Contains(errMsg, "\" does not exist")) || // PostgreSQL
+		(strings.Contains(errMsg, "Error 1146") && strings.Contains(errMsg, "doesn't exist")) || // MySQL
+		strings.Contains(errMsg, "no such table:") // SQLite
+}
+
 
 // GormTransactionManager implements tx.TransactionManager
 type GormTransactionManager struct {

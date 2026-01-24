@@ -37,7 +37,7 @@ type JobExecutionEntity struct {
 	ExecutionContext model.ExecutionContext
 	CurrentStepName  string
 	RestartCount     int
-	// StepExecutions []*StepExecutionEntity // Removed to avoid GORM schema parsing errors.
+	// StepExecutions []*StepExecutionEntity // Removed to avoid ORM schema parsing errors.
 }
 
 func (JobExecutionEntity) TableName() string {
@@ -65,7 +65,7 @@ type StepExecutionEntity struct {
 	ExecutionContext model.ExecutionContext
 	LastUpdated      time.Time
 	Version          int
-	// JobExecution *JobExecutionEntity // Removed to avoid GORM schema parsing errors.
+	// JobExecution *JobExecutionEntity // Removed to avoid ORM schema parsing errors.
 }
 
 func (StepExecutionEntity) TableName() string {

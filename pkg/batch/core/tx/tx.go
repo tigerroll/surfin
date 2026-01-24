@@ -38,6 +38,9 @@ type TxExecutor interface {
 	//                conflicts will be treated as DO NOTHING.
 	// Returns: The number of affected rows and any error that occurred during the operation.
 	ExecuteUpsert(ctx context.Context, model interface{}, tableName string, conflictColumns []string, updateColumns []string) (rowsAffected int64, err error)
+
+	// IsTableNotExistError checks if the given error indicates that a table does not exist.
+	IsTableNotExistError(err error) bool
 }
 
 // Tx represents an ongoing database transaction.

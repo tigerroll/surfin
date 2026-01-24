@@ -172,6 +172,24 @@ func (a *GormDBAdapter) Name() string {
 	return a.name
 }
 
+// IsTableNotExistError implements adaptor.DBConnection.
+func (a *GormDBAdapter) IsTableNotExistError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	switch a.dbType {
+	case "postgres", "redshift":
+		return strings.Contains(errMsg, "relation \"") && strings.Contains(errMsg, "\" does not exist")
+	case "mysql":
+		return strings.Contains(errMsg, "Error 1146") && strings.Contains(errMsg, "doesn't exist")
+	case "sqlite":
+		return strings.Contains(errMsg, "no such table:")
+	default:
+		return false
+	}
+}
+
 // RefreshConnection implements adaptor.DBConnection.
 func (a *GormDBAdapter) RefreshConnection(ctx context.Context) error {
 	if a.sqlDB == nil {
