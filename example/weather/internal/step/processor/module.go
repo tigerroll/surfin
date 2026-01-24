@@ -5,7 +5,6 @@ import (
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
-	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx"
@@ -14,13 +13,11 @@ import (
 func NewWeatherProcessorComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
-		repo job.JobRepository,
 		resolver core.ExpressionResolver,
 		dbResolver core.DBConnectionResolver,
 		properties map[string]string,
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
-		_ = repo
 		_ = dbResolver
 		processor, err := NewWeatherProcessor(cfg, resolver, properties)
 		if err != nil {

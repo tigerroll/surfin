@@ -11,7 +11,6 @@ import (
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
-	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration/drivers"
@@ -34,12 +33,11 @@ func NewMigrationTaskletComponentBuilder(migratorProvider MigratorProvider, p Mi
 	// Returns a builder function with the standard signature, called by JobFactory to construct the component.
 	return func(
 		cfg *config.Config,
-		repo job.JobRepository,
 		resolver port.ExpressionResolver,
 		dbResolver port.DBConnectionResolver,
 		properties map[string]string,
 	) (interface{}, error) {
-		return NewMigrationTasklet(cfg, repo, p.AllDBConnections, p.AllTxManagers, resolver, dbResolver, p.AllMigrationFS, properties, p.AllDBProviders, migratorProvider)
+		return NewMigrationTasklet(cfg, p.AllDBConnections, p.AllTxManagers, resolver, dbResolver, p.AllMigrationFS, properties, p.AllDBProviders, migratorProvider)
 	}
 }
 

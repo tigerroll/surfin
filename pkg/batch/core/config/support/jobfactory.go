@@ -29,10 +29,8 @@ type JobBuilder func(
 // JobFactory is a central factory for constructing key elements of the batch framework,
 // such as jobs, steps, components, and listeners, based on JSL (Job Specification Language) definitions.
 // This factory manages registered builder functions and resolves dependencies to generate executable objects.
-// Each field represents a dependency required for the JobFactory to fulfill its responsibilities.
 type JobFactory struct {
 	config                           *config.Config
-	jobRepository                    repository.JobRepository
 	expressionResolver               port.ExpressionResolver
 	dbConnectionResolver             port.DBConnectionResolver
 	componentBuilders                map[string]jsl.ComponentBuilder
@@ -54,6 +52,7 @@ type JobFactory struct {
 	stepFactory                      step_factory.StepFactory
 	metricRecorder                   metrics.MetricRecorder
 	tracer                           metrics.Tracer
+	jobRepository                    repository.JobRepository
 }
 
 // JobFactoryParams defines the parameters that the NewJobFactory function
@@ -61,8 +60,8 @@ type JobFactory struct {
 // Each field represents a dependency required for the JobFactory to fulfill its responsibilities.
 type JobFactoryParams struct {
 	fx.In
+	Repo              repository.JobRepository  // JobRepository used for persisting job metadata. // Re-added
 	Cfg               *config.Config            // Global configuration for the framework.
-	Repo              repository.JobRepository  // JobRepository used for persisting job metadata.
 	Resolver          port.ExpressionResolver   // ExpressionResolver for resolving dynamic expressions within JSL.
 	MetricRecorder    metrics.MetricRecorder    // MetricRecorder for recording metrics.
 	Tracer            metrics.Tracer            // Tracer for distributed tracing.
@@ -77,8 +76,7 @@ type JobFactoryParams struct {
 // Returns: A pointer to the initialized JobFactory.
 func NewJobFactory(p JobFactoryParams) *JobFactory {
 	return &JobFactory{
-		config:                           p.Cfg,
-		jobRepository:                    p.Repo,
+		jobRepository:                    p.Repo, // Re-added
 		expressionResolver:               p.Resolver,
 		dbConnectionResolver:             p.DBResolver,
 		metricRecorder:                   p.MetricRecorder,
@@ -100,6 +98,7 @@ func NewJobFactory(p JobFactoryParams) *JobFactory {
 		notificationListenerBuilders:     make(map[string]jsl.NotificationListenerBuilder), // Initialize
 		metadataTxManager:                p.MetadataTxManager,                              // ADD: Initialize metadataTxManager
 		stepFactory:                      p.StepFactory,
+		config:                           p.Cfg,
 	}
 }
 
@@ -251,7 +250,7 @@ func (f *JobFactory) CreateJob(jobName string) (port.Job, error) {
 	coreFlow, err := jsl.ConvertJSLToCoreFlow(
 		jslJob.Flow,
 		f.componentBuilders,
-		f.jobRepository,
+		f.jobRepository, // Pass jobRepository
 		f.config,
 		f.decisionBuilders,
 		f.splitBuilders,
@@ -306,8 +305,8 @@ func (f *JobFactory) CreateJob(jobName string) (port.Job, error) {
 	}
 
 	jobInstance, err := jobBuilder(
-		f.jobRepository,
-		f.config,
+		f.jobRepository, // Pass jobRepository
+		f.config,        // Pass config
 		jobListeners,
 		coreFlow,
 		f.metricRecorder,

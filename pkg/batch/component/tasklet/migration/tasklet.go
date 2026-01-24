@@ -16,6 +16,9 @@ import (
 )
 
 // MigrationTasklet executes database migrations using provided fs.FS resources.
+// It resolves the necessary database connection, migration file system, and migration table name,
+// then executes the specified migration command ("up" or "down").
+// After migration, it forces a re-connection to ensure the database connection is fresh.
 type MigrationTasklet struct {
 	cfg              *config.Config
 	repo             repository.JobRepository
@@ -27,7 +30,7 @@ type MigrationTasklet struct {
 	properties       map[string]string
 	migratorProvider MigratorProvider
 
-	// Configured properties
+	// Configured properties from JSL
 	dbConnectionName     string
 	fsName               string
 	migrationDir         string
@@ -39,11 +42,17 @@ type MigrationTasklet struct {
 }
 
 // NewMigrationTasklet creates a new MigrationTasklet instance.
+//
+// It initializes the tasklet with the provided configuration, repositories,
+// database connections, transaction managers, resolvers, file systems,
+// properties, and migrator provider. It extracts and validates
+// necessary properties from the `properties` map.
+//
+// Note: `allTxManagers` is currently not used within this tasklet's logic.
 func NewMigrationTasklet(
 	cfg *config.Config,
-	repo repository.JobRepository,
 	allDBConnections map[string]adaptor.DBConnection,
-	allTxManagers map[string]tx.TransactionManager,
+	allTxManagers map[string]tx.TransactionManager, // This parameter is not used in the current implementation.
 	resolver port.ExpressionResolver,
 	dbResolver port.DBConnectionResolver,
 	allMigrationFS map[string]fs.FS,
@@ -56,23 +65,23 @@ func NewMigrationTasklet(
 	logger.Debugf("MigrationTasklet builder received properties: %v", properties)
 
 	// Required properties from JSL
-
-	dbConnectionName, ok := properties["dbRef"] // Using old key 'dbRef' for JobFactory compatibility.
+	// Using old key 'dbRef' for JobFactory compatibility.
+	dbConnectionName, ok := properties["dbRef"]
 	if !ok || dbConnectionName == "" {
 		return nil, exception.NewBatchErrorf(taskletName, "Property 'dbRef' is required for MigrationTasklet")
 	}
 
-	fsName, ok := properties["migrationFSName"] // Using old key 'migrationFSName' for JobFactory compatibility.
+	// Using old key 'migrationFSName' for JobFactory compatibility.
+	fsName, ok := properties["migrationFSName"]
 	if !ok || fsName == "" {
 		return nil, exception.NewBatchErrorf(taskletName, "Property 'migrationFSName' is required for MigrationTasklet")
 	}
 
 	migrationDir, ok := properties["migrationDir"]
 	if !ok || migrationDir == "" {
-		// If migrationDir is empty, use the DB type as default.
-		// However, it is recommended to explicitly specify it in JSL.
-		logger.Warnf("Property 'migrationDir' is missing. Attempting to use DB type as default.")
-		// Not checking here as DB connection might not be established yet. Will check in Execute.
+		// If migrationDir is empty, it will be defaulted to the DB type in Execute.
+		// It is recommended to explicitly specify it in JSL for clarity.
+		logger.Warnf("Property 'migrationDir' is missing. It will be defaulted to the database type during execution.")
 	}
 
 	command := properties["command"]
@@ -89,7 +98,6 @@ func NewMigrationTasklet(
 
 	t := &MigrationTasklet{
 		cfg:                  cfg,
-		repo:                 repo,
 		allDBConnections:     allDBConnections,
 		allDBProviders:       allDBProviders,
 		resolver:             resolver,
@@ -111,6 +119,9 @@ func NewMigrationTasklet(
 }
 
 // Execute runs the database migration logic.
+// It resolves the database connection, migration file system, and migration table name,
+// then executes the specified migration command ("up" or "down").
+// After migration, it forces a re-connection to ensure the database connection is fresh.
 func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.StepExecution) (model.ExitStatus, error) {
 	taskletName := "migration_tasklet"
 	logger.Infof("Starting database migration for DB connection '%s' using FS '%s' and directory '%s' with command '%s'.",
@@ -125,7 +136,7 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 	// 2. Get DBProvider for the specific database type
 	provider, ok := t.allDBProviders[dbConfig.Type]
 	if !ok {
-		// Consider special cases like Redshift.
+		// Consider special cases like Redshift, which uses the Postgres provider.
 		if dbConfig.Type == "redshift" {
 			provider, ok = t.allDBProviders["postgres"]
 		}
@@ -153,23 +164,23 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Migration FS '%s' not found", t.fsName)
 	}
 
-	// 4. Determine Migration Table Name
+	// 5. Determine Migration Table Name
 	migrationTable := FixedAppMigrationsTable
 	if t.isFrameworkMigration {
 		migrationTable = FixedFrameworkMigrationsTable
 	}
 
-	// 5. Determine Migration Directory (use DB type if not specified in JSL).
+	// 6. Determine Migration Directory (use DB type if not specified in JSL).
 	migrationDir := t.migrationDir
 	if migrationDir == "" {
 		migrationDir = dbConn.Type()
 		logger.Debugf("Using DB type '%s' as migration directory.", migrationDir)
 	}
 
-	// 6. Create Migrator instance
+	// 7. Create Migrator instance
 	migrator := t.migratorProvider.NewMigrator(dbConn)
 
-	// 7. Execute Command
+	// 8. Execute Command
 	switch t.command {
 	case "up":
 		if err := migrator.Up(ctx, migrationFS, migrationDir, migrationTable); err != nil {
@@ -182,54 +193,47 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Unknown migration command: %s", t.command)
 	}
 
-	// 8. Refresh DB Connection (refresh connection after migration).
-	refreshErr := dbConn.RefreshConnection(ctx)
-	if refreshErr != nil {
-		// Connection is likely closed.
-		logger.Warnf("MigrationTasklet: Failed to refresh DB connection '%s' after migration: %v. Attempting to reconnect...", t.dbConnectionName, refreshErr)
-
-		// Force re-establishment of connection using DBProvider.
-		provider, ok := t.allDBProviders[dbConn.Type()]
-		if !ok {
-			// For Redshift, try Postgres Provider.
-			dbType := dbConn.Type()
-			if dbType == "redshift" {
-				provider, ok = t.allDBProviders["postgres"]
-			}
+	// 9. Ensure DB Connection is fresh after migration.
+	// The migration tool might close the underlying connection, so force re-establishment.
+	// This also ensures that schema changes are reflected in the connection.
+	// Use the provider to force re-connect, which updates the connection in the provider's map.
+	// Subsequent calls to DBConnectionResolver will then get the new connection.
+	reconnectProvider, ok := t.allDBProviders[dbConfig.Type]
+	if !ok {
+		// Handle special cases like Redshift.
+		if dbConfig.Type == "redshift" {
+			reconnectProvider, ok = t.allDBProviders["postgres"]
 		}
-
-		if ok {
-			// ForceReconnect is defined in the DBProvider interface.
-			_, err := provider.ForceReconnect(t.dbConnectionName)
-			if err != nil {
-				logger.Errorf("MigrationTasklet: Failed to force reconnect DB connection '%s': %v", t.dbConnectionName, err)
-				// Reconnection failure is not fatal, but JobRepository updates are likely to fail.
-			} else {
-				// newConn refers to the same instance as the existing dbConn, and its internal state is updated.
-				logger.Infof("MigrationTasklet: Successfully re-established DB connection '%s'.", t.dbConnectionName)
-			}
-		} else {
-			logger.Errorf("MigrationTasklet: Cannot find DBProvider for type '%s' to force reconnect.", dbConn.Type())
+		if !ok {
+			// If a provider for re-establishment is not found, this is a fatal error.
+			return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Cannot find DBProvider for type '%s' to force reconnect after migration.", dbConfig.Type)
 		}
 	}
 
-	// If successful
+	// ForceReconnect closes the old connection, establishes a new one, and updates the internal map.
+	_, err = reconnectProvider.ForceReconnect(t.dbConnectionName)
+	if err != nil {
+		// If re-establishment fails, it's a fatal error for subsequent operations.
+		return model.ExitStatusFailed, exception.NewBatchError(taskletName, "Failed to force reconnect DB connection after migration", err, false, false)
+	}
+
+	// Return completed status on success.
 	return model.ExitStatusCompleted, nil
 }
 
 // Close is the method for releasing resources.
+// For MigrationTasklet, there are no specific resources to close.
 func (t *MigrationTasklet) Close(ctx context.Context) error {
-	// No resources to close in this simple tasklet
 	return nil
 }
 
-// SetExecutionContext sets the ExecutionContext.
+// SetExecutionContext sets the ExecutionContext for the MigrationTasklet.
 func (t *MigrationTasklet) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	t.ec = ec
 	return nil
 }
 
-// GetExecutionContext retrieves the ExecutionContext.
+// GetExecutionContext retrieves the current ExecutionContext of the MigrationTasklet.
 func (t *MigrationTasklet) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	return t.ec, nil
 }

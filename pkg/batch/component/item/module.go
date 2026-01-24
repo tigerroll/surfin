@@ -9,7 +9,6 @@ import (
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
-	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
@@ -17,7 +16,6 @@ import (
 func NewNoOpItemReaderComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		_ *config.Config,
-		_ job.JobRepository,
 		_ port.ExpressionResolver,
 		_ port.DBConnectionResolver,
 		_ map[string]string,
@@ -31,7 +29,6 @@ func NewNoOpItemReaderComponentBuilder() jsl.ComponentBuilder {
 func NewPassThroughItemProcessorComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		_ *config.Config,
-		_ job.JobRepository,
 		_ port.ExpressionResolver,
 		_ port.DBConnectionResolver,
 		_ map[string]string,
@@ -45,7 +42,6 @@ func NewPassThroughItemProcessorComponentBuilder() jsl.ComponentBuilder {
 func NewNoOpItemWriterComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		_ *config.Config,
-		_ job.JobRepository,
 		_ port.ExpressionResolver,
 		_ port.DBConnectionResolver,
 		_ map[string]string,
@@ -59,14 +55,12 @@ func NewNoOpItemWriterComponentBuilder() jsl.ComponentBuilder {
 func NewExecutionContextItemWriterComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		cfg *config.Config,
-		repo job.JobRepository,
 		resolver port.ExpressionResolver,
 		dbResolver port.DBConnectionResolver,
 		properties map[string]string,
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
 		_ = cfg
-		_ = repo
 		_ = resolver
 		_ = dbResolver
 
