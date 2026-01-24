@@ -6,7 +6,6 @@ import (
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
-	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	"go.uber.org/fx"
 )
@@ -20,14 +19,12 @@ type NewExecutionContextWriterTaskletComponentBuilderParams struct {
 func NewExecutionContextWriterTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
-		repo job.JobRepository,
 		resolver port.ExpressionResolver,
 		dbResolver port.DBConnectionResolver,
 		properties map[string]string,
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
 		_ = cfg
-		_ = repo
 		_ = resolver
 		_ = dbResolver
 		return NewExecutionContextWriterTasklet("executionContextWriterTasklet", properties), nil
@@ -49,14 +46,12 @@ type NewRandomFailTaskletComponentBuilderParams struct {
 func NewRandomFailTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
-		repo job.JobRepository,
 		resolver port.ExpressionResolver,
 		dbResolver port.DBConnectionResolver,
 		properties map[string]string,
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
 		_ = cfg
-		_ = repo
 		_ = resolver
 		_ = dbResolver
 		return NewRandomFailTasklet("randomFailTasklet", properties), nil

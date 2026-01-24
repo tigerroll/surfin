@@ -11,7 +11,6 @@ import (
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
-	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
@@ -85,14 +84,12 @@ func (w *ExecutionContextItemWriter[I]) GetExecutionContext(ctx context.Context)
 func NewExecutionContextItemWriterBuilder() jsl.ComponentBuilder {
 	return func(
 		cfg *config.Config,
-		repo repository.JobRepository,
 		resolver port.ExpressionResolver,
 		dbResolver port.DBConnectionResolver,
 		properties map[string]string,
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
 		_ = cfg
-		_ = repo
 		_ = resolver
 		_ = dbResolver
 

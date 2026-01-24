@@ -46,7 +46,7 @@ func resolveComponentRefProperties(resolver core.ExpressionResolver, ref *Compon
 func ConvertJSLToCoreFlow(
 	jslFlow Flow,
 	componentBuilders map[string]ComponentBuilder,
-	jobRepository job.JobRepository,
+	jobRepository job.JobRepository, // Re-add this line
 	cfg *config.Config,
 	decisionBuilders map[string]ConditionalDecisionBuilder,
 	splitBuilders map[string]SplitBuilder,
@@ -223,7 +223,7 @@ func ConvertJSLToCoreFlow(
 				resolvedWriterRef := jslStep.Writer
 				resolvedWriterRef.Properties = resolvedWriterProps
 
-				r, p, w, err := buildReaderWriterProcessor(module, componentBuilders, cfg, jobRepository, resolver, dbResolver, &resolvedReaderRef, &resolvedProcessorRef, &resolvedWriterRef)
+				r, p, w, err := buildReaderWriterProcessor(module, componentBuilders, cfg, resolver, dbResolver, &resolvedReaderRef, &resolvedProcessorRef, &resolvedWriterRef)
 				if err != nil {
 					return nil, err
 				}
@@ -282,7 +282,7 @@ func ConvertJSLToCoreFlow(
 					return nil, err
 				}
 
-				taskletInstance, err := taskletBuilder(cfg, jobRepository, resolver, dbResolver, resolvedTaskletProps)
+				taskletInstance, err := taskletBuilder(cfg, resolver, dbResolver, resolvedTaskletProps) // Remove 'nil' argument
 				if err != nil {
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Tasklet '%s'", jslStep.Tasklet.Ref), err, false, false)
 				}
@@ -520,7 +520,7 @@ func ConvertJSLToCoreFlow(
 					resolvedWorkerWriterRef := workerStepJSL.Writer
 					resolvedWorkerWriterRef.Properties = resolvedWorkerWriterProps
 
-					r, p, w, err := buildReaderWriterProcessor(module, componentBuilders, cfg, jobRepository, resolver, dbResolver, &resolvedWorkerReaderRef, &resolvedWorkerProcessorRef, &resolvedWorkerWriterRef)
+					r, p, w, err := buildReaderWriterProcessor(module, componentBuilders, cfg, resolver, dbResolver, &resolvedWorkerReaderRef, &resolvedWorkerProcessorRef, &resolvedWorkerWriterRef)
 					if err != nil {
 						return nil, err
 					}
@@ -571,7 +571,7 @@ func ConvertJSLToCoreFlow(
 						return nil, err
 					}
 
-					taskletInstance, err := taskletBuilder(cfg, jobRepository, resolver, dbResolver, resolvedWorkerTaskletProps)
+					taskletInstance, err := taskletBuilder(cfg, resolver, dbResolver, resolvedWorkerTaskletProps)
 					if err != nil {
 						return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Worker Tasklet '%s'", workerStepJSL.Tasklet.Ref), err, false, false)
 					}
@@ -668,7 +668,6 @@ func buildReaderWriterProcessor(
 	module string,
 	componentBuilders map[string]ComponentBuilder,
 	cfg *config.Config,
-	jobRepository job.JobRepository,
 	resolver core.ExpressionResolver,
 	dbResolver core.DBConnectionResolver,
 	readerRef *ComponentRef,
@@ -683,7 +682,7 @@ func buildReaderWriterProcessor(
 	if !ok {
 		return nil, nil, nil, exception.NewBatchErrorf(module, "Reader builder '%s' not found", readerRef.Ref)
 	}
-	readerInstance, err := readerBuilder(cfg, jobRepository, resolver, dbResolver, readerRef.Properties)
+	readerInstance, err := readerBuilder(cfg, resolver, dbResolver, readerRef.Properties) // Remove 'nil' argument
 	if err != nil {
 		return nil, nil, nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Reader '%s'", readerRef.Ref), err, false, false)
 	}
@@ -696,7 +695,7 @@ func buildReaderWriterProcessor(
 	if !ok {
 		return nil, nil, nil, exception.NewBatchErrorf(module, "Processor builder '%s' not found", processorRef.Ref)
 	}
-	processorInstance, err := processorBuilder(cfg, jobRepository, resolver, dbResolver, processorRef.Properties)
+	processorInstance, err := processorBuilder(cfg, resolver, dbResolver, processorRef.Properties) // Remove 'nil' argument
 	if err != nil {
 		return nil, nil, nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Processor '%s'", processorRef.Ref), err, false, false)
 	}
@@ -709,7 +708,7 @@ func buildReaderWriterProcessor(
 	if !ok {
 		return nil, nil, nil, exception.NewBatchErrorf(module, "Writer builder '%s' not found", writerRef.Ref)
 	}
-	writerInstance, err := writerBuilder(cfg, jobRepository, resolver, dbResolver, writerRef.Properties)
+	writerInstance, err := writerBuilder(cfg, resolver, dbResolver, writerRef.Properties) // Remove 'nil' argument
 	if err != nil {
 		return nil, nil, nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Writer '%s'", writerRef.Ref), err, false, false)
 	}

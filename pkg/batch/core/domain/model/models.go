@@ -958,7 +958,7 @@ func (je *JobExecution) AddFailureException(err error) {
 
 	for _, existingErr := range je.Failures {
 		if existingErr == errMsg { // Check for duplicate error messages
-			logger.Debugf("Skipped adding duplicate error '%s' to JobExecution (ID: %s).", je.ID, errMsg)
+			logger.Debugf("Skipped adding duplicate error '%s' to JobExecution (ID: %s).", errMsg, je.ID)
 			return
 		}
 	}

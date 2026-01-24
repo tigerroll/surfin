@@ -4,7 +4,6 @@ package jsl
 import (
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
-	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 )
 
 // JSLDefinitionBytes holds the content of a JSL file as a byte slice.
@@ -136,7 +135,6 @@ type Partition struct {
 // ComponentBuilder is a generic function type for building core components such as ItemReader, ItemProcessor, ItemWriter, and Tasklet. This builder provides access to framework configuration, repositories, database connections, transaction managers, expression resolvers, database connection resolvers, migration file systems, and database providers, allowing components to access dynamic property resolution logic.
 type ComponentBuilder func(
 	cfg *config.Config,
-	repo repository.JobRepository,
 	resolver core.ExpressionResolver,
 	dbResolver core.DBConnectionResolver,
 	properties map[string]string,
