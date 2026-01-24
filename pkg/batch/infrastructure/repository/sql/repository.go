@@ -6,8 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/fx"
-
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -15,6 +13,7 @@ import (
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	"go.uber.org/fx"
 )
 
 // GORMJobRepository implements the repository.JobRepository interface using GORM.

@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"io/fs"
 
+	"go.uber.org/fx"
+
+	"github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/support/expression"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/factory"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/partition"
-	"github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-
-	"go.uber.org/fx"
 )
 
 // Module provides initializer-related components to Fx.
