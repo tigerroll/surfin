@@ -3,7 +3,6 @@ package sql
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
@@ -16,8 +15,8 @@ import (
 	"go.uber.org/fx"
 )
 
-// GORMJobRepository implements the repository.JobRepository interface using GORM.
-type GORMJobRepository struct {
+// SQLJobRepository implements the repository.JobRepository interface.
+type SQLJobRepository struct {
 	// dbResolver is used to resolve database connections by name.
 	dbResolver adaptor.DBConnectionResolver
 	// TxManager is the transaction manager for the database.
@@ -26,8 +25,8 @@ type GORMJobRepository struct {
 	dbName     string
 }
 
-// NewGORMJobRepository creates a new instance of GORMJobRepository.
-func NewGORMJobRepository(
+// NewSQLJobRepository creates a new instance of SQLJobRepository.
+func NewSQLJobRepository(
 	// dbResolver is the database connection resolver.
 	dbResolver adaptor.DBConnectionResolver,
 	// txManager is the transaction manager for the database.
@@ -35,33 +34,20 @@ func NewGORMJobRepository(
 	// dbName is the name of the database connection to be used by this repository.
 	dbName string,
 ) repository.JobRepository {
-	return &GORMJobRepository{
+	return &SQLJobRepository{
 		dbResolver: dbResolver,
 		TxManager:  txManager,
 		dbName:     dbName,
 	}
 }
 
-// isTableNotExistError checks if the given error is a "table does not exist" error from the database.
-// This typically occurs when the JobRepository is accessed before migrations have been applied.
-func isTableNotExistError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errMsg := err.Error()
-	// PostgreSQL: ERROR: relation "..." does not exist (SQLSTATE 42P01).
-	// MySQL/SQLite: no such table: ....
-	return (strings.Contains(errMsg, "relation \"") && strings.Contains(errMsg, "\" does not exist")) ||
-		strings.Contains(errMsg, "no such table:")
-}
-
 // getDBConnection is a helper function to get the DBConnection used by JobRepository.
 // This is used for operations that do not require an active transaction (e.g., ExecuteQuery, Count, Pluck).
-func (r *GORMJobRepository) getDBConnection(ctx context.Context) (adaptor.DBConnection, error) {
+func (r *SQLJobRepository) getDBConnection(ctx context.Context) (adaptor.DBConnection, error) {
 	// Use DBConnectionResolver to always get the latest DBConnection.
 	conn, err := r.dbResolver.ResolveDBConnection(ctx, r.dbName)
 	if err != nil {
-		return nil, exception.NewBatchError("GORMJobRepository", fmt.Sprintf("Failed to resolve DB connection '%s'", r.dbName), err, false, false)
+		return nil, exception.NewBatchError("SQLJobRepository", fmt.Sprintf("Failed to resolve DB connection '%s'", r.dbName), err, false, false)
 	}
 	return conn, nil
 }
@@ -69,7 +55,7 @@ func (r *GORMJobRepository) getDBConnection(ctx context.Context) (adaptor.DBConn
 // getTxExecutor checks if a Tx exists in the context.
 // If a transaction is found in the context, it returns the Tx (which implements TxExecutor); otherwise, it returns the DBConnection (which also implements TxExecutor).
 // This is used for operations within a transaction (ExecuteUpdate, ExecuteUpsert).
-func (r *GORMJobRepository) getTxExecutor(ctx context.Context) (tx.TxExecutor, error) {
+func (r *SQLJobRepository) getTxExecutor(ctx context.Context) (tx.TxExecutor, error) {
 	// Get Tx from context.
 	if t, ok := ctx.Value("tx").(tx.Tx); ok {
 		return t, nil // If a transaction exists in the context, use it.
@@ -78,24 +64,11 @@ func (r *GORMJobRepository) getTxExecutor(ctx context.Context) (tx.TxExecutor, e
 	return r.getDBConnection(ctx)
 }
 
-/*
-// getDBContext retrieves a GORM DB instance from a DBConnection and sets the Context.
-// NOTE: This method should only be used when advanced GORM features (e.g., Preload) cannot be abstracted by DBConnection.
-// To complete T_GORM_2, its use is restricted to SaveCheckpointData.
-func (r *GORMJobRepository) getDBContext(ctx context.Context) (*gorm.DB, error) {
-	gormDB, err := database.GetGormDBFromConnection(r.dbConn)
-	if err != nil {
-		return nil, exception.NewBatchError("GORMJobRepository", "Failed to get GORM DB connection", err, false, false)
-	}
-	return gormDB.WithContext(ctx), nil
-}
-*/
-
 // --- JobInstance implementation ---
 
-func (r *GORMJobRepository) SaveJobInstance(ctx context.Context, instance *model.JobInstance) error {
+func (r *SQLJobRepository) SaveJobInstance(ctx context.Context, instance *model.JobInstance) error {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.SaveJobInstance"
+	const op = "SQLJobRepository.SaveJobInstance"
 	entity := fromDomainJobInstance(instance)
 
 	executor, err := r.getTxExecutor(ctx)
@@ -107,7 +80,7 @@ func (r *GORMJobRepository) SaveJobInstance(ctx context.Context, instance *model
 	_, err = executor.ExecuteUpdate(ctx, entity, "CREATE", entity.TableName(), nil)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, it means migrations haven't been run yet.
+		if executor.IsTableNotExistError(err) { // If the table does not exist, it means migrations haven't been run yet.
 			// In this case, we ignore the error and return nil, as the table will be created later.
 			return nil
 		}
@@ -116,9 +89,9 @@ func (r *GORMJobRepository) SaveJobInstance(ctx context.Context, instance *model
 	return nil
 }
 
-func (r *GORMJobRepository) UpdateJobInstance(ctx context.Context, instance *model.JobInstance) error {
+func (r *SQLJobRepository) UpdateJobInstance(ctx context.Context, instance *model.JobInstance) error {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.UpdateJobInstance"
+	const op = "SQLJobRepository.UpdateJobInstance"
 
 	originalVersion := instance.Version
 	instance.Version++
@@ -140,7 +113,7 @@ func (r *GORMJobRepository) UpdateJobInstance(ctx context.Context, instance *mod
 		map[string]interface{}{"version": originalVersion}, // Remove ID condition
 	)
 	if err != nil {
-		if isTableNotExistError(err) {
+		if executor.IsTableNotExistError(err) {
 			// Ignore if table does not exist (e.g., before migrations are run).
 			instance.Version = originalVersion // Rollback version
 			return nil
@@ -155,9 +128,9 @@ func (r *GORMJobRepository) UpdateJobInstance(ctx context.Context, instance *mod
 	return nil
 }
 
-func (r *GORMJobRepository) FindJobInstanceByJobNameAndParameters(ctx context.Context, jobName string, params model.JobParameters) (*model.JobInstance, error) {
+func (r *SQLJobRepository) FindJobInstanceByJobNameAndParameters(ctx context.Context, jobName string, params model.JobParameters) (*model.JobInstance, error) {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.FindJobInstanceByJobNameAndParameters"
+	const op = "SQLJobRepository.FindJobInstanceByJobNameAndParameters"
 	hash, err := params.Hash()
 	if err != nil {
 		return nil, exception.NewBatchError(op, "failed to calculate JobParameters hash", err, false, false)
@@ -175,7 +148,7 @@ func (r *GORMJobRepository) FindJobInstanceByJobNameAndParameters(ctx context.Co
 	err = conn.ExecuteQuery(ctx, &entities, map[string]interface{}{"job_name": jobName, "parameters_hash": hash})
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, treat it as not found.
+		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
 			return nil, repository.ErrJobInstanceNotFound
 		}
 		// ExecuteQuery (Find) does not return ErrRecordNotFound, so only check for other DB errors here.
@@ -198,9 +171,9 @@ func (r *GORMJobRepository) FindJobInstanceByJobNameAndParameters(ctx context.Co
 	return nil, repository.ErrJobInstanceNotFound // No instance found with exactly matching parameters.
 }
 
-func (r *GORMJobRepository) FindJobInstanceByID(ctx context.Context, id string) (*model.JobInstance, error) {
+func (r *SQLJobRepository) FindJobInstanceByID(ctx context.Context, id string) (*model.JobInstance, error) {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.FindJobInstanceByID"
+	const op = "SQLJobRepository.FindJobInstanceByID"
 	var entity JobInstanceEntity
 
 	conn, err := r.getDBConnection(ctx)
@@ -212,7 +185,7 @@ func (r *GORMJobRepository) FindJobInstanceByID(ctx context.Context, id string) 
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"id": id}, "", 1)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, treat it as not found.
+		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
 			return nil, repository.ErrJobInstanceNotFound
 		}
 		// ExecuteQuery (Find) does not return ErrRecordNotFound, so only catch other DB errors here.
@@ -228,9 +201,9 @@ func (r *GORMJobRepository) FindJobInstanceByID(ctx context.Context, id string) 
 }
 
 // FindJobInstancesByJobNameAndPartialParameters implements repository.JobInstance.
-func (r *GORMJobRepository) FindJobInstancesByJobNameAndPartialParameters(ctx context.Context, jobName string, partialParams model.JobParameters) ([]*model.JobInstance, error) {
+func (r *SQLJobRepository) FindJobInstancesByJobNameAndPartialParameters(ctx context.Context, jobName string, partialParams model.JobParameters) ([]*model.JobInstance, error) {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.FindJobInstancesByJobNameAndPartialParameters"
+	const op = "SQLJobRepository.FindJobInstancesByJobNameAndPartialParameters"
 	var entities []JobInstanceEntity
 
 	conn, err := r.getDBConnection(ctx)
@@ -246,7 +219,7 @@ func (r *GORMJobRepository) FindJobInstancesByJobNameAndPartialParameters(ctx co
 	err = conn.ExecuteQueryAdvanced(ctx, &entities, query, "create_time desc", 0)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, return an empty slice.
+		if conn.IsTableNotExistError(err) { // If the table does not exist, return an empty slice.
 			return []*model.JobInstance{}, nil
 		}
 		return nil, exception.NewBatchError(op, "failed to find JobInstances by job name", err, true, false)
@@ -269,9 +242,9 @@ func (r *GORMJobRepository) FindJobInstancesByJobNameAndPartialParameters(ctx co
 }
 
 // GetJobInstanceCount implements repository.JobInstance.
-func (r *GORMJobRepository) GetJobInstanceCount(ctx context.Context, jobName string) (int, error) {
+func (r *SQLJobRepository) GetJobInstanceCount(ctx context.Context, jobName string) (int, error) {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.GetJobInstanceCount"
+	const op = "SQLJobRepository.GetJobInstanceCount"
 
 	conn, err := r.getDBConnection(ctx)
 	if err != nil {
@@ -280,7 +253,7 @@ func (r *GORMJobRepository) GetJobInstanceCount(ctx context.Context, jobName str
 	// Count JobInstance entities matching the given job name.
 	count, err := conn.Count(ctx, &JobInstanceEntity{}, map[string]interface{}{"job_name": jobName})
 	if err != nil {
-		if isTableNotExistError(err) { // If table does not exist, return 0.
+		if conn.IsTableNotExistError(err) { // If table does not exist, return 0.
 			return 0, nil
 		}
 		return 0, exception.NewBatchError(op, "failed to count JobInstances", err, true, false)
@@ -289,9 +262,9 @@ func (r *GORMJobRepository) GetJobInstanceCount(ctx context.Context, jobName str
 }
 
 // GetJobNames implements repository.JobInstance.
-func (r *GORMJobRepository) GetJobNames(ctx context.Context) ([]string, error) {
+func (r *SQLJobRepository) GetJobNames(ctx context.Context) ([]string, error) {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.GetJobNames"
+	const op = "SQLJobRepository.GetJobNames"
 	var jobNames []string
 
 	conn, err := r.getDBConnection(ctx)
@@ -302,7 +275,7 @@ func (r *GORMJobRepository) GetJobNames(ctx context.Context) ([]string, error) {
 	// Use Pluck to get a list of JobNames
 	err = conn.Pluck(ctx, &JobInstanceEntity{}, "job_name", &jobNames, nil)
 	if err != nil {
-		if isTableNotExistError(err) { // If table does not exist, return empty slice.
+		if conn.IsTableNotExistError(err) { // If table does not exist, return empty slice.
 			return []string{}, nil
 		}
 		return nil, exception.NewBatchError(op, "failed to pluck job names", err, true, false)
@@ -312,9 +285,9 @@ func (r *GORMJobRepository) GetJobNames(ctx context.Context) ([]string, error) {
 
 // --- JobExecution implementation ---
 
-func (r *GORMJobRepository) SaveJobExecution(ctx context.Context, jobExecution *model.JobExecution) error {
+func (r *SQLJobRepository) SaveJobExecution(ctx context.Context, jobExecution *model.JobExecution) error {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.SaveJobExecution"
+	const op = "SQLJobRepository.SaveJobExecution"
 	entity := fromDomainJobExecution(jobExecution)
 
 	executor, err := r.getTxExecutor(ctx)
@@ -326,7 +299,7 @@ func (r *GORMJobRepository) SaveJobExecution(ctx context.Context, jobExecution *
 	_, err = executor.ExecuteUpdate(ctx, entity, "CREATE", entity.TableName(), nil)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, ignore the error.
+		if executor.IsTableNotExistError(err) { // If the table does not exist, ignore the error.
 			// This can happen if the JobRepository is accessed before migrations are run.
 			return nil
 		}
@@ -335,9 +308,9 @@ func (r *GORMJobRepository) SaveJobExecution(ctx context.Context, jobExecution *
 	return nil
 }
 
-func (r *GORMJobRepository) UpdateJobExecution(ctx context.Context, jobExecution *model.JobExecution) error {
+func (r *SQLJobRepository) UpdateJobExecution(ctx context.Context, jobExecution *model.JobExecution) error {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.UpdateJobExecution"
+	const op = "SQLJobRepository.UpdateJobExecution"
 
 	originalVersion := jobExecution.Version
 	jobExecution.Version++
@@ -359,7 +332,7 @@ func (r *GORMJobRepository) UpdateJobExecution(ctx context.Context, jobExecution
 		map[string]interface{}{"version": originalVersion},
 	)
 	if err != nil {
-		if isTableNotExistError(err) { // If table does not exist, ignore.
+		if executor.IsTableNotExistError(err) { // If table does not exist, ignore.
 			jobExecution.Version = originalVersion
 			return nil
 		}
@@ -373,9 +346,9 @@ func (r *GORMJobRepository) UpdateJobExecution(ctx context.Context, jobExecution
 	return nil
 }
 
-func (r *GORMJobRepository) FindJobExecutionByID(ctx context.Context, executionID string) (*model.JobExecution, error) {
+func (r *SQLJobRepository) FindJobExecutionByID(ctx context.Context, executionID string) (*model.JobExecution, error) {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.FindJobExecutionByID"
+	const op = "SQLJobRepository.FindJobExecutionByID"
 	var entity JobExecutionEntity
 
 	conn, err := r.getDBConnection(ctx)
@@ -387,7 +360,7 @@ func (r *GORMJobRepository) FindJobExecutionByID(ctx context.Context, executionI
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"id": executionID}, "", 1)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, treat it as not found.
+		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
 			// This can happen if the JobRepository is accessed before migrations are run.
 			return nil, repository.ErrJobExecutionNotFound
 		}
@@ -414,9 +387,9 @@ func (r *GORMJobRepository) FindJobExecutionByID(ctx context.Context, executionI
 }
 
 // FindStepExecutionsByJobExecutionID retrieves all StepExecutions associated with a JobExecution.
-func (r *GORMJobRepository) FindStepExecutionsByJobExecutionID(ctx context.Context, jobExecutionID string) ([]*model.StepExecution, error) {
+func (r *SQLJobRepository) FindStepExecutionsByJobExecutionID(ctx context.Context, jobExecutionID string) ([]*model.StepExecution, error) {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.FindStepExecutionsByJobExecutionID"
+	const op = "SQLJobRepository.FindStepExecutionsByJobExecutionID"
 	var entities []StepExecutionEntity
 
 	conn, err := r.getDBConnection(ctx)
@@ -428,7 +401,7 @@ func (r *GORMJobRepository) FindStepExecutionsByJobExecutionID(ctx context.Conte
 	err = conn.ExecuteQueryAdvanced(ctx, &entities, map[string]interface{}{"job_execution_id": jobExecutionID}, "start_time asc", 0)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, return an empty slice.
+		if conn.IsTableNotExistError(err) { // If the table does not exist, return an empty slice.
 			// This can happen if the JobRepository is accessed before migrations are run.
 			return []*model.StepExecution{}, nil
 		}
@@ -443,9 +416,9 @@ func (r *GORMJobRepository) FindStepExecutionsByJobExecutionID(ctx context.Conte
 	return domainExecutions, nil
 }
 
-func (r *GORMJobRepository) FindLatestRestartableJobExecution(ctx context.Context, jobInstanceID string) (*model.JobExecution, error) {
+func (r *SQLJobRepository) FindLatestRestartableJobExecution(ctx context.Context, jobInstanceID string) (*model.JobExecution, error) {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.FindLatestRestartableJobExecution"
+	const op = "SQLJobRepository.FindLatestRestartableJobExecution"
 	var entity JobExecutionEntity
 
 	conn, err := r.getDBConnection(ctx)
@@ -458,7 +431,7 @@ func (r *GORMJobRepository) FindLatestRestartableJobExecution(ctx context.Contex
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"job_instance_id": jobInstanceID}, "create_time desc", 1)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, treat it as not found.
+		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
 			return nil, repository.ErrJobExecutionNotFound
 		}
 		return nil, exception.NewBatchError(op, fmt.Sprintf("failed to find latest JobExecution for JobInstance ID: %s", jobInstanceID), err, true, false)
@@ -489,8 +462,8 @@ func (r *GORMJobRepository) FindLatestRestartableJobExecution(ctx context.Contex
 	return nil, repository.ErrJobExecutionNotFound
 }
 
-func (r *GORMJobRepository) FindJobExecutionsByJobInstance(ctx context.Context, jobInstance *model.JobInstance) ([]*model.JobExecution, error) {
-	const op = "GORMJobRepository.FindJobExecutionsByJobInstance"
+func (r *SQLJobRepository) FindJobExecutionsByJobInstance(ctx context.Context, jobInstance *model.JobInstance) ([]*model.JobExecution, error) {
+	const op = "SQLJobRepository.FindJobExecutionsByJobInstance"
 	// op is the operation name for logging and error reporting.
 	var entities []JobExecutionEntity
 
@@ -503,7 +476,7 @@ func (r *GORMJobRepository) FindJobExecutionsByJobInstance(ctx context.Context, 
 	err = conn.ExecuteQueryAdvanced(ctx, &entities, map[string]interface{}{"job_instance_id": jobInstance.ID}, "create_time desc", 0)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, return an empty slice.
+		if conn.IsTableNotExistError(err) { // If the table does not exist, return an empty slice.
 			// This can happen if the JobRepository is accessed before migrations are run.
 			return []*model.JobExecution{}, nil
 		}
@@ -526,9 +499,9 @@ func (r *GORMJobRepository) FindJobExecutionsByJobInstance(ctx context.Context, 
 
 // --- StepExecution implementation ---
 
-func (r *GORMJobRepository) SaveStepExecution(ctx context.Context, stepExecution *model.StepExecution) error {
+func (r *SQLJobRepository) SaveStepExecution(ctx context.Context, stepExecution *model.StepExecution) error {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.SaveStepExecution"
+	const op = "SQLJobRepository.SaveStepExecution"
 	entity := fromDomainStepExecution(stepExecution)
 
 	executor, err := r.getTxExecutor(ctx)
@@ -540,7 +513,7 @@ func (r *GORMJobRepository) SaveStepExecution(ctx context.Context, stepExecution
 	_, err = executor.ExecuteUpdate(ctx, entity, "CREATE", entity.TableName(), nil)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If table does not exist, ignore.
+		if executor.IsTableNotExistError(err) { // If table does not exist, ignore.
 			return nil
 		}
 		return exception.NewBatchError(op, fmt.Sprintf("failed to save StepExecution (ID: %s)", stepExecution.ID), err, true, false)
@@ -548,9 +521,9 @@ func (r *GORMJobRepository) SaveStepExecution(ctx context.Context, stepExecution
 	return nil
 }
 
-func (r *GORMJobRepository) UpdateStepExecution(ctx context.Context, stepExecution *model.StepExecution) error {
+func (r *SQLJobRepository) UpdateStepExecution(ctx context.Context, stepExecution *model.StepExecution) error {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.UpdateStepExecution"
+	const op = "SQLJobRepository.UpdateStepExecution"
 
 	originalVersion := stepExecution.Version
 	stepExecution.Version++
@@ -572,7 +545,7 @@ func (r *GORMJobRepository) UpdateStepExecution(ctx context.Context, stepExecuti
 		map[string]interface{}{"version": originalVersion},
 	)
 	if err != nil {
-		if isTableNotExistError(err) { // If table does not exist, ignore.
+		if executor.IsTableNotExistError(err) { // If table does not exist, ignore.
 			stepExecution.Version = originalVersion
 			return nil
 		}
@@ -586,9 +559,9 @@ func (r *GORMJobRepository) UpdateStepExecution(ctx context.Context, stepExecuti
 	return nil
 }
 
-func (r *GORMJobRepository) FindStepExecutionByID(ctx context.Context, executionID string) (*model.StepExecution, error) {
+func (r *SQLJobRepository) FindStepExecutionByID(ctx context.Context, executionID string) (*model.StepExecution, error) {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.FindStepExecutionByID"
+	const op = "SQLJobRepository.FindStepExecutionByID"
 	var entity StepExecutionEntity
 
 	conn, err := r.getDBConnection(ctx)
@@ -600,7 +573,7 @@ func (r *GORMJobRepository) FindStepExecutionByID(ctx context.Context, execution
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"id": executionID}, "", 1)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, treat it as not found.
+		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
 			// This can happen if the JobRepository is accessed before migrations are run.
 			return nil, repository.ErrStepExecutionNotFound
 		}
@@ -616,9 +589,9 @@ func (r *GORMJobRepository) FindStepExecutionByID(ctx context.Context, execution
 
 // --- CheckpointData implementation ---
 
-func (r *GORMJobRepository) SaveCheckpointData(ctx context.Context, data *model.CheckpointData) error {
+func (r *SQLJobRepository) SaveCheckpointData(ctx context.Context, data *model.CheckpointData) error {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.SaveCheckpointData"
+	const op = "SQLJobRepository.SaveCheckpointData"
 
 	// To prevent MySQL '0000-00-00' datetime errors, set current time if LastUpdated is zero.
 	if data.LastUpdated.IsZero() {
@@ -641,7 +614,7 @@ func (r *GORMJobRepository) SaveCheckpointData(ctx context.Context, data *model.
 	_, err = executor.ExecuteUpsert(ctx, entity, entity.TableName(), conflictCols, updateCols)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, ignore the error.
+		if executor.IsTableNotExistError(err) { // If the table does not exist, ignore the error.
 			// The checkpoint data will be saved once the table is created.
 			return nil
 		}
@@ -650,9 +623,9 @@ func (r *GORMJobRepository) SaveCheckpointData(ctx context.Context, data *model.
 	return nil
 }
 
-func (r *GORMJobRepository) FindCheckpointData(ctx context.Context, stepExecutionID string) (*model.CheckpointData, error) {
+func (r *SQLJobRepository) FindCheckpointData(ctx context.Context, stepExecutionID string) (*model.CheckpointData, error) {
 	// op is the operation name for logging and error reporting.
-	const op = "GORMJobRepository.FindCheckpointData"
+	const op = "SQLJobRepository.FindCheckpointData"
 	var entity CheckpointDataEntity
 
 	conn, err := r.getDBConnection(ctx)
@@ -664,7 +637,7 @@ func (r *GORMJobRepository) FindCheckpointData(ctx context.Context, stepExecutio
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"step_execution_id": stepExecutionID}, "", 1)
 
 	if err != nil {
-		if isTableNotExistError(err) { // If the table does not exist, treat it as not found.
+		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
 			// This can happen if the JobRepository is accessed before migrations are run.
 			return nil, repository.ErrCheckpointDataNotFound
 		}
@@ -679,14 +652,14 @@ func (r *GORMJobRepository) FindCheckpointData(ctx context.Context, stepExecutio
 }
 
 // Close implements repository.JobRepository.
-func (r *GORMJobRepository) Close() error {
+func (r *SQLJobRepository) Close() error {
 	// The underlying DBConnection is managed by the DBProvider and its lifecycle,
 	// so it is not closed directly by the repository.
 	return nil
 }
 
-// Verify that GORMJobRepository implements all embedded interfaces of repository.JobRepository.
-var _ repository.JobRepository = (*GORMJobRepository)(nil)
+// Verify that SQLJobRepository implements all embedded interfaces of repository.JobRepository.
+var _ repository.JobRepository = (*SQLJobRepository)(nil)
 
 // JobRepositoryParams defines the dependencies required to create a NewJobRepository.
 type JobRepositoryParams struct {
@@ -709,5 +682,5 @@ func NewJobRepository(p JobRepositoryParams) repository.JobRepository {
 		dbName = "metadata"
 	}
 
-	return NewGORMJobRepository(p.DBResolver, p.MetadataTxManager, dbName)
+	return NewSQLJobRepository(p.DBResolver, p.MetadataTxManager, dbName)
 }

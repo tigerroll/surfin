@@ -56,6 +56,8 @@ type DBConnection interface {
 	Name() string
 	// Close closes the database connection.
 	Close() error
+	// IsTableNotExistError checks if the given error indicates that a table does not exist.
+	IsTableNotExistError(err error) bool
 	// RefreshConnection forces the re-establishment of the database connection.
 	// This is used, for example, when reflecting schema changes after migration.
 	RefreshConnection(ctx context.Context) error
