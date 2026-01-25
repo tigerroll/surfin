@@ -3,6 +3,7 @@ package mysql
 
 import (
 	gormadaptor "github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"gorm.io/driver/mysql"
@@ -11,7 +12,7 @@ import (
 
 // init registers the MySQL dialector factory with the gorm adaptor.
 func init() {
-	gormadaptor.RegisterDialector("mysql", func(cfg config.DatabaseConfig) (gorm.Dialector, error) {
+	gormadaptor.RegisterDialector("mysql", func(cfg dbconfig.DatabaseConfig) (gorm.Dialector, error) {
 		p := &gormadaptor.MySQLDBProvider{} // Creates a temporary instance to call the ConnectionString method.
 		connStr := p.ConnectionString(cfg)
 		return mysql.Open(connStr), nil

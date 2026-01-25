@@ -9,12 +9,12 @@ import (
 	"go.uber.org/fx"
 )
 
-// BatchInitializer is responsible for initializing batch components, such as loading JSL definitions.
+// BatchInitializer initializes batch components, such as loading JSL definitions.
 type BatchInitializer struct {
 	jslBytes jsl.JSLDefinitionBytes
 }
 
-// NewBatchInitializer creates a new instance of BatchInitializer.
+// NewBatchInitializer creates a new BatchInitializer instance.
 func NewBatchInitializer(jslBytes jsl.JSLDefinitionBytes) *BatchInitializer {
 	return &BatchInitializer{
 		jslBytes: jslBytes,
@@ -26,7 +26,7 @@ func (i *BatchInitializer) GetJSLDefinitionBytes() jsl.JSLDefinitionBytes {
 	return i.jslBytes
 }
 
-// ApplyLoggingConfigHook applies the logging level based on the configuration. (Corresponds to A_LOG_1)
+// ApplyLoggingConfigHook applies the logging level from the configuration.
 func ApplyLoggingConfigHook(cfg *config.Config) {
 	if cfg.Surfin.System.Logging.Level != "" {
 		logger.SetLogLevel(cfg.Surfin.System.Logging.Level)
@@ -35,14 +35,13 @@ func ApplyLoggingConfigHook(cfg *config.Config) {
 }
 
 // LoadJSLDefinitionsHook registers an Fx lifecycle hook to load JSL definitions.
-// Defined as a named function for use with fx.Invoke.
 func LoadJSLDefinitionsHook(lc fx.Lifecycle, initializer *BatchInitializer) {
 	lc.Append(fx.Hook{
 		OnStart: onStartLoadJSLDefinitions(initializer),
 	})
 }
 
-// onStartLoadJSLDefinitions is a helper function for the OnStart hook that begins loading JSL definitions.
+// onStartLoadJSLDefinitions is a helper for the OnStart hook that loads JSL definitions.
 func onStartLoadJSLDefinitions(initializer *BatchInitializer) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		logger.Infof("Loading JSL definitions.")

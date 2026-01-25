@@ -5,13 +5,14 @@ import (
 	"io/fs"
 	"strings"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
-	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
@@ -21,8 +22,6 @@ import (
 // After migration, it forces a re-connection to ensure the database connection is fresh.
 type MigrationTasklet struct {
 	cfg              *config.Config
-	repo             repository.JobRepository
-	allDBConnections map[string]adaptor.DBConnection
 	allDBProviders   map[string]adaptor.DBProvider
 	resolver         port.ExpressionResolver
 	dbResolver       port.DBConnectionResolver
@@ -51,14 +50,13 @@ type MigrationTasklet struct {
 // Note: `allTxManagers` is currently not used within this tasklet's logic.
 func NewMigrationTasklet(
 	cfg *config.Config,
-	allDBConnections map[string]adaptor.DBConnection,
-	allTxManagers map[string]tx.TransactionManager, // This parameter is not used in the current implementation.
 	resolver port.ExpressionResolver,
+	txFactory tx.TransactionManagerFactory,
 	dbResolver port.DBConnectionResolver,
+	migratorProvider MigratorProvider,
 	allMigrationFS map[string]fs.FS,
 	properties map[string]string,
 	allDBProviders map[string]adaptor.DBProvider,
-	migratorProvider MigratorProvider,
 ) (*MigrationTasklet, error) {
 
 	taskletName := "migration_tasklet"
@@ -98,7 +96,6 @@ func NewMigrationTasklet(
 
 	t := &MigrationTasklet{
 		cfg:                  cfg,
-		allDBConnections:     allDBConnections,
 		allDBProviders:       allDBProviders,
 		resolver:             resolver,
 		dbResolver:           dbResolver,
@@ -128,9 +125,20 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 		t.dbConnectionName, t.fsName, t.migrationDir, t.command)
 
 	// 1. Get DB Configuration to determine DB Type
-	dbConfig, ok := t.cfg.Surfin.Datasources[t.dbConnectionName]
+	var dbConfig dbconfig.DatabaseConfig
+	rawConfig, ok := t.cfg.Surfin.AdaptorConfigs[t.dbConnectionName]
 	if !ok {
-		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Database configuration '%s' not found", t.dbConnectionName)
+		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Database configuration '%s' not found in adaptor.database configs", t.dbConnectionName)
+	}
+		if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
+		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Failed to decode database config for '%s': %w", t.dbConnectionName, err)
+	}
+
+	// If the database type is 'dummy', skip the migration process entirely.
+	// This is for DB-less mode or testing where no actual database operations are expected.
+	if strings.TrimSpace(strings.ToLower(dbConfig.Type)) == "dummy" {
+		logger.Infof("MigrationTasklet: DB connection '%s' is configured as 'dummy'. Skipping migration.", t.dbConnectionName)
+		return model.ExitStatusCompleted, nil
 	}
 
 	// 2. Get DBProvider for the specific database type

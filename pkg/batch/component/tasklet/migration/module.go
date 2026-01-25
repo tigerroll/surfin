@@ -21,23 +21,32 @@ import (
 // MigrationTaskletComponentBuilderParams defines the dependencies for NewMigrationTaskletComponentBuilder.
 type MigrationTaskletComponentBuilderParams struct {
 	fx.In
-	AllDBConnections map[string]adaptor.DBConnection
-	AllTxManagers    map[string]tx.TransactionManager
+	TxFactory        tx.TransactionManagerFactory
+	DBResolver       port.DBConnectionResolver
+	MigratorProvider MigratorProvider
 	AllMigrationFS   map[string]fs.FS `name:"allMigrationFS"`
 	AllDBProviders   map[string]adaptor.DBProvider
 }
 
 // NewMigrationTaskletComponentBuilder creates a jsl.ComponentBuilder for MigrationTasklet.
-// It receives its core dependencies (AllDBConnections, AllTxManagers, AllMigrationFS, AllDBProviders) via Fx.
-func NewMigrationTaskletComponentBuilder(migratorProvider MigratorProvider, p MigrationTaskletComponentBuilderParams) jsl.ComponentBuilder {
-	// Returns a builder function with the standard signature, called by JobFactory to construct the component.
+func NewMigrationTaskletComponentBuilder(p MigrationTaskletComponentBuilderParams) jsl.ComponentBuilder {
+	// Returns a builder function that constructs the MigrationTasklet.
 	return func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver port.DBConnectionResolver,
+		dbResolver port.DBConnectionResolver, // This dbResolver is an argument to ComponentBuilder, not an Fx-injected one.
 		properties map[string]string,
 	) (interface{}, error) {
-		return NewMigrationTasklet(cfg, p.AllDBConnections, p.AllTxManagers, resolver, dbResolver, p.AllMigrationFS, properties, p.AllDBProviders, migratorProvider)
+		return NewMigrationTasklet(
+			cfg,
+			resolver,
+			p.TxFactory,
+			p.DBResolver, // Use the Fx-injected DBResolver.
+			p.MigratorProvider,
+			p.AllMigrationFS,
+			properties,
+			p.AllDBProviders,
+		)
 	}
 }
 

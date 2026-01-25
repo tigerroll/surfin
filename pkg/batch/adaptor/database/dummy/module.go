@@ -14,6 +14,15 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
+// NewDummyDBConnectionsAndTxManagers provides dummy implementations for database connections and transaction managers.
+// These are used when the application is configured to run in a DB-less mode, typically for testing or specific operational scenarios where actual database interaction is not required.
+//
+// Parameters:
+//   p: An Fx parameter struct containing Lifecycle and Config.
+//
+// Returns:
+//   A map of dummy DBConnection instances, a map of dummy TransactionManager instances,
+//   a map of dummy DBProvider instances, a dummy TransactionManagerFactory, and an error.
 func NewDummyDBConnectionsAndTxManagers(p struct {
 	fx.In
 	Lifecycle fx.Lifecycle
@@ -25,8 +34,6 @@ func NewDummyDBConnectionsAndTxManagers(p struct {
 	tx.TransactionManagerFactory,
 	error,
 ) {
-	// NewDummyDBConnectionsAndTxManagers provides dummy implementations for DB connections and transaction managers.
-	// These are used when the application runs in DB-less mode.
 	logger.Warnf("Running in DB-less mode. Providing dummy DB connections and transaction managers.")
 
 	// Add a hook to the Fx lifecycle to prevent errors from nil providers during shutdown.
@@ -40,24 +47,26 @@ func NewDummyDBConnectionsAndTxManagers(p struct {
 	// Provide a dummy DBProvider that can be resolved by type "dummy".
 	dummyProviders := make(map[string]adaptor.DBProvider)
 	dummyProviders["dummy"] = &dummyDBProvider{}
-	return make(map[string]adaptor.DBConnection), make(map[string]tx.TransactionManager), make(map[string]adaptor.DBProvider), &dummyTxManagerFactory{}, nil
+	return make(map[string]adaptor.DBConnection), make(map[string]tx.TransactionManager), make(map[string]adaptor.DBProvider), &DummyTxManagerFactory{}, nil
 }
 
-// NewMetadataTxManager extracts the "metadata" TransactionManager from the map.
-// In DB-less mode, it always returns a dummy manager provided by the dummyFactory.
+// NewMetadataTxManager provides a dummy TransactionManager specifically for "metadata" operations.
+// In DB-less mode, it always returns a dummy manager created by the provided dummyFactory,
+// effectively bypassing actual database interactions for metadata.
+//
+// Parameters:
+//   allTxManagers: A map of all registered TransactionManagers (ignored in dummy mode).
+//   dummyFactory: The dummy TransactionManagerFactory to create the dummy manager.
+//
+// Returns:
+//   A dummy TransactionManager and a nil error.
 func NewMetadataTxManager(allTxManagers map[string]tx.TransactionManager, dummyFactory tx.TransactionManagerFactory) (tx.TransactionManager, error) {
 	return dummyFactory.NewTransactionManager(nil), nil // A nil connection is passed as it's a dummy.
 }
 
-// Module is an Fx module that provides dummy DB-related implementations.
+// Module is an Fx module that provides dummy database-related implementations.
+// This module is intentionally empty in its current state, as the dummy providers
+// are conditionally supplied by the main application setup when DB-less mode is detected.
 var Module = fx.Options(
-	fx.Provide(NewDummyDBConnectionsAndTxManagers),
-	fx.Provide(fx.Annotate(
-		NewMetadataTxManager,
-		fx.ResultTags(`name:"metadata"`),
-	)),
-	fx.Provide(fx.Annotate(
-		NewDefaultDBConnectionResolver,
-		fx.As(new(adaptor.DBConnectionResolver)),
-	)),
+	// fx.Provide(NewDummyDBConnectionsAndTxManagers), // This provider is commented out as it's conditionally provided elsewhere.
 )

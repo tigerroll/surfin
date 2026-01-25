@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -18,7 +19,7 @@ import (
 // SQLJobRepository implements the repository.JobRepository interface.
 type SQLJobRepository struct {
 	// dbResolver is used to resolve database connections by name.
-	dbResolver adaptor.DBConnectionResolver
+	dbResolver port.DBConnectionResolver
 	// TxManager is the transaction manager for the database.
 	TxManager  tx.TransactionManager
 	// dbName is the name of the database connection used by this JobRepository (e.g., "metadata").
@@ -28,7 +29,7 @@ type SQLJobRepository struct {
 // NewSQLJobRepository creates a new instance of SQLJobRepository.
 func NewSQLJobRepository(
 	// dbResolver is the database connection resolver.
-	dbResolver adaptor.DBConnectionResolver,
+	dbResolver port.DBConnectionResolver,
 	// txManager is the transaction manager for the database.
 	txManager tx.TransactionManager,
 	// dbName is the name of the database connection to be used by this repository.
@@ -665,7 +666,7 @@ var _ repository.JobRepository = (*SQLJobRepository)(nil)
 type JobRepositoryParams struct {
 	fx.In
 	// DBResolver is the database connection resolver.
-	DBResolver        adaptor.DBConnectionResolver
+	DBResolver        port.DBConnectionResolver
 	// MetadataTxManager is the transaction manager for the metadata database.
 	MetadataTxManager tx.TransactionManager `name:"metadata"`
 	// Cfg is the application configuration.

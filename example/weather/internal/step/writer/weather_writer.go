@@ -17,21 +17,21 @@ import (
 	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 )
 
-// WeatherWriterConfig is a configuration struct specific to the Writer (for JSL property binding).
+// WeatherWriterConfig holds configuration specific to the WeatherItemWriter, typically for JSL property binding.
 type WeatherWriterConfig struct {
 	TargetDBName string `yaml:"targetDBName,omitempty"`
-	Database     string `yaml:"database,omitempty"` // For compatibility
+	Database     string `yaml:"database,omitempty"` // For backward compatibility
 }
 
-// WeatherItemWriter implements core.ItemWriter for writing weather data.
+// WeatherItemWriter implements core.ItemWriter for writing weather data to a database.
 type WeatherItemWriter struct {
-	TxManager tx.TransactionManager
-	Repo      appRepo.WeatherRepository // Repository resolved at runtime.
+	Repo appRepo.WeatherRepository // Repo is the repository resolved at runtime based on the database type.
 
 	AllDBConnections map[string]adaptor.DBConnection
 	DBResolver       port.DBConnectionResolver
 	Config           *batch_config.Config
-	TargetDBName     string // Target DB name resolved from JSL properties.
+	TargetDBName     string // Target database name resolved from JSL properties.
+	TableName        string // TableName is the name of the target table for this writer.
 
 	// stepExecutionContext holds the reference to the Step's ExecutionContext.
 	stepExecutionContext model.ExecutionContext
@@ -45,10 +45,15 @@ type WeatherItemWriter struct {
 var _ port.ItemWriter[any] = (*WeatherItemWriter)(nil)
 
 // NewWeatherWriter creates a new WeatherItemWriter instance.
+//
+// cfg provides the application configuration.
+// allDBConnections is a map of all established database connections.
+// resolver is an ExpressionResolver for dynamic property resolution.
+// dbResolver is a DBConnectionResolver for resolving database connections.
+// properties is a map of JSL properties for this writer.
 func NewWeatherWriter(
 	cfg *batch_config.Config,
 	allDBConnections map[string]adaptor.DBConnection,
-	allTxManagers map[string]tx.TransactionManager,
 	resolver port.ExpressionResolver,
 	dbResolver port.DBConnectionResolver,
 	properties map[string]string,
@@ -68,26 +73,22 @@ func NewWeatherWriter(
 		dbName = "workload" // Default value
 	}
 
-	// TxManager is mandatory.
-	txManager, ok := allTxManagers[dbName]
-	if !ok {
-		return nil, fmt.Errorf("transaction manager '%s' not found", dbName)
-	}
-
-	// Check for DBConnection existence (used during Open).
-	_, ok = allDBConnections[dbName]
+	// Check for DBConnection existence. The actual connection is used during Open.
+	_, ok := allDBConnections[dbName] 
 	if !ok {
 		return nil, fmt.Errorf("database connection '%s' not found", dbName)
 	}
 
 	return &WeatherItemWriter{
-		TxManager: txManager,
 		// Repo is initialized in Open.
+		// The TxManager is no longer directly held by the writer; it's created on demand
+		// by the ChunkStep using the TxManagerFactory and passed to the Write method.
 
 		AllDBConnections: allDBConnections,
 		DBResolver:       dbResolver,
 		Config:           cfg,
 		TargetDBName:     dbName,
+		TableName:        weather_entity.WeatherDataToStore{}.TableName(), // TableName is initialized from the entity's TableName method.
 
 		resolver:             resolver,
 		stepExecutionContext: model.NewExecutionContext(),
@@ -95,7 +96,10 @@ func NewWeatherWriter(
 	}, nil
 }
 
-// Open opens resources and restores state from ExecutionContext.
+// Open initializes the writer and restores its state from the provided ExecutionContext.
+//
+// ctx is the context for the operation.
+// ec is the ExecutionContext to initialize the writer with.
 func (w *WeatherItemWriter) Open(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
@@ -128,7 +132,11 @@ func (w *WeatherItemWriter) Open(ctx context.Context, ec model.ExecutionContext)
 	return w.restoreWriterStateFromExecutionContext(ctx)
 }
 
-// Write writes a chunk of items to the database within the provided transaction.
+// Write persists a chunk of items to the database within the provided transaction.
+//
+// ctx is the context for the operation.
+// tx is the current transaction.
+// items is the list of items to be written.
 func (w *WeatherItemWriter) Write(ctx context.Context, tx tx.Tx, items []any) error {
 	select {
 	case <-ctx.Done():
@@ -162,14 +170,17 @@ func (w *WeatherItemWriter) Write(ctx context.Context, tx tx.Tx, items []any) er
 
 	err := w.Repo.BulkInsertWeatherData(ctx, tx, finalDataToStore)
 	if err != nil {
-		return exception.NewBatchError("weather_writer", "failed to bulk insert weather data", err, true, true) // Changed isRetryable to true based on common DB error handling
+		// Changed isRetryable to true based on common DB error handling.
+		return exception.NewBatchError("weather_writer", "failed to bulk insert weather data", err, true, true)
 	}
 
 	logger.Debugf("Saved chunk of weather data items to the database. Count: %d", len(finalDataToStore))
 	return nil
 }
 
-// Close releases resources.
+// Close releases any resources held by the writer.
+//
+// ctx is the context for the operation.
 func (w *WeatherItemWriter) Close(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -184,7 +195,10 @@ func (w *WeatherItemWriter) Close(ctx context.Context) error {
 	return nil
 }
 
-// SetExecutionContext sets the ExecutionContext and restores the writer's state.
+// SetExecutionContext sets the ExecutionContext for the writer and restores its state.
+//
+// ctx is the context for the operation.
+// ec is the ExecutionContext to set.
 func (w *WeatherItemWriter) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
@@ -195,7 +209,11 @@ func (w *WeatherItemWriter) SetExecutionContext(ctx context.Context, ec model.Ex
 	return w.restoreWriterStateFromExecutionContext(ctx)
 }
 
-// GetExecutionContext retrieves the writer's ExecutionContext state.
+// GetExecutionContext retrieves the current ExecutionContext from the writer.
+//
+// ctx is the context for the operation.
+//
+// Returns the current ExecutionContext and an error if retrieval fails.
 func (w *WeatherItemWriter) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	select {
 	case <-ctx.Done():
@@ -212,6 +230,17 @@ func (w *WeatherItemWriter) GetExecutionContext(ctx context.Context) (model.Exec
 	return w.writerState, nil
 }
 
+// GetTargetDBName returns the name of the target database for this writer.
+func (w *WeatherItemWriter) GetTargetDBName() string {
+	return w.TargetDBName
+}
+
+// GetTableName returns the name of the target table for this writer.
+func (w *WeatherItemWriter) GetTableName() string {
+	return w.TableName
+}
+
+// restoreWriterStateFromExecutionContext extracts writer-specific state from the step's ExecutionContext.
 func (w *WeatherItemWriter) restoreWriterStateFromExecutionContext(ctx context.Context) error {
 	// Extract writer-specific context from stepExecutionContext.
 	writerCtxVal, ok := w.stepExecutionContext.Get("writer_context")
@@ -234,6 +263,7 @@ func (w *WeatherItemWriter) restoreWriterStateFromExecutionContext(ctx context.C
 	return nil
 }
 
+// saveWriterStateToExecutionContext saves the writer's internal state to the step's ExecutionContext.
 func (w *WeatherItemWriter) saveWriterStateToExecutionContext(ctx context.Context) error {
 	// Extract writer-specific context from stepExecutionContext (created if not present)
 	writerCtxVal, ok := w.stepExecutionContext.Get("writer_context")

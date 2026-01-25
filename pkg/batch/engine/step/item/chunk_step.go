@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -19,7 +20,9 @@ import (
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
-// ChunkStep is an implementation of core.Step for chunk-oriented processing.
+// ChunkStep is an implementation of the core.Step interface designed for chunk-oriented processing.
+// It orchestrates the reading of items, their processing, and writing them in chunks,
+// managing transactions, checkpointing, and handling retries and skips for individual items and the chunk itself.
 type ChunkStep struct {
 	id                     string
 	reader                 port.ItemReader[any]
@@ -37,11 +40,8 @@ type ChunkStep struct {
 	chunkListeners         []port.ChunkListener
 	promotion              *model.ExecutionContextPromotion
 
-	txManager tx.TransactionManager // For managing chunk processing transactions.
-
-	// T_TX_DEC: Addition of transaction attributes
-	isolationLevel sql.IsolationLevel
-	propagation    string // Holds values like REQUIRED, REQUIRES_NEW as strings
+	isolationLevel sql.IsolationLevel // The transaction isolation level for this step.
+	propagation    string             // The transaction propagation attribute (e.g., "REQUIRED", "REQUIRES_NEW").
 
 	// Policies
 	retryPolicy     retry.RetryPolicy // Global retry policy (for chunk operations)
@@ -51,12 +51,44 @@ type ChunkStep struct {
 	// Metrics and Tracing
 	metricRecorder metrics.MetricRecorder
 	tracer         metrics.Tracer
+
+	dbResolver       adaptor.DBConnectionResolver // Database connection resolver for dynamic database access.
+	txManagerFactory tx.TransactionManagerFactory // Transaction manager factory for creating transaction managers.
 }
 
-// Verify that ChunkStep implements the core.ItemWriter[any] interface.
+// Verify that ChunkStep implements the core.Step interface.
 var _ port.Step = (*ChunkStep)(nil)
 
-// NewJSLAdaptedStep creates a new ChunkStep instance configured from JSL.
+// NewJSLAdaptedStep creates a new ChunkStep instance configured from JSL (Job Specification Language) definitions.
+//
+// Parameters:
+//   id: The unique identifier name of the step.
+//   reader: An implementation of the ItemReader interface for reading items.
+//   processor: An implementation of the ItemProcessor interface for processing items.
+//   writer: An implementation of the ItemWriter interface for writing items.
+//   chunkSize: The maximum number of items to process at once.
+//   commitInterval: The interval at which transactions are committed (usually the same as chunkSize).
+//   retryConfig: Step-level retry configuration for the entire chunk operation.
+//   itemRetryConfig: Item-level retry configuration for individual item read/process operations.
+//   itemSkipConfig: Item-level skip configuration for individual item read/process/write operations.
+//   jobRepository: The job repository for persisting job metadata.
+//   stepExecutionListeners: A list of StepExecutionListeners to apply to this step.
+//   itemReadListeners: A list of ItemReadListeners to apply to this step.
+//   itemProcessListeners: A list of ItemProcessListeners to apply to this step.
+//   itemWriteListeners: A list of ItemWriteListeners to apply to this step.
+//   skipListeners: A list of SkipListeners to apply to this step.
+//   retryItemListeners: A list of RetryItemListeners to apply to this step.
+//   chunkListeners: A list of ChunkListeners to apply to this step.
+//   promotion: Promotion settings from StepExecutionContext to JobExecutionContext.
+//   isolationLevel: The transaction isolation level string passed from JSL (e.g., "SERIALIZABLE").
+//   propagation: The transaction propagation attribute string passed from JSL (e.g., "REQUIRED").
+//   txManagerFactory: The transaction manager factory to use for creating transaction managers.
+//   metricRecorder: The metric recorder for recording metrics.
+//   tracer: The tracer for distributed tracing.
+//   dbResolver: The database connection resolver for dynamic database access.
+//
+// Returns:
+//   A new ChunkStep instance.
 func NewJSLAdaptedStep(
 	id string,
 	reader port.ItemReader[any],
@@ -76,11 +108,12 @@ func NewJSLAdaptedStep(
 	retryItemListeners []port.RetryItemListener,
 	chunkListeners []port.ChunkListener,
 	promotion *model.ExecutionContextPromotion,
-	isolationLevel string, // Isolation level string passed from JSL
-	propagation string, // Propagation attribute string passed from JSL
-	txManager tx.TransactionManager,
+	isolationLevel string,
+	propagation string,
+	txManagerFactory tx.TransactionManagerFactory,
 	metricRecorder metrics.MetricRecorder,
 	tracer metrics.Tracer,
+	dbResolver adaptor.DBConnectionResolver,
 ) *ChunkStep {
 	// Note: RetryPolicy and SkipPolicy creation should ideally be delegated to factories,
 	// but for simplicity, we use default implementations here.
@@ -129,29 +162,45 @@ func NewJSLAdaptedStep(
 		skipPolicy:             itemSkipPolicy,    // Item skip policy
 		isolationLevel:         isoLevel,
 		propagation:            propagation,
-		txManager:              txManager,
+		txManagerFactory:       txManagerFactory,
 		metricRecorder:         metricRecorder,
 		tracer:                 tracer,
+		dbResolver:             dbResolver,
 		// Note: Item retry logic is handled internally within the chunk loop using itemRetryPolicy
 	}
 }
 
-// GetExecutionContextPromotion implements port.Step.
+// GetExecutionContextPromotion returns the ExecutionContext promotion settings for this step.
+//
+// Returns:
+//   A pointer to the ExecutionContextPromotion configuration.
 func (s *ChunkStep) GetExecutionContextPromotion() *model.ExecutionContextPromotion {
 	return s.promotion
 }
 
-// SetMetricRecorder implements port.Step.
+// SetMetricRecorder sets the MetricRecorder for this step.
+//
+// Parameters:
+//   recorder: The MetricRecorder instance to be used.
 func (s *ChunkStep) SetMetricRecorder(recorder metrics.MetricRecorder) {
 	s.metricRecorder = recorder
 }
 
-// SetTracer implements port.Step.
+// SetTracer sets the Tracer for this step.
+//
+// Parameters:
+//   tracer: The Tracer instance to be used.
 func (s *ChunkStep) SetTracer(tracer metrics.Tracer) {
 	s.tracer = tracer
 }
 
 // parseIsolationLevel converts a JSL string to sql.IsolationLevel.
+//
+// Parameters:
+//   level: The isolation level as a string (e.g., "READ_UNCOMMITTED", "SERIALIZABLE").
+//
+// Returns:
+//   The corresponding sql.IsolationLevel.
 func parseIsolationLevel(level string) sql.IsolationLevel {
 	switch level {
 	case "READ_UNCOMMITTED":
@@ -170,17 +219,26 @@ func parseIsolationLevel(level string) sql.IsolationLevel {
 	}
 }
 
-// ID returns the step ID.
+// ID returns the unique ID of the step definition.
+//
+// Returns:
+//   The unique identifier string for the step.
 func (s *ChunkStep) ID() string {
 	return s.id
 }
 
-// StepName returns the step name.
+// StepName returns the logical name of the step.
+//
+// Returns:
+//   The logical name string for the step.
 func (s *ChunkStep) StepName() string {
 	return s.id
 }
 
 // GetTransactionOptions returns the transaction options for this step.
+//
+// Returns:
+//   A pointer to sql.TxOptions configured with the step's isolation level.
 func (s *ChunkStep) GetTransactionOptions() *sql.TxOptions {
 	// Propagation attribute is handled by the StepExecutor, so only IsolationLevel is set in TxOptions here.
 	return &sql.TxOptions{
@@ -190,12 +248,20 @@ func (s *ChunkStep) GetTransactionOptions() *sql.TxOptions {
 }
 
 // GetPropagation returns the transaction propagation attribute.
+//
+// Returns:
+//   The propagation attribute as a string (e.g., "REQUIRED", "REQUIRES_NEW").
 func (s *ChunkStep) GetPropagation() string {
 	return s.propagation
 }
 
 // --- Listener Notifiers ---
 
+// notifyRetryRead notifies listeners that an item read operation is being retried.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//   err: The error that caused the retry.
 func (s *ChunkStep) notifyRetryRead(ctx context.Context, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemRetry(ctx, s.id, "read")
@@ -204,6 +270,11 @@ func (s *ChunkStep) notifyRetryRead(ctx context.Context, err error) {
 	}
 }
 
+// notifySkipRead notifies listeners that an item read operation is being skipped.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//   err: The error that caused the skip.
 func (s *ChunkStep) notifySkipRead(ctx context.Context, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemSkip(ctx, s.id, "read")
@@ -212,6 +283,12 @@ func (s *ChunkStep) notifySkipRead(ctx context.Context, err error) {
 	}
 }
 
+// notifyRetryProcess notifies listeners that an item process operation is being retried.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//   item: The item being processed.
+//   err: The error that caused the retry.
 func (s *ChunkStep) notifyRetryProcess(ctx context.Context, item any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemRetry(ctx, s.id, "process")
@@ -220,6 +297,12 @@ func (s *ChunkStep) notifyRetryProcess(ctx context.Context, item any, err error)
 	}
 }
 
+// notifySkipProcess notifies listeners that an item process operation is being skipped.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//   item: The item being processed.
+//   err: The error that caused the skip.
 func (s *ChunkStep) notifySkipProcess(ctx context.Context, item any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemSkip(ctx, s.id, "process")
@@ -228,6 +311,12 @@ func (s *ChunkStep) notifySkipProcess(ctx context.Context, item any, err error) 
 	}
 }
 
+// notifyRetryWrite notifies listeners that an item write operation is being retried.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//   items: The list of items being written.
+//   err: The error that caused the retry.
 func (s *ChunkStep) notifyRetryWrite(ctx context.Context, items []any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemRetry(ctx, s.id, "write")
@@ -240,6 +329,12 @@ func (s *ChunkStep) notifyRetryWrite(ctx context.Context, items []any, err error
 	}
 }
 
+// notifySkipWrite notifies listeners that an item write operation is being skipped.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//   item: The item being skipped.
+//   err: The error that caused the skip.
 func (s *ChunkStep) notifySkipWrite(ctx context.Context, item any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemSkip(ctx, s.id, "write")
@@ -254,7 +349,17 @@ func (s *ChunkStep) notifySkipWrite(ctx context.Context, item any, err error) {
 	}
 }
 
-// Execute runs the chunk-oriented step logic.
+// Execute runs the main business logic of the chunk-oriented step.
+// It orchestrates the reading, processing, and writing of items in chunks,
+// managing transactions, checkpointing, and error handling including retries and skips.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//   jobExecution: The current JobExecution instance.
+//   stepExecution: The current StepExecution instance.
+//
+// Returns:
+//   An error if the step execution encounters a fatal issue or exceeds retry/skip limits.
 func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution) error {
 
 	logger.Infof("ChunkStep '%s' executing.", s.id)
@@ -311,13 +416,39 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 
 	// Main chunk processing loop
 	for {
+		// --- START: MODIFIED CODE FOR DYNAMIC TX MANAGER ---
+		var currentTxManager tx.TransactionManager
+		var targetDBName string // Target DB name for ItemWriter
+		var tableName string    // Target table name for ItemWriter
+
+		// If ItemWriter is configured, get its target DB name and table name
+		if s.writer != nil {
+			targetDBName = s.writer.GetTargetDBName()
+			tableName = s.writer.GetTableName()
+		}
+
+		// If target DB name is empty and writer is not nil, it's an error
+		if targetDBName == "" && s.writer != nil {
+			chunkError = exception.NewBatchError(s.id, "ItemWriter must provide a target DB name for transaction management.", nil, false, false)
+			break
+		}
+
+		// Get DBConnection based on target DB name and create TxManager
+		dbConn, err := s.dbResolver.ResolveDBConnection(ctx, targetDBName)
+		if err != nil {
+			chunkError = exception.NewBatchError(s.id, fmt.Sprintf("Failed to resolve DB connection '%s' for chunk transaction", targetDBName), err, false, false)
+			break
+		}
+		currentTxManager = s.txManagerFactory.NewTransactionManager(dbConn)
+
 		// 3.1. Begin transaction
-		txAdapter, err := s.txManager.Begin(ctx, s.GetTransactionOptions())
+		txAdapter, err := currentTxManager.Begin(ctx, s.GetTransactionOptions())
 		if err != nil {
 			chunkError = exception.NewBatchError(s.id, "Failed to begin transaction for chunk", err, false, false)
 			break
 		}
 		txCtx := context.WithValue(ctx, "tx", txAdapter) // Store transaction in context
+		// --- END: MODIFIED CODE FOR DYNAMIC TX MANAGER ---
 
 		// Listener notification (BeforeChunk)
 		for _, l := range s.chunkListeners {
@@ -431,7 +562,7 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 
 		if chunkError != nil {
 			// If an error occurred during read or process, rollback the transaction
-			s.txManager.Rollback(txAdapter)
+			currentTxManager.Rollback(txAdapter)
 
 			// Listener notification (AfterChunk - failed)
 			for _, l := range s.chunkListeners {
@@ -442,7 +573,7 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 
 		// If read ended with EOF and there are no items to write, rollback transaction and exit loop
 		if currentChunkReadCount == 0 && len(itemsToWrite) == 0 {
-			s.txManager.Rollback(txAdapter) // Rollback as transaction was started but nothing was done
+			currentTxManager.Rollback(txAdapter) // Rollback as transaction was started but nothing was done
 
 			// Listener notification (AfterChunk - successful/empty)
 			for _, l := range s.chunkListeners {
@@ -470,7 +601,7 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 						s.notifyRetryWrite(txCtx, itemsToWrite, writeErr)
 
 						// Rollback transaction and continue outer chunk loop (retry)
-						s.txManager.Rollback(txAdapter)
+						currentTxManager.Rollback(txAdapter)
 						stepExecution.RollbackCount++
 						// TODO: Backoff wait
 						goto RetryChunk // Go to outer chunk loop
@@ -483,12 +614,12 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 						logger.Warnf("ChunkStep '%s': Item write failed (Skip Count: %d/%d). Triggering chunk splitting.", s.id, s.skipPolicy.GetSkipCount(), s.skipPolicy.GetSkipLimit())
 
 						// 2.1. Rollback transaction
-						s.txManager.Rollback(txAdapter)
+						currentTxManager.Rollback(txAdapter)
 						stepExecution.RollbackCount++
 
 						// 2.2. Execute chunk splitting process
 						// If chunk splitting succeeds, error items are skipped, and remaining items are committed.
-						_, fatalErr := s.HandleSkippableWriteFailure(txCtx, itemsToWrite, stepExecution) // Ignore remainingItems
+						_, fatalErr := s.HandleSkippableWriteFailure(txCtx, itemsToWrite, stepExecution, currentTxManager) // Ignore remainingItems
 
 						if fatalErr != nil {
 							chunkError = fatalErr
@@ -502,7 +633,7 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 
 					// 3. Fatal error or retry/skip limit exceeded
 					// If a write error occurs, rollback the transaction
-					s.txManager.Rollback(txAdapter)
+					currentTxManager.Rollback(txAdapter)
 					chunkError = exception.NewBatchError(s.id, "Item write failed (Fatal or limit reached)", writeErr, false, false)
 					goto EndChunkLoop // Exit the entire chunk processing
 				}
@@ -514,8 +645,24 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 			writeCount += len(itemsToWrite)
 		}
 
+		// --- START: MODIFIED CODE FOR POST-COMMIT VERIFICATION ---
+		// If ItemWriter provides target DB name and table name, perform post-commit verification.
+		if s.writer != nil && targetDBName != "" && tableName != "" {
+			// dbConn is not used here, so discard it with _
+			_, err := s.dbResolver.ResolveDBConnection(ctx, targetDBName)
+			if err != nil {
+				logger.Errorf("ChunkStep '%s': Failed to resolve DB connection for post-commit verification for '%s': %v", s.id, targetDBName, err)
+				// Log the error but continue processing as it's not fatal.
+			} else {
+				// Additional verification logic can be added here using dbConn, e.g., checking table row count.
+				// Currently, only logging is performed.
+				logger.Debugf("ChunkStep '%s': Successfully resolved DB connection '%s' for table '%s' for post-commit verification.", s.id, targetDBName, tableName)
+			}
+		}
+		// --- END: MODIFIED CODE FOR POST-COMMIT VERIFICATION ---
+
 		// 3.4. Commit transaction
-		if commitErr := s.txManager.Commit(txAdapter); commitErr != nil {
+		if commitErr := currentTxManager.Commit(txAdapter); commitErr != nil {
 			chunkError = exception.NewBatchError(s.id, "Failed to commit transaction for chunk", commitErr, false, false)
 
 			// Listener notification (AfterChunk - failed)
@@ -545,7 +692,7 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 			break
 		}
 	RetryChunk: // Jump here on write retry
-	EndChunkTransaction: // Jump target on successful chunk splitting or EOF
+	EndChunkTransaction: ; // Jump target on successful chunk splitting or EOF
 		// Empty statement to allow label definition
 	} // End of chunk loop
 EndChunkLoop:
@@ -573,7 +720,7 @@ EndChunkLoop:
 		}
 	}
 
-	// ADDED: Update StepExecution.ExecutionContext to the latest state
+	// Update StepExecution.ExecutionContext to the latest state
 	// This ensures that data written by the reader/writer to ExecutionContext (e.g., decision.condition)
 	// is reflected in the StepExecution object, enabling promotion to JobExecution.
 	finalStepEC := model.NewExecutionContext()
@@ -625,6 +772,16 @@ EndChunkLoop:
 }
 
 // saveCheckpoint retrieves the state of the Reader/Writer and saves it to the JobRepository.
+// This function is typically called after a successful chunk commit to persist the progress.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//   stepExecution: The current StepExecution.
+//   readCount: The number of items read so far.
+//   writeCount: The number of items written so far.
+//
+// Returns:
+//   An error if saving the checkpoint fails.
 func (s *ChunkStep) saveCheckpoint(ctx context.Context, stepExecution *model.StepExecution, readCount, writeCount int) error {
 	currentEC := model.NewExecutionContext()
 
@@ -669,9 +826,18 @@ func (s *ChunkStep) saveCheckpoint(ctx context.Context, stepExecution *model.Ste
 }
 
 // HandleSkippableWriteFailure re-writes items one by one when a skippable write error occurs,
-// skipping the item that caused the error and returning the remaining items.
-// Returns: (remaining items, fatal error)
-func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalItems []any, stepExecution *model.StepExecution) ([]any, error) {
+// skipping the item that caused the error and attempting to commit the remaining items.
+// This mechanism is known as "chunk splitting".
+//
+// Parameters:
+//   ctx: The context for the operation.
+//   originalItems: The original list of items that caused the write failure.
+//   stepExecution: The current StepExecution.
+//   currentTxManager: The current transaction manager.
+//
+// Returns:
+//   An empty slice (as all items are either committed or skipped) and a fatal error if one occurs during splitting.
+func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalItems []any, stepExecution *model.StepExecution, currentTxManager tx.TransactionManager) ([]any, error) {
 	taskletName := s.id
 
 	// Remaining items after chunk splitting (expected to be empty if this function succeeds)
@@ -683,7 +849,7 @@ func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalIte
 	// 1. Re-write items one by one to identify errors
 	for i, item := range originalItems {
 		// 1.1. Begin transaction for a single item
-		txAdapter, err := s.txManager.Begin(ctx, s.GetTransactionOptions())
+		txAdapter, err := currentTxManager.Begin(ctx, s.GetTransactionOptions())
 		if err != nil {
 			fatalError = exception.NewBatchError(taskletName, "Failed to begin transaction for chunk splitting", err, false, false)
 			break
@@ -704,19 +870,19 @@ func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalIte
 				s.notifySkipWrite(txCtx, item, writeErr)
 
 				// Rollback
-				s.txManager.Rollback(txAdapter)
+				currentTxManager.Rollback(txAdapter)
 				logger.Warnf("ChunkStep '%s': Item skipped during chunk splitting: %+v", taskletName, item)
 
 				// This item was skipped, so do not add to remainingItems
 			} else {
 				// Skip limit exceeded or fatal error
-				s.txManager.Rollback(txAdapter)
+				currentTxManager.Rollback(txAdapter)
 				fatalError = exception.NewBatchError(taskletName, fmt.Sprintf("Item write failed during chunk splitting (Fatal or limit reached) for item index %d", i), writeErr, false, false)
 				break
 			}
 		} else {
 			// 1.4. Write successful: Commit
-			if commitErr := s.txManager.Commit(txAdapter); commitErr != nil {
+			if commitErr := currentTxManager.Commit(txAdapter); commitErr != nil {
 				fatalError = exception.NewBatchError(taskletName, "Failed to commit transaction during chunk splitting", commitErr, false, false)
 				break
 			}

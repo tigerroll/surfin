@@ -7,7 +7,6 @@ import (
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
-	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	step_factory "github.com/tigerroll/surfin/pkg/batch/engine/step/factory"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -16,9 +15,11 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
+// Package jsl provides functionality to convert JSL (Job Specification Language)
+// definitions into the internal core batch framework models.
+
 // resolveComponentRefProperties resolves dynamic expressions within the ComponentRef's Properties map.
-// JobExecution/StepExecution are nil during JSL converter execution.
-// Therefore, only expressions that do not depend on JobParameters or EC (e.g., environment variables) are resolved.
+// It resolves expressions that do not depend on JobParameters or ExecutionContext, as JobExecution/StepExecution are nil during JSL conversion.
 func resolveComponentRefProperties(resolver core.ExpressionResolver, ref *ComponentRef) (map[string]string, error) {
 	module := "jsl_converter"
 	if ref == nil || len(ref.Properties) == 0 {
@@ -27,7 +28,7 @@ func resolveComponentRefProperties(resolver core.ExpressionResolver, ref *Compon
 
 	resolvedProps := make(map[string]string, len(ref.Properties))
 	for key, value := range ref.Properties {
-		// Use context.Background() since JobExecution/StepExecution are nil during JSL converter execution.
+		// Use context.Background() as JobExecution/StepExecution are nil during JSL conversion.
 		resolvedValue, err := resolver.Resolve(context.Background(), value, nil, nil)
 		if err != nil {
 			// Return error if resolution fails
@@ -39,20 +40,42 @@ func resolveComponentRefProperties(resolver core.ExpressionResolver, ref *Compon
 }
 
 // ConvertJSLToCoreFlow converts a JSL Flow definition into a core.FlowDefinition.
-// componentBuilders holds builders for components (Reader, Processor, Writer, Tasklet) referenced in JSL.
-// jobRepository is used if the repository is needed within the step.
-// cfg is the overall application configuration. // FIX: Added period.
-// listenerBuilders are maps for dynamically building step-level and item-level listeners.
+//
+// This function performs a two-pass conversion:
+// 1. First pass: Builds all steps, decisions, and splits to resolve potential forward references.
+// 2. Second pass: Adds elements to the flow definition and resolves Split references,
+//    including the final construction of Partition Steps.
+//
+// Parameters:
+//   jslFlow: The JSL Flow definition to convert.
+//   componentBuilders: A map of builders for components (Reader, Processor, Writer, Tasklet) referenced in JSL.
+//   jobRepository: The job repository, used if the repository is needed within a step (e.g., PartitionStep).
+//   cfg: The overall application configuration.
+//   decisionBuilders: A map of builders for conditional decisions.
+//   splitBuilders: A map of builders for split elements.
+//   stepFactory: The factory for creating core step instances.
+//   partitionerBuilders: A map of builders for partitioners.
+//   resolver: The expression resolver for dynamic property resolution.
+//   dbResolver: The database connection resolver.
+//   stepListenerBuilders: A map of builders for step execution listeners.
+//   itemReadListenerBuilders: A map of builders for item read listeners.
+//   itemProcessListenerBuilders: A map of builders for item process listeners.
+//   itemWriteListenerBuilders: A map of builders for item write listeners.
+//   skipListenerBuilders: A map of builders for skip listeners.
+//   retryItemListenerBuilders: A map of builders for retry item listeners.
+//   chunkListenerBuilders: A map of builders for chunk listeners.
+//
+// Returns:
+//   A pointer to the converted core.FlowDefinition and an error if the conversion fails.
 func ConvertJSLToCoreFlow(
 	jslFlow Flow,
 	componentBuilders map[string]ComponentBuilder,
-	jobRepository job.JobRepository, // Re-add this line
+	jobRepository job.JobRepository,
 	cfg *config.Config,
 	decisionBuilders map[string]ConditionalDecisionBuilder,
 	splitBuilders map[string]SplitBuilder,
 	stepFactory step_factory.StepFactory,
-	txManager tx.TransactionManager,
-	partitionerBuilders map[string]core.PartitionerBuilder,
+	partitionerBuilders map[string]core.PartitionerBuilder, // Builders for partitioners.
 	resolver core.ExpressionResolver,
 	dbResolver core.DBConnectionResolver,
 	stepListenerBuilders map[string]StepExecutionListenerBuilder,
@@ -99,7 +122,7 @@ func ConvertJSLToCoreFlow(
 				if !found {
 					return nil, exception.NewBatchErrorf(module, "StepExecutionListener builder '%s' is not registered", listenerRef.Ref)
 				}
-				listenerInstance, err := builder(cfg, listenerRef.Properties) // FIX: Added properties.
+				listenerInstance, err := builder(cfg, listenerRef.Properties)
 				if err != nil {
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build StepExecutionListener '%s'", listenerRef.Ref), err, false, false)
 				}
@@ -118,7 +141,7 @@ func ConvertJSLToCoreFlow(
 					if !found {
 						return nil, exception.NewBatchErrorf(module, "ItemReadListener builder '%s' is not registered", listenerRef.Ref)
 					}
-					listenerInstance, err := builder(cfg, listenerRef.Properties) // FIX: Added properties.
+					listenerInstance, err := builder(cfg, listenerRef.Properties)
 					if err != nil {
 						return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build ItemReadListener '%s'", listenerRef.Ref), err, false, false)
 					}
@@ -130,7 +153,7 @@ func ConvertJSLToCoreFlow(
 					if !found {
 						return nil, exception.NewBatchErrorf(module, "ItemProcessListener builder '%s' is not registered", listenerRef.Ref)
 					}
-					listenerInstance, err := builder(cfg, listenerRef.Properties) // FIX: Added properties.
+					listenerInstance, err := builder(cfg, listenerRef.Properties)
 					if err != nil {
 						return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build ItemProcessListener '%s'", listenerRef.Ref), err, false, false)
 					}
@@ -142,7 +165,7 @@ func ConvertJSLToCoreFlow(
 					if !found {
 						return nil, exception.NewBatchErrorf(module, "ItemWriteListener builder '%s' is not registered", listenerRef.Ref)
 					}
-					listenerInstance, err := builder(cfg, listenerRef.Properties) // FIX: Added properties.
+					listenerInstance, err := builder(cfg, listenerRef.Properties)
 					if err != nil {
 						return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build ItemWriteListener '%s'", listenerRef.Ref), err, false, false)
 					}
@@ -154,7 +177,7 @@ func ConvertJSLToCoreFlow(
 					if !found {
 						return nil, exception.NewBatchErrorf(module, "RetryItemListener builder '%s' is not registered", listenerRef.Ref)
 					}
-					listenerInstance, err := builder(cfg, listenerRef.Properties) // FIX: Pass cfg and properties.
+					listenerInstance, err := builder(cfg, listenerRef.Properties)
 					if err != nil {
 						return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build RetryItemListener '%s'", listenerRef.Ref), err, false, false)
 					}
@@ -166,7 +189,7 @@ func ConvertJSLToCoreFlow(
 					if !found {
 						return nil, exception.NewBatchErrorf(module, "ChunkListener builder '%s' is not registered", listenerRef.Ref)
 					}
-					listenerInstance, err := builder(cfg, listenerRef.Properties) // FIX: Added properties.
+					listenerInstance, err := builder(cfg, listenerRef.Properties)
 					if err != nil {
 						return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build ChunkListener '%s'", listenerRef.Ref), err, false, false)
 					}
@@ -180,7 +203,7 @@ func ConvertJSLToCoreFlow(
 				if !found {
 					return nil, exception.NewBatchErrorf(module, "SkipListener builder '%s' is not registered", listenerRef.Ref)
 				}
-				listenerInstance, err := builder(cfg, listenerRef.Properties) // FIX: Added properties.
+				listenerInstance, err := builder(cfg, listenerRef.Properties)
 				if err != nil {
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build SkipListener '%s'", listenerRef.Ref), err, false, false)
 				}
@@ -237,10 +260,6 @@ func ConvertJSLToCoreFlow(
 						dbName = "workload" // Default value
 					}
 				}
-
-				// TxManager is now passed directly from JobFactory
-				chunkTxManager := txManager
-
 				chunkIsolationLevel := jslStep.Chunk.IsolationLevel
 
 				coreStep, err = stepFactory.CreateChunkStep(
@@ -263,11 +282,10 @@ func ConvertJSLToCoreFlow(
 					coreECPromotion,
 					chunkIsolationLevel,
 					jslStep.Propagation,
-					chunkTxManager,
 				)
 				if err != nil {
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Chunk Step '%s'", id), err, false, false)
-				}
+				}				
 				logger.Debugf("Chunk Step '%s' built.", id)
 
 			} else if jslStep.Tasklet.Ref != "" {
@@ -283,7 +301,7 @@ func ConvertJSLToCoreFlow(
 				}
 
 				taskletInstance, err := taskletBuilder(cfg, resolver, dbResolver, resolvedTaskletProps) // Remove 'nil' argument
-				if err != nil {
+				if err != nil {					
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Tasklet '%s'", jslStep.Tasklet.Ref), err, false, false)
 				}
 				t, isTasklet := taskletInstance.(core.Tasklet)
@@ -299,8 +317,8 @@ func ConvertJSLToCoreFlow(
 					jslStep.IsolationLevel,
 					jslStep.Propagation,
 				)
-				if err != nil {
-					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Tasklet Step '%s'", id), err, false, false)
+				if err != nil {					
+					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Tasklet Step '%s'", id), err, false, false)					
 				}
 				logger.Debugf("Tasklet Step '%s' built.", id)
 
@@ -327,8 +345,8 @@ func ConvertJSLToCoreFlow(
 				}
 				// PartitionerBuilder only accepts properties map[string]string
 				partitionerInstance, err := partitionerBuilder(resolvedPartitionerRef.Properties)
-				if err != nil {
-					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Partitioner '%s'", resolvedPartitionerRef.Ref), err, false, false)
+				if err != nil {					
+					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Partitioner '%s'", resolvedPartitionerRef.Ref), err, false, false)					
 				}
 				partitioner, isPartitioner := partitionerInstance.(core.Partitioner)
 				if !isPartitioner {
@@ -533,9 +551,6 @@ func ConvertJSLToCoreFlow(
 							workerDBName = "workload" // Default value
 						}
 					}
-					// TxManager is now passed directly from JobFactory
-					workerTxManager := txManager
-
 					workerIsolationLevel := workerStepJSL.Chunk.IsolationLevel
 
 					// Worker Step does not inherit retry/skip/listener settings from the Controller, so pass empty lists/default settings
@@ -557,7 +572,6 @@ func ConvertJSLToCoreFlow(
 						nil, // EC Promotion is unnecessary (nil).
 						workerIsolationLevel,
 						workerStepJSL.Propagation,
-						workerTxManager,
 					)
 				} else if workerStepJSL.Tasklet.Ref != "" {
 					taskletBuilder, ok := componentBuilders[workerStepJSL.Tasklet.Ref]
@@ -614,8 +628,7 @@ func ConvertJSLToCoreFlow(
 			}
 
 			// Add element and transitions
-			err = flowDef.AddElement(id, coreElement)
-			if err != nil {
+			if err := flowDef.AddElement(id, coreElement); err != nil {
 				return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to add step '%s' to flow", id), err, false, false)
 			}
 			for _, transition := range jslStep.Transitions {
@@ -629,8 +642,7 @@ func ConvertJSLToCoreFlow(
 			// Try to unmarshal as Decision
 		} else if err := yaml.Unmarshal(elementBytes, &jslDecision); err == nil && jslDecision.ID != "" && jslDecision.Ref != "" {
 			coreElement := builtElements[id].(core.FlowElement)
-			err := flowDef.AddElement(id, coreElement)
-			if err != nil {
+			if err := flowDef.AddElement(id, coreElement); err != nil {
 				return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to add Decision '%s' to flow", id), err, false, false)
 			}
 			for _, transition := range jslDecision.Transitions {
@@ -644,8 +656,7 @@ func ConvertJSLToCoreFlow(
 			// Try to unmarshal as Split
 		} else if err := yaml.Unmarshal(elementBytes, &jslSplit); err == nil && jslSplit.ID != "" && len(jslSplit.Steps) > 0 {
 			coreSplit := builtElements[id].(core.FlowElement)
-			err = flowDef.AddElement(id, coreSplit)
-			if err != nil {
+			if err := flowDef.AddElement(id, coreSplit); err != nil {
 				return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to add Split '%s' to flow", id), err, false, false)
 			}
 			for _, transition := range jslSplit.Transitions {
@@ -664,6 +675,19 @@ func ConvertJSLToCoreFlow(
 }
 
 // buildReaderWriterProcessor is a helper function to build instances of ItemReader, ItemProcessor, and ItemWriter.
+//
+// Parameters:
+//   module: The module name for error reporting.
+//   componentBuilders: A map of component builders.
+//   cfg: The application configuration.
+//   resolver: The expression resolver.
+//   dbResolver: The database connection resolver.
+//   readerRef: The ComponentRef for the ItemReader.
+//   processorRef: The ComponentRef for the ItemProcessor.
+//   writerRef: The ComponentRef for the ItemWriter.
+//
+// Returns:
+//   The built ItemReader, ItemProcessor, ItemWriter instances, and an error if building fails.
 func buildReaderWriterProcessor(
 	module string,
 	componentBuilders map[string]ComponentBuilder,
@@ -682,7 +706,7 @@ func buildReaderWriterProcessor(
 	if !ok {
 		return nil, nil, nil, exception.NewBatchErrorf(module, "Reader builder '%s' not found", readerRef.Ref)
 	}
-	readerInstance, err := readerBuilder(cfg, resolver, dbResolver, readerRef.Properties) // Remove 'nil' argument
+	readerInstance, err := readerBuilder(cfg, resolver, dbResolver, readerRef.Properties)
 	if err != nil {
 		return nil, nil, nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Reader '%s'", readerRef.Ref), err, false, false)
 	}
@@ -695,7 +719,7 @@ func buildReaderWriterProcessor(
 	if !ok {
 		return nil, nil, nil, exception.NewBatchErrorf(module, "Processor builder '%s' not found", processorRef.Ref)
 	}
-	processorInstance, err := processorBuilder(cfg, resolver, dbResolver, processorRef.Properties) // Remove 'nil' argument
+	processorInstance, err := processorBuilder(cfg, resolver, dbResolver, processorRef.Properties)
 	if err != nil {
 		return nil, nil, nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Processor '%s'", processorRef.Ref), err, false, false)
 	}
@@ -708,7 +732,7 @@ func buildReaderWriterProcessor(
 	if !ok {
 		return nil, nil, nil, exception.NewBatchErrorf(module, "Writer builder '%s' not found", writerRef.Ref)
 	}
-	writerInstance, err := writerBuilder(cfg, resolver, dbResolver, writerRef.Properties) // Remove 'nil' argument
+	writerInstance, err := writerBuilder(cfg, resolver, dbResolver, writerRef.Properties)
 	if err != nil {
 		return nil, nil, nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Writer '%s'", writerRef.Ref), err, false, false)
 	}
@@ -721,6 +745,15 @@ func buildReaderWriterProcessor(
 }
 
 // validateTransition validates a single transition rule.
+// It checks for:
+// - Presence of 'on' attribute.
+// - Mutual exclusivity of 'to', 'end', 'fail', and 'stop' attributes.
+// - Existence of the target element if 'to' is specified.
+//
+// Parameters:
+//   fromElementID: The ID of the source flow element.
+//   t: The Transition rule to validate.
+//   allElements: A map of all flow elements, used to check target element existence.
 func validateTransition(fromElementID string, t Transition, allElements map[string]interface{}) error {
 	if t.On == "" {
 		return exception.NewBatchError("jsl_converter", fmt.Sprintf("Transition rule for flow element '%s' is missing 'on'", fromElementID), nil, false, false)

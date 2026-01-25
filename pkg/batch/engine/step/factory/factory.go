@@ -40,7 +40,6 @@ type StepFactory interface {
 		promotion *model.ExecutionContextPromotion,
 		isolationLevel string,
 		propagation string,
-		txManager tx.TransactionManager,
 	) (port.Step, error)
 
 	// CreateTaskletStep constructs a tasklet-oriented Step.
@@ -70,62 +69,69 @@ type StepFactory interface {
 // DefaultStepFactory is the default implementation of the StepFactory interface.
 // It manages the dependencies required for constructing Steps.
 type DefaultStepFactory struct {
-	jobRepository  repository.JobRepository
-	txManager      tx.TransactionManager
-	stepExecutor   port.StepExecutor
-	metricRecorder metrics.MetricRecorder
-	tracer         metrics.Tracer
+	jobRepository        repository.JobRepository
+	stepExecutor         port.StepExecutor
+	metricRecorder       metrics.MetricRecorder
+	tracer               metrics.Tracer
+	dbConnectionResolver port.DBConnectionResolver
+	txManagerFactory     tx.TransactionManagerFactory // Transaction manager factory for creating transaction managers.
 }
 
 // DefaultStepFactoryParams defines the parameters that the NewDefaultStepFactory function
-// receives through dependency injection (Fx).
+// receives via dependency injection (Fx).
 type DefaultStepFactoryParams struct {
 	fx.In
 	JobRepository     repository.JobRepository
-	MetadataTxManager tx.TransactionManager `name:"metadata"` // Requests the metadata TxManager.
+	MetadataTxManager tx.TransactionManager `name:"metadata"` // Requests the metadata TxManager (used by JobRepository).
 	StepExecutor      port.StepExecutor
 	MetricRecorder    metrics.MetricRecorder
 	Tracer            metrics.Tracer
+	DBResolver        port.DBConnectionResolver
+	TxFactory         tx.TransactionManagerFactory // Transaction manager factory.
 }
 
 // NewDefaultStepFactory creates a new instance of DefaultStepFactory.
 //
-// p: Receives the necessary dependencies (JobRepository, MetadataTxManager, StepExecutor, MetricRecorder, Tracer) through the DefaultStepFactoryParams struct.
+// Parameters:
+//   p: The DefaultStepFactoryParams struct containing injected dependencies.
+//
 // Returns: A pointer to the initialized DefaultStepFactory.
 func NewDefaultStepFactory(
 	p DefaultStepFactoryParams,
 ) *DefaultStepFactory {
 	return &DefaultStepFactory{
-		jobRepository:  p.JobRepository,
-		txManager:      p.MetadataTxManager, // Uses the tagged TxManager.
-		stepExecutor:   p.StepExecutor,
-		metricRecorder: p.MetricRecorder,
-		tracer:         p.Tracer,
+		jobRepository:        p.JobRepository,
+		stepExecutor:         p.StepExecutor,
+		metricRecorder:       p.MetricRecorder,
+		tracer:               p.Tracer,
+		dbConnectionResolver: p.DBResolver,
+		txManagerFactory:     p.TxFactory, // Set the TxFactory.
 	}
 }
 
 // CreateChunkStep constructs a new ChunkStep instance.
 //
-// name: The unique identifier name of the step.
-// reader: An implementation of the ItemReader interface for reading items.
-// processor: An implementation of the ItemProcessor interface for processing items.
-// writer: An implementation of the ItemWriter interface for writing items.
-// chunkSize: The maximum number of items to process at once.
-// commitInterval: The interval at which transactions are committed (usually the same as chunkSize).
-// retryConfig: Step-level retry configuration.
-// itemRetryConfig: Item-level retry configuration.
-// itemSkipConfig: Item-level skip configuration.
-// stepExecutionListeners: A list of StepExecutionListeners to apply to this step.
-// itemReadListeners: A list of ItemReadListeners to apply to this step.
-// itemProcessListeners: A list of ItemProcessListeners to apply to this step.
-// itemWriteListeners: A list of ItemWriteListeners to apply to this step.
-// skipListeners: A list of SkipListeners to apply to this step.
-// retryItemListeners: A list of RetryItemListeners to apply to this step.
-// chunkListeners: A list of ChunkListeners to apply to this step.
-// promotion: Promotion settings from StepExecutionContext to JobExecutionContext.
-// isolationLevel: The transaction isolation level for this step.
-// propagation: The transaction propagation attribute for this step.
-// txManager: The transaction manager to use for this step.
+// Parameters:
+//   name: The unique identifier name of the step.
+//   reader: An implementation of the ItemReader interface for reading items.
+//   processor: An implementation of the ItemProcessor interface for processing items.
+//   writer: An implementation of the ItemWriter interface for writing items.
+//   chunkSize: The maximum number of items to process at once.
+//   commitInterval: The interval at which transactions are committed (usually the same as chunkSize).
+//   retryConfig: Step-level retry configuration.
+//   itemRetryConfig: Item-level retry configuration.
+//   itemSkipConfig: Item-level skip configuration.
+//   stepExecutionListeners: A list of StepExecutionListeners to apply to this step.
+//   itemReadListeners: A list of ItemReadListeners to apply to this step.
+//   itemProcessListeners: A list of ItemProcessListeners to apply to this step.
+//   itemWriteListeners: A list of ItemWriteListeners to apply to this step.
+//   skipListeners: A list of SkipListeners to apply to this step.
+//   retryItemListeners: A list of RetryItemListeners to apply to this step.
+//   chunkListeners: A list of ChunkListeners to apply to this step.
+//   promotion: Promotion settings from StepExecutionContext to JobExecutionContext.
+//   isolationLevel: The transaction isolation level for this step.
+//   propagation: The transaction propagation attribute for this step.
+//
 // Returns: The constructed port.Step interface and an error.
 func (f *DefaultStepFactory) CreateChunkStep(
 	name string,
@@ -147,7 +153,6 @@ func (f *DefaultStepFactory) CreateChunkStep(
 	promotion *model.ExecutionContextPromotion,
 	isolationLevel string,
 	propagation string,
-	txManager tx.TransactionManager,
 ) (port.Step, error) {
 	step := itemstep.NewJSLAdaptedStep(
 		name,
@@ -159,7 +164,7 @@ func (f *DefaultStepFactory) CreateChunkStep(
 		retryConfig,
 		itemRetryConfig,
 		itemSkipConfig,
-		f.jobRepository, // Use StepFactory dependency
+		f.jobRepository,
 		stepExecutionListeners,
 		itemReadListeners,
 		itemProcessListeners,
@@ -170,9 +175,10 @@ func (f *DefaultStepFactory) CreateChunkStep(
 		promotion,
 		isolationLevel,
 		propagation,
-		txManager,
+		f.txManagerFactory, // Pass f.txManagerFactory.
 		f.metricRecorder,
 		f.tracer,
+		f.dbConnectionResolver,
 	)
 	logger.Debugf("Chunk Step '%s' built.", name)
 	return step, nil

@@ -12,9 +12,4 @@ var Module = fx.Options(
 		NewDefaultExpressionResolver,
 		fx.As(new(port.ExpressionResolver)),
 	)),
-	// Provides DefaultDBConnectionResolver as the core.DBConnectionResolver interface.
-	fx.Provide(fx.Annotate(
-		NewDefaultDBConnectionResolver, // Dependency on ExpressionResolver is resolved automatically.
-		fx.As(new(port.DBConnectionResolver)),
-	)),
 )
