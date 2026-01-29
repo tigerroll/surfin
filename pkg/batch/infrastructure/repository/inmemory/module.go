@@ -5,7 +5,7 @@ package inmemory
 import (
 	"go.uber.org/fx"
 
-	dummy "github.com/tigerroll/surfin/pkg/batch/adaptor/database/dummy" // Import of dummy module.
+	dummy "github.com/tigerroll/surfin/pkg/batch/adapter/database/dummy" // Import of dummy module.
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 )
 

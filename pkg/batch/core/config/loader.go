@@ -201,14 +201,14 @@ func mergeSurfinConfig(dest, source *SurfinConfig) {
 		dest.Security.MaskedParameterKeys = source.Security.MaskedParameterKeys
 	}
 
-	// Merge AdaptorConfigs (this is the critical part for database configs)
-	if source.AdaptorConfigs != nil {
-		if dest.AdaptorConfigs == nil {
-			dest.AdaptorConfigs = make(map[string]interface{})
+	// Merge AdapterConfigs (this is the critical part for database configs)
+	if source.AdapterConfigs != nil {
+		if dest.AdapterConfigs == nil {
+			dest.AdapterConfigs = make(map[string]interface{})
 		}
-		// Since source.AdaptorConfigs is a map[string]interface{}, iterate directly and merge.
-		for key, value := range source.AdaptorConfigs {
-			dest.AdaptorConfigs[key] = value
+		// Since source.AdapterConfigs is a map[string]interface{}, iterate directly and merge.
+		for key, value := range source.AdapterConfigs {
+			dest.AdapterConfigs[key] = value
 		}
 	}
 }
@@ -363,7 +363,7 @@ func loadStructFromEnv(val reflect.Value, prefix string) error {
 //
 // Parameters:
 //
-//	mapField: The reflect.Value of the map field (e.g., `cfg.Surfin.AdaptorConfigs`).
+//	mapField: The reflect.Value of the map field (e.g., `cfg.Surfin.AdapterConfigs`).
 //	prefix: The environment variable prefix for this map (e.g., "SURFIN_DATABASE_").
 func loadMapOfStructsFromEnv(mapField reflect.Value, prefix string) error {
 	if mapField.IsNil() {

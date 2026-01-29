@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	"io/fs"
 
@@ -22,12 +22,12 @@ import (
 
 // migratorImpl implements Migrator
 type migratorImpl struct {
-	dbConn adaptor.DBConnection
+	dbConn adapter.DBConnection
 	dbType string
 }
 
 // NewMigrator creates a new Migrator instance.
-func NewMigrator(dbConn adaptor.DBConnection) Migrator {
+func NewMigrator(dbConn adapter.DBConnection) Migrator {
 	return &migratorImpl{
 		dbConn: dbConn,
 		dbType: dbConn.Type(),

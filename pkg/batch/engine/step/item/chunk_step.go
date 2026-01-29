@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -52,7 +52,7 @@ type ChunkStep struct {
 	metricRecorder metrics.MetricRecorder
 	tracer         metrics.Tracer
 
-	dbResolver       adaptor.DBConnectionResolver // Database connection resolver for dynamic database access.
+	dbResolver       adapter.DBConnectionResolver // Database connection resolver for dynamic database access.
 	txManagerFactory tx.TransactionManagerFactory // Transaction manager factory for creating transaction managers.
 }
 
@@ -115,7 +115,7 @@ func NewJSLAdaptedStep(
 	txManagerFactory tx.TransactionManagerFactory,
 	metricRecorder metrics.MetricRecorder,
 	tracer metrics.Tracer,
-	dbResolver adaptor.DBConnectionResolver,
+	dbResolver adapter.DBConnectionResolver,
 ) *ChunkStep {
 	// Note: RetryPolicy and SkipPolicy creation should ideally be delegated to factories,
 	// but for simplicity, we use default implementations here.

@@ -7,7 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
@@ -218,9 +218,9 @@ type DBConnectionResolver interface {
 	//   name: The name of the database connection to resolve (e.g., "metadata", "workload").
 	//
 	// Returns:
-	//   adaptor.DBConnection: The resolved database connection instance.
+	//   adapter.DBConnection: The resolved database connection instance.
 	//   error: An error that occurred during connection resolution or re-establishment.
-	ResolveDBConnection(ctx context.Context, name string) (adaptor.DBConnection, error)
+	ResolveDBConnection(ctx context.Context, name string) (adapter.DBConnection, error)
 }
 
 // ItemReader is the interface for a data reading step.

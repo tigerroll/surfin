@@ -8,7 +8,7 @@ import (
 
 	"go.uber.org/fx"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -30,9 +30,9 @@ func NewDummyDBConnectionsAndTxManagers(p struct {
 	Lifecycle fx.Lifecycle
 	Cfg       *config.Config
 }) (
-	map[string]adaptor.DBConnection,
+	map[string]adapter.DBConnection,
 	map[string]tx.TransactionManager,
-	map[string]adaptor.DBProvider,
+	map[string]adapter.DBProvider,
 	tx.TransactionManagerFactory,
 	error,
 ) {
@@ -47,9 +47,9 @@ func NewDummyDBConnectionsAndTxManagers(p struct {
 	})
 
 	// Provide a dummy DBProvider that can be resolved by type "dummy".
-	dummyProviders := make(map[string]adaptor.DBProvider)
+	dummyProviders := make(map[string]adapter.DBProvider)
 	dummyProviders["dummy"] = &dummyDBProvider{}
-	return make(map[string]adaptor.DBConnection), make(map[string]tx.TransactionManager), make(map[string]adaptor.DBProvider), &DummyTxManagerFactory{}, nil
+	return make(map[string]adapter.DBConnection), make(map[string]tx.TransactionManager), make(map[string]adapter.DBProvider), &DummyTxManagerFactory{}, nil
 }
 
 // NewMetadataTxManager provides a dummy TransactionManager specifically for "metadata" operations.

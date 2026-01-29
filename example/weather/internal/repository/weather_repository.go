@@ -5,7 +5,7 @@ import (
 	_ "database/sql"
 	"fmt"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -23,11 +23,11 @@ type WeatherRepository interface {
 
 // PostgresRepositoryWrapper adapts repository.PostgresRepository to WeatherRepository.
 type PostgresRepositoryWrapper struct {
-	dbConn adaptor.DBConnection
+	dbConn adapter.DBConnection
 	dbType string
 }
 
-func NewPostgresWeatherRepository(dbConn adaptor.DBConnection, dbType string) WeatherRepository {
+func NewPostgresWeatherRepository(dbConn adapter.DBConnection, dbType string) WeatherRepository {
 	return &PostgresRepositoryWrapper{dbConn: dbConn, dbType: dbType}
 }
 
@@ -79,11 +79,11 @@ func (w *PostgresRepositoryWrapper) Close() error {
 
 // MySQLRepositoryWrapper adapts repository.MySQLRepository to WeatherRepository.
 type MySQLRepositoryWrapper struct {
-	dbConn adaptor.DBConnection
+	dbConn adapter.DBConnection
 	dbType string
 }
 
-func NewMySQLWeatherRepository(dbConn adaptor.DBConnection, dbType string) WeatherRepository {
+func NewMySQLWeatherRepository(dbConn adapter.DBConnection, dbType string) WeatherRepository {
 	return &MySQLRepositoryWrapper{dbConn: dbConn, dbType: dbType}
 }
 
@@ -134,11 +134,11 @@ func (w *MySQLRepositoryWrapper) Close() error {
 
 // SQLiteRepositoryWrapper adapts repository.SQLiteRepository to WeatherRepository.
 type SQLiteRepositoryWrapper struct {
-	dbConn adaptor.DBConnection
+	dbConn adapter.DBConnection
 	dbType string
 }
 
-func NewSQLiteWeatherRepository(dbConn adaptor.DBConnection, dbType string) WeatherRepository {
+func NewSQLiteWeatherRepository(dbConn adapter.DBConnection, dbType string) WeatherRepository {
 	return &SQLiteRepositoryWrapper{dbConn: dbConn, dbType: dbType}
 }
 

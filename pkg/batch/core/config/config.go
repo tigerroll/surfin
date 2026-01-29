@@ -103,8 +103,8 @@ type SurfinConfig struct {
 	Infrastructure InfrastructureConfig `yaml:"infrastructure"`
 	// Security contains security-related configurations.
 	Security SecurityConfig `yaml:"security"`
-	// AdaptorConfigs holds configurations for various adaptors, typically database connections.
-	AdaptorConfigs map[string]interface{} `yaml:"database"`
+	// AdapterConfigs holds configurations for various adapters, typically database connections.
+	AdapterConfigs map[string]interface{} `yaml:"database"`
 }
 
 // Config is the root structure for the entire application configuration.
@@ -175,7 +175,7 @@ func NewConfig() *Config {
 		},
 	}
 
-	// Initialize AdaptorConfigs as an empty map, to be populated by YAML or by mergeConfig.
-	cfg.Surfin.AdaptorConfigs = map[string]interface{}{}
+	// Initialize AdapterConfigs as an empty map, to be populated by YAML or by mergeConfig.
+	cfg.Surfin.AdapterConfigs = map[string]interface{}{}
 	return cfg
 }

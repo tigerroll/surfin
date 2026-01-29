@@ -1,12 +1,12 @@
-// Package adaptor provides abstractions for database connections and providers in the Surfin Batch Framework.
+// Package adapter provides abstractions for database connections and providers in the Surfin Batch Framework.
 // This allows unified access to different database systems (e.g., PostgreSQL, MySQL, SQLite) through a consistent interface.
-package adaptor
+package adapter
 
 import (
 	"context"
 	"database/sql"
 
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 )
 
 // DBExecutor is an interface that defines common write operations for a database.

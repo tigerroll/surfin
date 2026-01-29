@@ -729,7 +729,7 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	inmemoryRepo "github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/inmemory"
 	helloTasklet "github.com/tigerroll/surfin/example/hello-world/internal/step"
-	dummy "github.com/tigerroll/surfin/pkg/batch/adaptor/database/dummy"
+	dummy "github.com/tigerroll/surfin/pkg/batch/adapter/database/dummy"
 	
 	"go.uber.org/fx"
 

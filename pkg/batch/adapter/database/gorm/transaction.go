@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 )
 
@@ -125,12 +125,12 @@ func (t *GormTxAdapter) IsTableNotExistError(err error) bool {
 
 // GormTransactionManager implements tx.TransactionManager
 type GormTransactionManager struct {
-	dbResolver adaptor.DBConnectionResolver
+	dbResolver adapter.DBConnectionResolver
 	dbName     string
 }
 
 // NewGormTransactionManager creates a new GormTransactionManager.
-// func NewGormTransactionManager(dbConn adaptor.DBConnection) tx.TransactionManager {
+// func NewGormTransactionManager(dbConn adapter.DBConnection) tx.TransactionManager {
 // 	return &GormTransactionManager{
 // 		dbConn: dbConn,
 // 	} // This is commented out because it's replaced by the factory pattern.
@@ -143,7 +143,7 @@ func (m *GormTransactionManager) Begin(ctx context.Context, opts ...*sql.TxOptio
 		return nil, fmt.Errorf("failed to resolve DB connection '%s' for transaction: %w", m.dbName, err)
 	}
 	// 2. Get the GORM DB from the DBConnection.
-	// This depends on internal implementation but is acceptable only within the adaptor layer.
+	// This depends on internal implementation but is acceptable only within the adapter layer.
 	adapter, ok := conn.(*GormDBAdapter)
 	if !ok {
 		return nil, fmt.Errorf("internal error: DBConnection implementation is not *GormDBAdapter")

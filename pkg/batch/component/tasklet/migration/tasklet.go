@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/mitchellh/mapstructure"
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -22,7 +22,7 @@ import (
 // After migration, it forces a re-connection to ensure the database connection is fresh.
 type MigrationTasklet struct {
 	cfg              *config.Config
-	allDBProviders   map[string]adaptor.DBProvider
+	allDBProviders   map[string]adapter.DBProvider
 	resolver         port.ExpressionResolver
 	dbResolver       port.DBConnectionResolver
 	allMigrationFS   map[string]fs.FS
@@ -56,7 +56,7 @@ func NewMigrationTasklet(
 	migratorProvider MigratorProvider,
 	allMigrationFS map[string]fs.FS,
 	properties map[string]string,
-	allDBProviders map[string]adaptor.DBProvider,
+	allDBProviders map[string]adapter.DBProvider,
 ) (*MigrationTasklet, error) {
 
 	taskletName := "migration_tasklet"
@@ -126,9 +126,9 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 
 	// 1. Get DB Configuration to determine DB Type
 	var dbConfig dbconfig.DatabaseConfig
-	rawConfig, ok := t.cfg.Surfin.AdaptorConfigs[t.dbConnectionName]
+	rawConfig, ok := t.cfg.Surfin.AdapterConfigs[t.dbConnectionName]
 	if !ok {
-		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Database configuration '%s' not found in adaptor.database configs", t.dbConnectionName)
+		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Database configuration '%s' not found in adapter.database configs", t.dbConnectionName)
 	}
 	if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
 		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Failed to decode database config for '%s': %w", t.dbConnectionName, err)

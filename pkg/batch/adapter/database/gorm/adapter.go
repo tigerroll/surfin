@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
@@ -124,7 +124,7 @@ func (w *GormWriter) Printf(format string, v ...interface{}) {
 	}
 }
 
-// GormDBAdapter implements adaptor.DBConnection
+// GormDBAdapter implements adapter.DBConnection
 type GormDBAdapter struct {
 	db     *gorm.DB
 	sqlDB  *sql.DB                 // Underlying *sql.DB connection.
@@ -134,7 +134,7 @@ type GormDBAdapter struct {
 }
 
 // NewGormDBAdapter creates a new GormDBAdapter.
-func NewGormDBAdapter(db *gorm.DB, cfg dbconfig.DatabaseConfig, name string) adaptor.DBConnection {
+func NewGormDBAdapter(db *gorm.DB, cfg dbconfig.DatabaseConfig, name string) adapter.DBConnection {
 	sqlDB, err := db.DB()
 	if err != nil {
 		logger.Fatalf("Failed to get underlying *sql.DB: %v", err)
@@ -150,12 +150,12 @@ func NewGormDBAdapter(db *gorm.DB, cfg dbconfig.DatabaseConfig, name string) ada
 }
 
 // GetGormDB returns the underlying *gorm.DB instance.
-// NOTE: This method is intended for internal use within the 'gorm' adaptor package only.
+// NOTE: This method is intended for internal use within the 'gorm' adapter package only.
 func (a *GormDBAdapter) GetGormDB() *gorm.DB {
 	return a.db
 }
 
-// GormDB() was removed from adaptor.DBConnection, so it is not implemented here.
+// GormDB() was removed from adapter.DBConnection, so it is not implemented here.
 // However, access to the internal *gorm.DB is done through helper functions within the same package.
 
 func (a *GormDBAdapter) Close() error {
@@ -174,7 +174,7 @@ func (a *GormDBAdapter) Name() string {
 	return a.name
 }
 
-// IsTableNotExistError implements adaptor.DBConnection.
+// IsTableNotExistError implements adapter.DBConnection.
 func (a *GormDBAdapter) IsTableNotExistError(err error) bool {
 	if err == nil {
 		return false
@@ -192,7 +192,7 @@ func (a *GormDBAdapter) IsTableNotExistError(err error) bool {
 	}
 }
 
-// RefreshConnection implements adaptor.DBConnection.
+// RefreshConnection implements adapter.DBConnection.
 func (a *GormDBAdapter) RefreshConnection(ctx context.Context) error {
 	if a.sqlDB == nil {
 		return fmt.Errorf("database connection is not initialized")
@@ -201,12 +201,12 @@ func (a *GormDBAdapter) RefreshConnection(ctx context.Context) error {
 	return a.sqlDB.PingContext(ctx)
 }
 
-// Config implements adaptor.DBConnection.
+// Config implements adapter.DBConnection.
 func (a *GormDBAdapter) Config() dbconfig.DatabaseConfig {
 	return a.cfg
 }
 
-// GetSQLDB implements adaptor.DBConnection.
+// GetSQLDB implements adapter.DBConnection.
 func (a *GormDBAdapter) GetSQLDB() (*sql.DB, error) {
 	if a.sqlDB == nil {
 		return nil, fmt.Errorf("underlying sql.DB is nil")
@@ -214,7 +214,7 @@ func (a *GormDBAdapter) GetSQLDB() (*sql.DB, error) {
 	return a.sqlDB, nil
 }
 
-// ExecuteQuery implements adaptor.DBConnection.
+// ExecuteQuery implements adapter.DBConnection.
 // This method executes a read operation using GORM's Find method.
 func (a *GormDBAdapter) ExecuteQuery(ctx context.Context, target interface{}, query map[string]interface{}) error {
 	db := a.db.WithContext(ctx)
@@ -234,7 +234,7 @@ func (a *GormDBAdapter) ExecuteQuery(ctx context.Context, target interface{}, qu
 	return nil
 }
 
-// ExecuteQueryAdvanced implements adaptor.DBConnection.
+// ExecuteQueryAdvanced implements adapter.DBConnection.
 func (a *GormDBAdapter) ExecuteQueryAdvanced(ctx context.Context, target interface{}, query map[string]interface{}, orderBy string, limit int) error {
 	db := a.db.WithContext(ctx)
 
@@ -260,7 +260,7 @@ func (a *GormDBAdapter) ExecuteQueryAdvanced(ctx context.Context, target interfa
 	return nil
 }
 
-// Count implements adaptor.DBConnection.
+// Count implements adapter.DBConnection.
 func (a *GormDBAdapter) Count(ctx context.Context, model interface{}, query map[string]interface{}) (int64, error) {
 	db := a.db.WithContext(ctx)
 
@@ -276,7 +276,7 @@ func (a *GormDBAdapter) Count(ctx context.Context, model interface{}, query map[
 	return count, nil
 }
 
-// Pluck implements adaptor.DBConnection.
+// Pluck implements adapter.DBConnection.
 func (a *GormDBAdapter) Pluck(ctx context.Context, model interface{}, column string, target interface{}, query map[string]interface{}) error {
 	db := a.db.WithContext(ctx)
 
@@ -293,7 +293,7 @@ func (a *GormDBAdapter) Pluck(ctx context.Context, model interface{}, column str
 	return nil
 }
 
-// ExecuteUpdate implements adaptor.DBExecutor.
+// ExecuteUpdate implements adapter.DBExecutor.
 // This method executes a write operation (CREATE, UPDATE, DELETE) using GORM.
 func (a *GormDBAdapter) ExecuteUpdate(ctx context.Context, model interface{}, operation string, tableName string, query map[string]interface{}) (rowsAffected int64, err error) {
 	db := a.db.WithContext(ctx)
@@ -342,7 +342,7 @@ func (a *GormDBAdapter) ExecuteUpdate(ctx context.Context, model interface{}, op
 	return result.RowsAffected, nil
 }
 
-// ExecuteUpsert implements adaptor.DBExecutor.
+// ExecuteUpsert implements adapter.DBExecutor.
 func (a *GormDBAdapter) ExecuteUpsert(ctx context.Context, model interface{}, tableName string, conflictColumns []string, updateColumns []string) (rowsAffected int64, err error) {
 	db := a.db.WithContext(ctx)
 
@@ -391,7 +391,7 @@ func NewGormTransactionManagerFactory(dbResolver port.DBConnectionResolver) tx.T
 }
 
 // NewTransactionManager creates a GormTransactionManager from GormDBAdapter.
-func (f *GormTransactionManagerFactory) NewTransactionManager(dbConn adaptor.DBConnection) tx.TransactionManager {
+func (f *GormTransactionManagerFactory) NewTransactionManager(dbConn adapter.DBConnection) tx.TransactionManager {
 	// TxManager is changed to depend on DBConnectionResolver and DBName.
 	return &GormTransactionManager{
 		dbResolver: f.dbResolver,

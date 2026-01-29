@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"surfin/pkg/batch/adaptor/database"
-	adaptor "surfin/pkg/batch/core/adaptor"
+	"surfin/pkg/batch/adapter/database"
+	adapter "surfin/pkg/batch/core/adapter"
 	config "surfin/pkg/batch/core/config"
 	model "surfin/pkg/batch/core/domain/model"
 	job "surfin/pkg/batch/core/domain/repository"
@@ -19,7 +19,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func setupGormInstanceMock(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, adaptor.DBConnection, job.JobRepository) {
+func setupGormInstanceMock(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, adapter.DBConnection, job.JobRepository) {
 	sqlDB, mock, err := sqlmock.New()
 	assert.NoError(t, err)
 

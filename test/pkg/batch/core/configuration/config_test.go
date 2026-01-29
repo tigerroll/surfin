@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"surfin/pkg/batch/adaptor/database"
+	"surfin/pkg/batch/adapter/database"
 	config "surfin/pkg/batch/core/config"
 )
 

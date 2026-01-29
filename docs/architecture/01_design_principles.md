@@ -4,14 +4,14 @@ Surfin Batch Frameworkは、以下の主要な原則に基づいて設計され�
 
 ## 1.1. 責務の分離 (Separation of Concerns)
 
-Jobの定義（JSL）、実行フロー（Job Runner）、ビジネスロジック（Item/Tasklet）、永続化（Repository/Adaptor）の各層を明確に分離しています。これにより、各コンポーネントは単一の責務に集中し、変更の影響範囲を最小限に抑えます。
+Jobの定義（JSL）、実行フロー（Job Runner）、ビジネスロジック（Item/Tasklet）、永続化（Repository/Adapter）の各層を明確に分離しています。これにより、各コンポーネントは単一の責務に集中し、変更の影響範囲を最小限に抑えます。
 
 ## 1.2. 依存性逆転の原則 (Dependency Inversion Principle, DIP)
 
 フレームワークのコアロジック（`pkg/batch/core`）は、具体的な実装（例: GORM、Prometheus、特定のDBドライバ）ではなく、抽象化されたインターフェース（`port` パッケージ内のインターフェース）に依存します。
 これらのインターフェースは、フレームワークの「契約」として機能します。
 
-具体的な実装は `adaptor` 層や `infrastructure` 層に配置され、Go Fxによる依存性注入（DI）を通じてコアコンポーネントに提供されます。
+具体的な実装は `adapter` 層や `infrastructure` 層に配置され、Go Fxによる依存性注入（DI）を通じてコアコンポーネントに提供されます。
 これにより、コアロジックは特定のインフラストラクチャ実装に縛られず、テスト容易性や将来的な技術変更への対応が容易になります。
 
 ## 1.3. 拡張性 (Extensibility)
@@ -20,7 +20,7 @@ Jobの定義（JSL）、実行フロー（Job Runner）、ビジネスロジッ�
 
 *   **カスタムコンポーネント**: `ItemReader`, `ItemProcessor`, `ItemWriter`, `Tasklet` はすべてインターフェースであり、ユーザーは独自のビジネスロジックを実装し、JSLで参照できます。
     これにより、フレームワークのコアを変更することなく、アプリケーション固有の要件に対応できます。
-*   **DBProvider**: 新しいデータベースタイプ（例: Redshift, BigQuery）を追加する場合、`surfin/pkg/batch/core/adaptor.DBProvider` インターフェースを実装するだけで、コアの永続化ロジックを変更する必要はありません。
+*   **DBProvider**: 新しいデータベースタイプ（例: Redshift, BigQuery）を追加する場合、`surfin/pkg/batch/core/adapter.DBProvider` インターフェースを実装するだけで、コアの永続化ロジックを変更する必要はありません。
     これにより、新しいデータベースシステムへの対応が容易になり、インフラストラクチャの選択肢が広がります。
 
 ## 1.4. トランザクション境界の明確化

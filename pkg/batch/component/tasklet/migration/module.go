@@ -14,7 +14,7 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration/drivers"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 )
 
@@ -25,7 +25,7 @@ type MigrationTaskletComponentBuilderParams struct {
 	DBResolver       port.DBConnectionResolver
 	MigratorProvider MigratorProvider
 	AllMigrationFS   map[string]fs.FS `name:"allMigrationFS"`
-	AllDBProviders   map[string]adaptor.DBProvider
+	AllDBProviders   map[string]adapter.DBProvider
 }
 
 // NewMigrationTaskletComponentBuilder creates a jsl.ComponentBuilder for MigrationTasklet.

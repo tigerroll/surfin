@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -81,8 +81,8 @@ func (r *DefaultDBConnectionResolver) ResolveDBConnectionName(ctx context.Contex
 //
 // Returns:
 //
-//	An adaptor.DBConnection (always nil) and an error indicating that this operation is not supported here.
-func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adaptor.DBConnection, error) {
+//	An adapter.DBConnection (always nil) and an error indicating that this operation is not supported here.
+func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adapter.DBConnection, error) {
 	return nil, fmt.Errorf("DefaultDBConnectionResolver in 'expression' package does not support resolving actual DB connections; it only resolves connection names. Attempted to resolve: %s", name)
 }
 

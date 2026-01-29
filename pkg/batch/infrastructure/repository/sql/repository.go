@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -44,7 +44,7 @@ func NewSQLJobRepository(
 
 // getDBConnection is a helper function to get the DBConnection used by JobRepository.
 // This is used for operations that do not require an active transaction (e.g., ExecuteQuery, Count, Pluck).
-func (r *SQLJobRepository) getDBConnection(ctx context.Context) (adaptor.DBConnection, error) {
+func (r *SQLJobRepository) getDBConnection(ctx context.Context) (adapter.DBConnection, error) {
 	// Use DBConnectionResolver to always get the latest DBConnection.
 	conn, err := r.dbResolver.ResolveDBConnection(ctx, r.dbName)
 	if err != nil {

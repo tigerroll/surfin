@@ -10,18 +10,18 @@ import (
 	"io/fs"
 	"sync"
 
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"github.com/mitchellh/mapstructure"
-	dummy "github.com/tigerroll/surfin/pkg/batch/adaptor/database/dummy" // Dummy database implementations
-	gormadaptor "github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm"
-	"github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm/mysql"
-	"github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm/postgres"
-	"github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm/sqlite" // GORM SQLite provider
+	dummy "github.com/tigerroll/surfin/pkg/batch/adapter/database/dummy" // Dummy database implementations
+	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/mysql"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/postgres"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/sqlite" // GORM SQLite provider
 	migrationfs "github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration/filesystem"
 
 	"go.uber.org/fx"
@@ -31,7 +31,7 @@ import (
 )
 
 // DBProviderMap is used by main.go to dynamically select providers.
-var DBProviderMap = map[string]func(cfg *config.Config) adaptor.DBProvider{
+var DBProviderMap = map[string]func(cfg *config.Config) adapter.DBProvider{
 	"postgres": postgres.NewProvider,
 	"redshift": postgres.NewProvider, // Redshift also uses PostgresProvider
 	"mysql":    mysql.NewProvider,
@@ -80,7 +80,7 @@ type DBConnectionsAndTxManagersParams struct {
 	Cfg       *config.Config // The application configuration.
 	// DBProviders is a slice of all DBProvider implementations, automatically collected by Fx
 	// due to the `group:"db_providers"` tag.
-	DBProviders []adaptor.DBProvider `group:"db_providers"`
+	DBProviders []adapter.DBProvider `group:"db_providers"`
 	// TxFactory is the TransactionManagerFactory used to create transaction managers.
 	TxFactory tx.TransactionManagerFactory
 }
@@ -93,29 +93,29 @@ type DBConnectionsAndTxManagersParams struct {
 //   - A map of database providers, keyed by their database type.
 //   - An error if any connection establishment or configuration decoding fails.
 func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
-	map[string]adaptor.DBConnection,
-	map[string]adaptor.DBProvider, // Removed map[string]tx.TransactionManager as it's no longer directly provided here.
+	map[string]adapter.DBConnection,
+	map[string]adapter.DBProvider, // Removed map[string]tx.TransactionManager as it's no longer directly provided here.
 	error,
 ) {
-	allConnections := make(map[string]adaptor.DBConnection)
+	allConnections := make(map[string]adapter.DBConnection)
 	// Removed the declaration of allTxManagers.
-	allProviders := make(map[string]adaptor.DBProvider)
+	allProviders := make(map[string]adapter.DBProvider)
 
 	// Map providers by DB type
-	providerMap := make(map[string]adaptor.DBProvider)
+	providerMap := make(map[string]adapter.DBProvider)
 	for _, provider := range p.DBProviders {
 		providerMap[provider.Type()] = provider
 		allProviders[provider.Type()] = provider // Store providers by DB type
 	}
 
 	// Loop through all data sources defined in the configuration file
-	for name, rawConfig := range p.Cfg.Surfin.AdaptorConfigs {
+	for name, rawConfig := range p.Cfg.Surfin.AdapterConfigs {
 		var dbConfig dbconfig.DatabaseConfig
 		if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
 			return nil, nil, fmt.Errorf("failed to decode database config for '%s': %w", name, err)
 		}
 
-		var conn adaptor.DBConnection
+		var conn adapter.DBConnection
 		// Handle dummy type explicitly: provide dummy implementations instead of skipping.
 		if dbConfig.Type == "dummy" {
 			logger.Infof("DB connection '%s' is configured as 'dummy'. Providing dummy implementations.", name)
@@ -156,7 +156,7 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 			// Close connections for each provider
 			for _, provider := range p.DBProviders {
 				wg.Add(1)
-				go func(p adaptor.DBProvider) {
+				go func(p adapter.DBProvider) {
 					defer wg.Done()
 					// Connection closing is delegated to the provider
 					if err := p.CloseAll(); err != nil {
@@ -188,7 +188,7 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 func NewMetadataTxManager(p struct {
 	fx.In
 	// AllDBConnections is the map of all established database connections.
-	AllDBConnections map[string]adaptor.DBConnection
+	AllDBConnections map[string]adapter.DBConnection
 	// TxFactory is injected to create the TransactionManager.
 	TxFactory tx.TransactionManagerFactory
 }) (tx.TransactionManager, error) {
@@ -203,7 +203,7 @@ func NewMetadataTxManager(p struct {
 // DefaultDBConnectionResolver is the default implementation of port.DBConnectionResolver.
 // It resolves database connection names and provides actual database connection instances.
 type DefaultDBConnectionResolver struct {
-	providers map[string]adaptor.DBProvider
+	providers map[string]adapter.DBProvider
 	cfg       *config.Config
 	// resolver is an ExpressionResolver used for dynamic name resolution.
 	resolver port.ExpressionResolver
@@ -225,12 +225,12 @@ type DefaultDBConnectionResolver struct {
 func NewDefaultDBConnectionResolver(p struct {
 	fx.In
 	// DBProviders are received as a list and converted to a map internally.
-	DBProviders []adaptor.DBProvider `group:"db_providers"`
+	DBProviders []adapter.DBProvider `group:"db_providers"`
 	Cfg         *config.Config       // The application configuration.
 	// ExpressionResolver is used for dynamic name resolution.
 	ExpressionResolver port.ExpressionResolver
 }) port.DBConnectionResolver {
-	providerMap := make(map[string]adaptor.DBProvider)
+	providerMap := make(map[string]adapter.DBProvider)
 	for _, provider := range p.DBProviders {
 		providerMap[provider.Type()] = provider
 	}
@@ -294,12 +294,12 @@ func (r *DefaultDBConnectionResolver) ResolveDBConnectionName(ctx context.Contex
 //	name: The name of the database connection to resolve (e.g., "metadata", "workload").
 //
 // Returns:
-//   - adaptor.DBConnection: The resolved database connection instance.
+//   - adapter.DBConnection: The resolved database connection instance.
 //   - error: An error that occurred during connection resolution or re-establishment.
-func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adaptor.DBConnection, error) {
-	rawConfig, ok := r.cfg.Surfin.AdaptorConfigs[name]
+func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adapter.DBConnection, error) {
+	rawConfig, ok := r.cfg.Surfin.AdapterConfigs[name]
 	if !ok {
-		return nil, fmt.Errorf("database configuration '%s' not found in adaptor.database configs", name)
+		return nil, fmt.Errorf("database configuration '%s' not found in adapter.database configs", name)
 	}
 	var dbConfig dbconfig.DatabaseConfig
 	if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil { // Decode the raw configuration into a DatabaseConfig struct.
@@ -342,18 +342,18 @@ func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, n
 // and the DB connection resolver.
 var Module = fx.Options(
 	// DB Provider Modules
-	// gormadaptor.Module provides NewGormTransactionManagerFactory.
-	gormadaptor.Module,
+	// gormadapter.Module provides NewGormTransactionManagerFactory.
+	gormadapter.Module,
 
-	// Provide the aggregated map[string]adaptor.DBConnection and map[string]tx.TransactionManager
-	// NewDBConnectionsAndTxManagers also provides map[string]adaptor.DBProvider
+	// Provide the aggregated map[string]adapter.DBConnection and map[string]tx.TransactionManager
+	// NewDBConnectionsAndTxManagers also provides map[string]adapter.DBProvider
 	fx.Provide(NewDBConnectionsAndTxManagers),
 	// Provide the specific metadata TxManager required by JobFactory
 	fx.Provide(fx.Annotate(
 		NewMetadataTxManager,
 		fx.ResultTags(`name:"metadata"`), // Tagged as "metadata" for injection into JobFactoryParams.
 	)),
-	// Note: An explicit fx.Provide for TxFactory is not needed here because gormadaptor.Module already provides it.
+	// Note: An explicit fx.Provide for TxFactory is not needed here because gormadapter.Module already provides it.
 	// Fx automatically resolves TxFactory as a dependency for NewMetadataTxManager.
 
 	// Provide the concrete DBConnectionResolver implementation

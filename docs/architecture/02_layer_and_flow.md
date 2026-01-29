@@ -4,7 +4,7 @@ Surfin Batch Frameworkは、明確に定義された層構造を持ち、Go Fx�
 
 ## 2.0. 高レベルアーキテクチャ概要
 
-フレームワークは、Application、Core、Infrastructure/Adaptor の3つの主要な層で構成されています。
+フレームワークは、Application、Core、Infrastructure/Adapter の3つの主要な層で構成されています。
 
 ```mermaid
 graph LR
@@ -20,7 +20,7 @@ graph LR
         F --> G["ItemReader / Processor / Writer"]
     end
 
-    subgraph "Infrastructure / Adaptor"
+    subgraph "Infrastructure / Adapter"
         D --> H["Transaction Manager"]
         F --> I["Job Repository (Metadata DB)"]
         G --> J["DB Connection / DB Provider"]
@@ -46,13 +46,13 @@ graph LR
  - Step (Chunk/Tasklet/Partition): 実際の処理ロジック（ItemReader/Processor/WriterまたはTasklet）をカプセル化します。
  - ExecutionContext: ジョブおよびステップ間で状態を共有するためのコンテキストです。
 
-### 2.1.3. Infrastructure / Adaptor 層
+### 2.1.3. Infrastructure / Adapter 層
 
 外部システムとの接続や、フレームワークの永続化・オブザーバビリティを担います。
 
  - JobRepository: JobExecution, StepExecution, CheckpointData などのメタデータを永続化します。
  - TransactionManager: トランザクションの開始、コミット、ロールバックを抽象化します。
- - DBConnection / DBProvider: `pkg/batch/adaptor` パッケージ内の具体的な実装（例: GORM）を通じて、`pkg/batch/core/adaptor` で定義されたインターフェースを提供し、データベース接続を管理します。
+ - DBConnection / DBProvider: `pkg/batch/adapter` パッケージ内の具体的な実装（例: GORM）を通じて、`pkg/batch/core/adapter` で定義されたインターフェースを提供し、データベース接続を管理します。
  - MetricRecorder / Tracer: PrometheusやOpenTelemetryなどの外部オブザーバビリティシステムへの連携を抽象化します。
 
 
@@ -114,4 +114,4 @@ sequenceDiagram
 
  - トランザクションの検出: GORMJobRepository は、操作を実行する際、現在の context.Context に tx.Tx が存在するかどうかをチェックします。
     - Txあり: 既存のトランザクションに参加し、tx.TxExecutor を使用して操作を実行します。
-    - Txなし: adaptor.DBConnection を使用して非トランザクション操作を実行します（主に読み取り操作や、StepExecutorがトランザクションを開始しない場合の書き込み）。
+    - Txなし: adapter.DBConnection を使用して非トランザクション操作を実行します（主に読み取り操作や、StepExecutorがトランザクションを開始しない場合の書き込み）。
