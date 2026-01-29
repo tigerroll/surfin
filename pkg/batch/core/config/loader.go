@@ -25,17 +25,20 @@ const moduleName = "config"
 type ConfigParams struct {
 	fx.In
 	EmbeddedConfig EmbeddedConfig // EmbeddedConfig contains the raw bytes of the configuration file.
-	EnvFilePath    string `name:"envFilePath" optional:"true"` // EnvFilePath is the path to the .env file, if any.
+	EnvFilePath    string         `name:"envFilePath" optional:"true"` // EnvFilePath is the path to the .env file, if any.
 }
 
 // loadConfig loads configuration from a file and environment variables.
 // This function is intended to be called only once during application startup.
 //
 // Parameters:
-//   envFilePath: The path to the .env file.
-//   embeddedConfig: The embedded configuration bytes.
+//
+//	envFilePath: The path to the .env file.
+//	embeddedConfig: The embedded configuration bytes.
+//
 // Returns:
-//   A pointer to the loaded Config and an error if loading fails.
+//
+//	A pointer to the loaded Config and an error if loading fails.
 func loadConfig(envFilePath string, embeddedConfig EmbeddedConfig) (*Config, error) {
 	if envFilePath != "" {
 		if err := godotenv.Load(envFilePath); err != nil {
@@ -74,9 +77,12 @@ func loadConfig(envFilePath string, embeddedConfig EmbeddedConfig) (*Config, err
 // It also sets the global logger level and validates exception classes.
 //
 // Parameters:
-//   params: ConfigParams containing dependencies like embedded config and env file path.
+//
+//	params: ConfigParams containing dependencies like embedded config and env file path.
+//
 // Returns:
-//   A pointer to the initialized Config and an error if configuration loading or validation fails.
+//
+//	A pointer to the initialized Config and an error if configuration loading or validation fails.
 func NewConfigProvider(params ConfigParams) (*Config, error) {
 	cfg, err := loadConfig(params.EnvFilePath, params.EmbeddedConfig)
 	if err != nil {
@@ -102,10 +108,13 @@ func NewConfigProvider(params ConfigParams) (*Config, error) {
 // This function is expected to be called only once during application startup.
 //
 // Parameters:
-//   envFilePath: The path to the .env file.
-//   embeddedConfig: The embedded configuration bytes.
+//
+//	envFilePath: The path to the .env file.
+//	embeddedConfig: The embedded configuration bytes.
+//
 // Returns:
-//   A pointer to the loaded Config and an error if loading fails.
+//
+//	A pointer to the loaded Config and an error if loading fails.
 func LoadConfig(envFilePath string, embeddedConfig EmbeddedConfig) (*Config, error) {
 	return loadConfig(envFilePath, embeddedConfig)
 }
@@ -136,8 +145,9 @@ func validateExceptionClasses(cfg *Config) error {
 // if they are not zero/empty values for their type.
 //
 // Parameters:
-//   destConfig: The destination Config to merge into.
-//   sourceConfig: The source Config to merge from.
+//
+//	destConfig: The destination Config to merge into.
+//	sourceConfig: The source Config to merge from.
 func mergeConfig(destConfig, sourceConfig *Config) {
 	// Merge SurfinConfig
 	mergeSurfinConfig(&destConfig.Surfin, &sourceConfig.Surfin)
@@ -147,8 +157,9 @@ func mergeConfig(destConfig, sourceConfig *Config) {
 // mergeSurfinConfig merges source into dest.
 //
 // Parameters:
-//   dest: The destination SurfinConfig to merge into.
-//   source: The source SurfinConfig to merge from.
+//
+//	dest: The destination SurfinConfig to merge into.
+//	source: The source SurfinConfig to merge from.
 func mergeSurfinConfig(dest, source *SurfinConfig) {
 	// Merge BatchConfig
 	if source.Batch.PollingIntervalSeconds != 0 {
@@ -206,55 +217,86 @@ func mergeSurfinConfig(dest, source *SurfinConfig) {
 // mergeRetryConfig merges source into dest.
 //
 // Parameters:
-//   dest: The destination RetryConfig to merge into.
-//   source: The source RetryConfig to merge from.
+//
+//	dest: The destination RetryConfig to merge into.
+//	source: The source RetryConfig to merge from.
 func mergeRetryConfig(dest, source *RetryConfig) {
 	// Only overwrite if source value is not zero/empty
-	if source.MaxAttempts != 0 { dest.MaxAttempts = source.MaxAttempts }
-	if source.InitialInterval != 0 { dest.InitialInterval = source.InitialInterval }
-	if source.MaxInterval != 0 { dest.MaxInterval = source.MaxInterval }
-	if source.Factor != 0 { dest.Factor = source.Factor }
-	if source.CircuitBreakerThreshold != 0 { dest.CircuitBreakerThreshold = source.CircuitBreakerThreshold }
-	if source.CircuitBreakerResetInterval != 0 { dest.CircuitBreakerResetInterval = source.CircuitBreakerResetInterval }
+	if source.MaxAttempts != 0 {
+		dest.MaxAttempts = source.MaxAttempts
+	}
+	if source.InitialInterval != 0 {
+		dest.InitialInterval = source.InitialInterval
+	}
+	if source.MaxInterval != 0 {
+		dest.MaxInterval = source.MaxInterval
+	}
+	if source.Factor != 0 {
+		dest.Factor = source.Factor
+	}
+	if source.CircuitBreakerThreshold != 0 {
+		dest.CircuitBreakerThreshold = source.CircuitBreakerThreshold
+	}
+	if source.CircuitBreakerResetInterval != 0 {
+		dest.CircuitBreakerResetInterval = source.CircuitBreakerResetInterval
+	}
 }
 
 // mergeItemRetryConfig merges source into dest.
 //
 // Parameters:
-//   dest: The destination ItemRetryConfig to merge into.
-//   source: The source ItemRetryConfig to merge from.
+//
+//	dest: The destination ItemRetryConfig to merge into.
+//	source: The source ItemRetryConfig to merge from.
 func mergeItemRetryConfig(dest, source *ItemRetryConfig) {
-	if source.MaxAttempts != 0 { dest.MaxAttempts = source.MaxAttempts }
-	if source.InitialInterval != 0 { dest.InitialInterval = source.InitialInterval }
-	if source.RetryableExceptions != nil { dest.RetryableExceptions = source.RetryableExceptions }
+	if source.MaxAttempts != 0 {
+		dest.MaxAttempts = source.MaxAttempts
+	}
+	if source.InitialInterval != 0 {
+		dest.InitialInterval = source.InitialInterval
+	}
+	if source.RetryableExceptions != nil {
+		dest.RetryableExceptions = source.RetryableExceptions
+	}
 }
 
 // mergeItemSkipConfig merges source into dest.
 //
 // Parameters:
-//   dest: The destination ItemSkipConfig to merge into.
-//   source: The source ItemSkipConfig to merge from.
+//
+//	dest: The destination ItemSkipConfig to merge into.
+//	source: The source ItemSkipConfig to merge from.
 func mergeItemSkipConfig(dest, source *ItemSkipConfig) {
-	if source.SkipLimit != 0 { dest.SkipLimit = source.SkipLimit }
-	if source.SkippableExceptions != nil { dest.SkippableExceptions = source.SkippableExceptions }
+	if source.SkipLimit != 0 {
+		dest.SkipLimit = source.SkipLimit
+	}
+	if source.SkippableExceptions != nil {
+		dest.SkippableExceptions = source.SkippableExceptions
+	}
 }
 
 // mergeSystemConfig merges source into dest.
 //
 // Parameters:
-//   dest: The destination SystemConfig to merge into.
-//   source: The source SystemConfig to merge from.
+//
+//	dest: The destination SystemConfig to merge into.
+//	source: The source SystemConfig to merge from.
 func mergeSystemConfig(dest, source *SystemConfig) {
-	if source.Timezone != "" { dest.Timezone = source.Timezone }
-	if source.Logging.Level != "" { dest.Logging.Level = source.Logging.Level }
+	if source.Timezone != "" {
+		dest.Timezone = source.Timezone
+	}
+	if source.Logging.Level != "" {
+		dest.Logging.Level = source.Logging.Level
+	}
 }
 
 // checkExceptionClasses validates that all exception class names in the provided list
 // are registered in the exception registry.
 //
 // Parameters:
-//   classNames: A slice of strings representing exception class names.
-//   configType: A string indicating the configuration type (e.g., "ItemRetry", "ItemSkip") for error messages.
+//
+//	classNames: A slice of strings representing exception class names.
+//	configType: A string indicating the configuration type (e.g., "ItemRetry", "ItemSkip") for error messages.
 func checkExceptionClasses(classNames []string, configType string) error {
 	for _, name := range classNames {
 		if !exception.IsErrorTypeRegistered(name) {
@@ -268,8 +310,10 @@ func checkExceptionClasses(classNames []string, configType string) error {
 // It uses the "yaml" tag to determine the environment variable name.
 //
 // Parameters:
-//   val: The reflect.Value of the struct to populate.
-//   prefix: The prefix for environment variable names (e.g., "SURFIN_BATCH_").
+//
+//	val: The reflect.Value of the struct to populate.
+//	prefix: The prefix for environment variable names (e.g., "SURFIN_BATCH_").
+//
 // Returns: An error if any field cannot be set.
 func loadStructFromEnv(val reflect.Value, prefix string) error {
 	typ := val.Type()
@@ -318,8 +362,9 @@ func loadStructFromEnv(val reflect.Value, prefix string) error {
 // of the `DatabaseConfig` instance associated with the key "jobdb".
 //
 // Parameters:
-//   mapField: The reflect.Value of the map field (e.g., `cfg.Surfin.AdaptorConfigs`).
-//   prefix: The environment variable prefix for this map (e.g., "SURFIN_DATABASE_").
+//
+//	mapField: The reflect.Value of the map field (e.g., `cfg.Surfin.AdaptorConfigs`).
+//	prefix: The environment variable prefix for this map (e.g., "SURFIN_DATABASE_").
 func loadMapOfStructsFromEnv(mapField reflect.Value, prefix string) error {
 	if mapField.IsNil() {
 		mapField.Set(reflect.MakeMap(mapField.Type()))
@@ -373,9 +418,11 @@ func loadMapOfStructsFromEnv(mapField reflect.Value, prefix string) error {
 // against the field's `yaml` tag.
 //
 // Parameters:
-//   structVal: The reflect.Value of the struct instance.
-//   fieldName: The name of the field to set (derived from the environment variable).
-//   value: The string value to set.
+//
+//	structVal: The reflect.Value of the struct instance.
+//	fieldName: The name of the field to set (derived from the environment variable).
+//	value: The string value to set.
+//
 // Returns: An error if the field cannot be set due to type conversion issues.
 func setStructFieldFromEnv(structVal reflect.Value, fieldName string, value string) error {
 	typ := structVal.Type()
@@ -399,8 +446,9 @@ func setStructFieldFromEnv(structVal reflect.Value, fieldName string, value stri
 // It handles string, int, float, and bool types.
 //
 // Parameters:
-//   field: The reflect.Value of the field to set.
-//   value: The string value to convert and set.
+//
+//	field: The reflect.Value of the field to set.
+//	value: The string value to convert and set.
 func setField(field reflect.Value, value string) error {
 	if !field.CanSet() {
 		return nil

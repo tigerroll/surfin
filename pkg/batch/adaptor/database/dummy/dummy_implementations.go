@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
@@ -22,7 +22,7 @@ func (d *DummyTx) ExecuteUpdate(ctx context.Context, entity interface{}, operati
 func (d *DummyTx) ExecuteUpsert(ctx context.Context, entities interface{}, tableName string, conflictColumns []string, updateColumns []string) (int64, error) {
 	return 0, nil
 }
-func (d *DummyTx) IsTableNotExistError(err error) bool { return false }
+func (d *DummyTx) IsTableNotExistError(err error) bool   { return false }
 func (d *DummyTx) Savepoint(name string) error           { return nil }
 func (d *DummyTx) RollbackToSavepoint(name string) error { return nil }
 

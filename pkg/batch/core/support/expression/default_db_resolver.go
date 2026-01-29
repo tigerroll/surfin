@@ -22,10 +22,12 @@ type DefaultDBConnectionResolver struct {
 // NewDefaultDBConnectionResolver creates a new instance of DefaultDBConnectionResolver.
 //
 // Parameters:
-//   resolver: An ExpressionResolver used to resolve dynamic expressions within connection names.
+//
+//	resolver: An ExpressionResolver used to resolve dynamic expressions within connection names.
 //
 // Returns:
-//   A new instance of port.DBConnectionResolver.
+//
+//	A new instance of port.DBConnectionResolver.
 func NewDefaultDBConnectionResolver(resolver port.ExpressionResolver) port.DBConnectionResolver {
 	return &DefaultDBConnectionResolver{resolver: resolver}
 }
@@ -34,13 +36,15 @@ func NewDefaultDBConnectionResolver(resolver port.ExpressionResolver) port.DBCon
 // It attempts to resolve dynamic expressions within the provided defaultName.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   jobExecution: The current JobExecution.
-//   stepExecution: The current StepExecution (may be nil).
-//   defaultName: The default connection name, which might contain expressions.
+//
+//	ctx: The context for the operation.
+//	jobExecution: The current JobExecution.
+//	stepExecution: The current StepExecution (may be nil).
+//	defaultName: The default connection name, which might contain expressions.
 //
 // Returns:
-//   The resolved database connection name and an error if resolution fails.
+//
+//	The resolved database connection name and an error if resolution fails.
 func (r *DefaultDBConnectionResolver) ResolveDBConnectionName(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution, defaultName string) (string, error) {
 
 	// 1. If defaultName is an expression (e.g., #{jobParameters['db_name']}), attempt to resolve it.
@@ -71,11 +75,13 @@ func (r *DefaultDBConnectionResolver) ResolveDBConnectionName(ctx context.Contex
 // Actual connection resolution should be handled by a dedicated DBProvider.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   name: The name of the database connection to resolve.
+//
+//	ctx: The context for the operation.
+//	name: The name of the database connection to resolve.
 //
 // Returns:
-//   An adaptor.DBConnection (always nil) and an error indicating that this operation is not supported here.
+//
+//	An adaptor.DBConnection (always nil) and an error indicating that this operation is not supported here.
 func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adaptor.DBConnection, error) {
 	return nil, fmt.Errorf("DefaultDBConnectionResolver in 'expression' package does not support resolving actual DB connections; it only resolves connection names. Attempted to resolve: %s", name)
 }

@@ -18,11 +18,13 @@ import (
 // These are used when the application is configured to run in a DB-less mode, typically for testing or specific operational scenarios where actual database interaction is not required.
 //
 // Parameters:
-//   p: An Fx parameter struct containing Lifecycle and Config.
+//
+//	p: An Fx parameter struct containing Lifecycle and Config.
 //
 // Returns:
-//   A map of dummy DBConnection instances, a map of dummy TransactionManager instances,
-//   a map of dummy DBProvider instances, a dummy TransactionManagerFactory, and an error.
+//
+//	A map of dummy DBConnection instances, a map of dummy TransactionManager instances,
+//	a map of dummy DBProvider instances, a dummy TransactionManagerFactory, and an error.
 func NewDummyDBConnectionsAndTxManagers(p struct {
 	fx.In
 	Lifecycle fx.Lifecycle
@@ -55,11 +57,13 @@ func NewDummyDBConnectionsAndTxManagers(p struct {
 // effectively bypassing actual database interactions for metadata.
 //
 // Parameters:
-//   allTxManagers: A map of all registered TransactionManagers (ignored in dummy mode).
-//   dummyFactory: The dummy TransactionManagerFactory to create the dummy manager.
+//
+//	allTxManagers: A map of all registered TransactionManagers (ignored in dummy mode).
+//	dummyFactory: The dummy TransactionManagerFactory to create the dummy manager.
 //
 // Returns:
-//   A dummy TransactionManager and a nil error.
+//
+//	A dummy TransactionManager and a nil error.
 func NewMetadataTxManager(allTxManagers map[string]tx.TransactionManager, dummyFactory tx.TransactionManagerFactory) (tx.TransactionManager, error) {
 	return dummyFactory.NewTransactionManager(nil), nil // A nil connection is passed as it's a dummy.
 }
@@ -68,5 +72,5 @@ func NewMetadataTxManager(allTxManagers map[string]tx.TransactionManager, dummyF
 // This module is intentionally empty in its current state, as the dummy providers
 // are conditionally supplied by the main application setup when DB-less mode is detected.
 var Module = fx.Options(
-	// fx.Provide(NewDummyDBConnectionsAndTxManagers), // This provider is commented out as it's conditionally provided elsewhere.
+// fx.Provide(NewDummyDBConnectionsAndTxManagers), // This provider is commented out as it's conditionally provided elsewhere.
 )

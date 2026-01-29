@@ -122,7 +122,8 @@ var GlobalConfig *Config
 // GetMaskedParameterKeys retrieves the list of keys to be masked from the global configuration.
 //
 // Returns:
-//   A slice of strings representing the keys whose values should be masked.
+//
+//	A slice of strings representing the keys whose values should be masked.
 func GetMaskedParameterKeys() []string {
 	if GlobalConfig == nil {
 		return []string{}
@@ -133,7 +134,8 @@ func GetMaskedParameterKeys() []string {
 // NewConfig returns a new instance of Config with default values.
 //
 // Returns:
-//   A pointer to a new Config instance initialized with default settings.
+//
+//	A pointer to a new Config instance initialized with default settings.
 func NewConfig() *Config {
 	cfg := &Config{
 		Surfin: SurfinConfig{

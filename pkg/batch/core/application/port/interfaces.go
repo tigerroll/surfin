@@ -477,11 +477,13 @@ const StepExecutionKey contextKey = "stepExecution"
 // GetContextWithStepExecution stores a StepExecution in the Context.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   se: The StepExecution to store.
+//
+//	ctx: The context for the operation.
+//	se: The StepExecution to store.
 //
 // Returns:
-//   context.Context: A new context with the StepExecution stored.
+//
+//	context.Context: A new context with the StepExecution stored.
 func GetContextWithStepExecution(ctx context.Context, se *model.StepExecution) context.Context {
 	return context.WithValue(ctx, StepExecutionKey, se)
 }
@@ -489,10 +491,12 @@ func GetContextWithStepExecution(ctx context.Context, se *model.StepExecution) c
 // GetStepExecutionFromContext retrieves a StepExecution from the Context. Returns nil if not found.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 //
 // Returns:
-//   *model.StepExecution: The retrieved StepExecution, or nil if not found.
+//
+//	*model.StepExecution: The retrieved StepExecution, or nil if not found.
 func GetStepExecutionFromContext(ctx context.Context) *model.StepExecution {
 	if se, ok := ctx.Value(StepExecutionKey).(*model.StepExecution); ok {
 		return se
@@ -578,9 +582,11 @@ type Partitioner interface {
 // PartitionerBuilder is a function type for building core.Partitioner.
 //
 // Parameters:
-//   properties: A map of properties for building the Partitioner.
+//
+//	properties: A map of properties for building the Partitioner.
 //
 // Returns:
-//   Partitioner: The built Partitioner instance.
-//   error: An error if building fails.
+//
+//	Partitioner: The built Partitioner instance.
+//	error: An error if building fails.
 type PartitionerBuilder func(properties map[string]string) (Partitioner, error)

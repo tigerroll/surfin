@@ -10,24 +10,24 @@ import (
 	"io/fs"
 	"sync"
 
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
+	"github.com/mitchellh/mapstructure"
+	dummy "github.com/tigerroll/surfin/pkg/batch/adaptor/database/dummy" // Dummy database implementations
 	gormadaptor "github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm"
 	"github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm/mysql"
 	"github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm/postgres"
 	"github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm/sqlite" // GORM SQLite provider
-	dummy "github.com/tigerroll/surfin/pkg/batch/adaptor/database/dummy" // Dummy database implementations
 	migrationfs "github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration/filesystem"
-	"github.com/mitchellh/mapstructure"
 
 	"go.uber.org/fx"
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port" // Core application interfaces
-	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"     // Core domain models
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"    // Core domain models
 )
 
 // DBProviderMap is used by main.go to dynamically select providers.
@@ -41,15 +41,16 @@ var DBProviderMap = map[string]func(cfg *config.Config) adaptor.DBProvider{
 // MigrationFSMapParams defines the dependencies for NewMigrationFSMap.
 //
 // Parameters:
-//   fx.In: Fx-injected parameters.
-//   WeatherAppFS: The embedded file system for application-specific migrations.
-//   FrameworkFS: The embedded file system for framework-specific migrations.
+//
+//	fx.In: Fx-injected parameters.
+//	WeatherAppFS: The embedded file system for application-specific migrations.
+//	FrameworkFS: The embedded file system for framework-specific migrations.
 type MigrationFSMapParams struct {
 	fx.In
 	// WeatherAppFS is provided by the anonymous provider below.
 	WeatherAppFS fs.FS `name:"weatherAppFS"`
 	// FrameworkFS is provided by migrationfs.Module.
-	FrameworkFS  fs.FS `name:"frameworkMigrationsFS"`
+	FrameworkFS fs.FS `name:"frameworkMigrationsFS"`
 }
 
 // NewMigrationFSMap aggregates all necessary migration file systems into a single map.
@@ -62,7 +63,7 @@ func NewMigrationFSMap(p MigrationFSMapParams) map[string]fs.FS {
 	if p.FrameworkFS != nil { // Ensure the FS is not nil before adding.
 		fsMap[frameworkFSKey] = p.FrameworkFS
 	}
-	
+
 	// 2. Add Application FS
 	if p.WeatherAppFS != nil {
 		fsMap["weatherAppFS"] = p.WeatherAppFS
@@ -74,14 +75,14 @@ func NewMigrationFSMap(p MigrationFSMapParams) map[string]fs.FS {
 
 // DBConnectionsAndTxManagersParams defines the dependencies for NewDBConnectionsAndTxManagers.
 type DBConnectionsAndTxManagersParams struct {
-	fx.In // Fx-injected parameters.
-	Lifecycle fx.Lifecycle // The Fx lifecycle for hook registration.
+	fx.In                    // Fx-injected parameters.
+	Lifecycle fx.Lifecycle   // The Fx lifecycle for hook registration.
 	Cfg       *config.Config // The application configuration.
 	// DBProviders is a slice of all DBProvider implementations, automatically collected by Fx
 	// due to the `group:"db_providers"` tag.
-	DBProviders []adaptor.DBProvider `group:"db_providers"` 
+	DBProviders []adaptor.DBProvider `group:"db_providers"`
 	// TxFactory is the TransactionManagerFactory used to create transaction managers.
-	TxFactory tx.TransactionManagerFactory 
+	TxFactory tx.TransactionManagerFactory
 }
 
 // NewDBConnectionsAndTxManagers establishes connections and transaction managers for all data sources defined in the configuration file,
@@ -112,9 +113,9 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 		var dbConfig dbconfig.DatabaseConfig
 		if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
 			return nil, nil, fmt.Errorf("failed to decode database config for '%s': %w", name, err)
-		} 
-		
-		var conn adaptor.DBConnection 
+		}
+
+		var conn adaptor.DBConnection
 		// Handle dummy type explicitly: provide dummy implementations instead of skipping.
 		if dbConfig.Type == "dummy" {
 			logger.Infof("DB connection '%s' is configured as 'dummy'. Providing dummy implementations.", name)
@@ -140,7 +141,7 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 				return nil, nil, fmt.Errorf("failed to get connection for '%s' using provider '%s': %w", name, provider.Type(), err)
 			}
 		}
-		
+
 		allConnections[name] = conn
 		logger.Debugf("Initialized DB Connection for: %s (%s)", name, dbConfig.Type)
 	}
@@ -176,9 +177,10 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 // This function is responsible for providing the TransactionManager specifically for metadata operations.
 //
 // Parameters:
-//   p: An Fx parameter struct containing:
-//     - AllDBConnections: A map of all established database connections.
-//     - TxFactory: The TransactionManagerFactory to create the TransactionManager.
+//
+//	p: An Fx parameter struct containing:
+//	  - AllDBConnections: A map of all established database connections.
+//	  - TxFactory: The TransactionManagerFactory to create the TransactionManager.
 //
 // Returns:
 //   - The TransactionManager for the "metadata" connection.
@@ -188,7 +190,7 @@ func NewMetadataTxManager(p struct {
 	// AllDBConnections is the map of all established database connections.
 	AllDBConnections map[string]adaptor.DBConnection
 	// TxFactory is injected to create the TransactionManager.
-	TxFactory        tx.TransactionManagerFactory
+	TxFactory tx.TransactionManagerFactory
 }) (tx.TransactionManager, error) {
 	conn, ok := p.AllDBConnections["metadata"] // Changed from AllTxManagers to AllDBConnections.
 	if !ok {
@@ -204,25 +206,27 @@ type DefaultDBConnectionResolver struct {
 	providers map[string]adaptor.DBProvider
 	cfg       *config.Config
 	// resolver is an ExpressionResolver used for dynamic name resolution.
-	resolver  port.ExpressionResolver
+	resolver port.ExpressionResolver
 }
 
 // NewDefaultDBConnectionResolver creates a new DefaultDBConnectionResolver.
 // To resolve circular dependencies, DBProviders are received as a list and converted to a map internally.
 //
 // Parameters:
-//   p: An Fx parameter struct containing:
-//     - DBProviders: A slice of all DBProvider implementations.
-//     - Cfg: The application configuration.
-//     - ExpressionResolver: The ExpressionResolver for dynamic name resolution.
+//
+//	p: An Fx parameter struct containing:
+//	  - DBProviders: A slice of all DBProvider implementations.
+//	  - Cfg: The application configuration.
+//	  - ExpressionResolver: The ExpressionResolver for dynamic name resolution.
 //
 // Returns:
-//   A new instance of port.DBConnectionResolver.
+//
+//	A new instance of port.DBConnectionResolver.
 func NewDefaultDBConnectionResolver(p struct {
 	fx.In
 	// DBProviders are received as a list and converted to a map internally.
-	DBProviders        []adaptor.DBProvider `group:"db_providers"`
-	Cfg                *config.Config // The application configuration.
+	DBProviders []adaptor.DBProvider `group:"db_providers"`
+	Cfg         *config.Config       // The application configuration.
 	// ExpressionResolver is used for dynamic name resolution.
 	ExpressionResolver port.ExpressionResolver
 }) port.DBConnectionResolver {
@@ -242,14 +246,16 @@ func NewDefaultDBConnectionResolver(p struct {
 // Currently, it checks for "dbConnectionName" in StepExecution's ExecutionContext.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   jobExecution: The current JobExecution (can be nil).
-//   stepExecution: The current StepExecution (can be nil).
-//   defaultName: The default connection name to use if no dynamic resolution occurs.
+//
+//	ctx: The context for the operation.
+//	jobExecution: The current JobExecution (can be nil).
+//	stepExecution: The current StepExecution (can be nil).
+//	defaultName: The default connection name to use if no dynamic resolution occurs.
 //
 // Returns:
-//   The resolved database connection name.
-//   An error if resolution fails.
+//
+//	The resolved database connection name.
+//	An error if resolution fails.
 func (r *DefaultDBConnectionResolver) ResolveDBConnectionName(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution, defaultName string) (string, error) {
 	// This implementation is used to support dynamic connection name resolution logic defined in JSL.
 	// Currently, it can simply return the default name or resolve from ExecutionContext.
@@ -283,8 +289,9 @@ func (r *DefaultDBConnectionResolver) ResolveDBConnectionName(ctx context.Contex
 // the connection if necessary.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   name: The name of the database connection to resolve (e.g., "metadata", "workload").
+//
+//	ctx: The context for the operation.
+//	name: The name of the database connection to resolve (e.g., "metadata", "workload").
 //
 // Returns:
 //   - adaptor.DBConnection: The resolved database connection instance.
@@ -292,17 +299,17 @@ func (r *DefaultDBConnectionResolver) ResolveDBConnectionName(ctx context.Contex
 func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adaptor.DBConnection, error) {
 	rawConfig, ok := r.cfg.Surfin.AdaptorConfigs[name]
 	if !ok {
-			return nil, fmt.Errorf("database configuration '%s' not found in adaptor.database configs", name)
+		return nil, fmt.Errorf("database configuration '%s' not found in adaptor.database configs", name)
 	}
 	var dbConfig dbconfig.DatabaseConfig
 	if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil { // Decode the raw configuration into a DatabaseConfig struct.
-			return nil, fmt.Errorf("failed to decode database config for '%s': %w", name, err)
+		return nil, fmt.Errorf("failed to decode database config for '%s': %w", name, err)
 	}
 
 	// If the database type is "dummy", return a dummy connection.
 	if dbConfig.Type == "dummy" {
-			logger.Debugf("Returning dummy DB connection for '%s'.", name) // Log that a dummy connection is being returned.
-			return &dummy.DummyDBConnection{}, nil
+		logger.Debugf("Returning dummy DB connection for '%s'.", name) // Log that a dummy connection is being returned.
+		return &dummy.DummyDBConnection{}, nil
 	}
 
 	provider, ok := r.providers[dbConfig.Type]
