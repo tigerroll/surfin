@@ -4,12 +4,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"surfin/pkg/batch/adapter/database"
-	config "surfin/pkg/batch/core/config"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"  // Correct path for DatabaseConfig
+	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm" // Correct path for GetConnectionStringForTest
+	coreconfig "github.com/tigerroll/surfin/pkg/batch/core/config"            // Path for core configuration
 )
 
+// TestNewConfig_Defaults verifies that the NewConfig function correctly initializes
+// the application configuration with expected default values.
 func TestNewConfig_Defaults(t *testing.T) {
-	cfg := config.NewConfig()
+	cfg := coreconfig.NewConfig()
 
 	if cfg.Surfin.System.Timezone != "UTC" {
 		t.Errorf("Expected default Timezone 'UTC', got %s", cfg.Surfin.System.Timezone)
@@ -31,9 +34,11 @@ func TestNewConfig_Defaults(t *testing.T) {
 	}
 }
 
+// TestDatabaseConfig_ConnectionString verifies that GetConnectionStringForTest
+// correctly generates connection strings for different database types (PostgreSQL, MySQL, SQLite).
 func TestDatabaseConfig_ConnectionString(t *testing.T) {
 	// PostgreSQL
-	cfg := config.DatabaseConfig{
+	cfg := dbconfig.DatabaseConfig{ // Use dbconfig.DatabaseConfig
 		Type:     "postgres",
 		Host:     "pg_host",
 		Port:     5432,
@@ -42,13 +47,13 @@ func TestDatabaseConfig_ConnectionString(t *testing.T) {
 		Password: "pg_password",
 		Sslmode:  "require",
 	}
-	connStr, err := database.GetConnectionStringForTest(cfg)
+	connStr, err := gormadapter.GetConnectionStringForTest(cfg) // Use gormadapter.GetConnectionStringForTest
 	assert.NoError(t, err)
 	expected := "host=pg_host port=5432 user=pg_user password=pg_password dbname=pg_db sslmode=require"
 	assert.Equal(t, expected, connStr)
 
 	// MySQL
-	cfg = config.DatabaseConfig{
+	cfg = dbconfig.DatabaseConfig{
 		Type:     "mysql",
 		Host:     "mysql_host",
 		Port:     3306,
@@ -56,13 +61,13 @@ func TestDatabaseConfig_ConnectionString(t *testing.T) {
 		User:     "mysql_user",
 		Password: "mysql_password",
 	}
-	connStr, err = database.GetConnectionStringForTest(cfg)
+	connStr, err = gormadapter.GetConnectionStringForTest(cfg) // Use gormadapter.GetConnectionStringForTest
 	assert.NoError(t, err)
 	expected = "mysql_user:mysql_password@tcp(mysql_host:3306)/mysql_db?charset=utf8mb4&parseTime=True&loc=Local"
 	assert.Equal(t, expected, connStr)
 
 	// MySQL (No Password)
-	cfg = config.DatabaseConfig{
+	cfg = dbconfig.DatabaseConfig{
 		Type:     "mysql",
 		Host:     "mysql_host",
 		Port:     3306,
@@ -70,42 +75,54 @@ func TestDatabaseConfig_ConnectionString(t *testing.T) {
 		User:     "mysql_user",
 		Password: "",
 	}
-	connStr, err = database.GetConnectionStringForTest(cfg)
+	connStr, err = gormadapter.GetConnectionStringForTest(cfg) // Use gormadapter.GetConnectionStringForTest
 	assert.NoError(t, err)
 	expected = "mysql_user@tcp(mysql_host:3306)/mysql_db?charset=utf8mb4&parseTime=True&loc=Local"
 	assert.Equal(t, expected, connStr)
 
 	// SQLite
-	cfg = config.DatabaseConfig{
+	cfg = dbconfig.DatabaseConfig{
 		Type:     "sqlite",
 		Database: "/path/to/sqlite.db",
 	}
-	connStr, err = database.GetConnectionStringForTest(cfg)
+	connStr, err = gormadapter.GetConnectionStringForTest(cfg) // Use gormadapter.GetConnectionStringForTest
 	assert.NoError(t, err)
 	expected = "/path/to/sqlite.db"
 	assert.Equal(t, expected, connStr)
 }
 
-func TestGetMaskedParameterKeys(t *testing.T) {
-	// 既存の GlobalConfig を保存
-	originalConfig := config.GlobalConfig
-	defer func() {
-		config.GlobalConfig = originalConfig
-	}()
+// setupMaskingConfig is a helper function that temporarily sets the global configuration
+// for masked parameter keys and returns a cleanup function to restore the original state.
+func setupMaskingConfig(keys []string) func() {
+	originalConfig := coreconfig.GlobalConfig
+	cfg := coreconfig.NewConfig()
+	cfg.Surfin.Security.MaskedParameterKeys = keys
+	coreconfig.GlobalConfig = cfg
 
-	// 1. GlobalConfig が nil の場合
-	config.GlobalConfig = nil
-	keys := config.GetMaskedParameterKeys()
+	return func() {
+		coreconfig.GlobalConfig = originalConfig // Use coreconfig
+	}
+}
+
+// TestGetMaskedParameterKeys verifies that the GetMaskedParameterKeys function
+// correctly retrieves the list of keys to be masked from the global configuration.
+// It tests scenarios where GlobalConfig is nil and where it is properly set.
+func TestGetMaskedParameterKeys(t *testing.T) {
+	defer setupMaskingConfig([]string{"token", "secret"})()
+
+	// 1. When GlobalConfig is nil
+	coreconfig.GlobalConfig = nil               // Use coreconfig
+	keys := coreconfig.GetMaskedParameterKeys() // Use coreconfig
 	if len(keys) != 0 {
 		t.Errorf("Expected 0 keys when GlobalConfig is nil, got %d", len(keys))
 	}
 
-	// 2. GlobalConfig が設定されている場合
-	cfg := config.NewConfig()
+	// 2. When GlobalConfig is set
+	cfg := coreconfig.NewConfig() // Use coreconfig
 	cfg.Surfin.Security.MaskedParameterKeys = []string{"token", "secret"}
-	config.GlobalConfig = cfg
+	coreconfig.GlobalConfig = cfg // Use coreconfig
 
-	keys = config.GetMaskedParameterKeys()
+	keys = coreconfig.GetMaskedParameterKeys() // Use coreconfig
 	expected := []string{"token", "secret"}
 	if len(keys) != len(expected) || keys[0] != expected[0] || keys[1] != expected[1] {
 		t.Errorf("Expected %v, got %v", expected, keys)

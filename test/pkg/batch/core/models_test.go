@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	model "surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/support/util/exception"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -193,30 +193,30 @@ func TestJobExecution_AddFailureException_Deduplication(t *testing.T) {
 func TestJobExecution_MarkAsFailed_Deduplication(t *testing.T) {
 	je := newTestJobExecution(model.BatchStatusStarted)
 
-	// 1. 最初の失敗を追加
+	// 1. Add the first failure
 	err1 := errors.New("critical system failure")
 	je.MarkAsFailed(err1)
 	assert.Equal(t, model.BatchStatusFailed, je.Status)
 	assert.Len(t, je.Failures, 1)
 
-	// Status を STARTED に戻して、別のステップが失敗した状況をシミュレート
-	// MarkAsFailed は TransitionTo(FAILED) を呼び出すが、FAILED -> FAILED は無効な遷移であるため、
-	// 堅牢性チェックのため、Statusをリセットして再試行可能な状態をシミュレートする。
+	// Reset status to STARTED to simulate a situation where another step failed.
+	// MarkAsFailed calls TransitionTo(FAILED), but FAILED -> FAILED is an invalid transition.
+	// For robustness, we simulate a retryable state by resetting the Status.
 	je.Status = model.BatchStatusStarted
 	je.EndTime = nil
 
-	// 同じエラーメッセージで MarkAsFailed を呼び出す
+	// Call MarkAsFailed with the same error message
 	je.MarkAsFailed(err1)
 	assert.Equal(t, model.BatchStatusFailed, je.Status)
-	assert.Len(t, je.Failures, 1) // 重複は追加されないこと
+	assert.Len(t, je.Failures, 1) // Ensure duplicates are not added
 
-	// 3. 異なるエラーで MarkAsFailed を呼び出す
+	// 3. Call MarkAsFailed with a different error
 	err2 := errors.New("second critical failure")
 	je.Status = model.BatchStatusStarted
 	je.EndTime = nil
 	je.MarkAsFailed(err2)
 	assert.Equal(t, model.BatchStatusFailed, je.Status)
-	assert.Len(t, je.Failures, 2) // 新しいエラーが追加されること
+	assert.Len(t, je.Failures, 2) // Ensure new errors are added
 	assert.Contains(t, je.Failures, "critical system failure")
 	assert.Contains(t, je.Failures, "second critical failure")
 }
@@ -260,7 +260,7 @@ func TestJobParameters_Contains(t *testing.T) {
 	fullParams.Put("key1", "value1")
 	fullParams.Put("key2", 123)
 	fullParams.Put("key3", true)
-	fullParams.Put("key4", 123.0) // float64として保存
+	fullParams.Put("key4", 123.0) // Stored as float64
 
 	t.Run("EmptyPartial", func(t *testing.T) {
 		partial := model.NewJobParameters()
@@ -300,7 +300,7 @@ func TestJobParameters_Contains(t *testing.T) {
 
 	t.Run("TypeMismatch_NonNumeric", func(t *testing.T) {
 		partial := model.NewJobParameters()
-		partial.Put("key2", "123") // int vs string (非数値は厳密比較)
+		partial.Put("key2", "123") // int vs string (non-numeric types are strictly compared)
 		assert.False(t, fullParams.Contains(partial))
 	})
 }
@@ -475,19 +475,19 @@ func TestJobExecution_IncrementRestartCount(t *testing.T) {
 }
 
 func TestBatchError_IsErrorOfType_OptimisticLocking(t *testing.T) {
-	// 楽観的ロックエラーのテスト
+	// Test for optimistic locking error
 	olfe := exception.NewOptimisticLockingFailureException("repo", "update failed", nil)
 
-	// 1. errors.Is によるチェック
+	// 1. Check with errors.Is
 	assert.True(t, errors.Is(olfe, exception.ErrOptimisticLockingFailure))
 
-	// 2. IsErrorOfType によるチェック (Sentinel Name)
+	// 2. Check with IsErrorOfType (Sentinel Name)
 	assert.True(t, exception.IsErrorOfType(olfe, exception.OptimisticLockingFailureException))
 
-	// 3. IsErrorOfType によるチェック (Wrapped Error Name)
+	// 3. Check with IsErrorOfType (Wrapped Error Name)
 	assert.True(t, exception.IsErrorOfType(olfe, "OptimisticLockingFailureException"))
 
-	// 4. 異なるエラー
+	// 4. Different error
 	otherErr := errors.New("some other error")
 	assert.False(t, exception.IsErrorOfType(otherErr, exception.OptimisticLockingFailureException))
 }

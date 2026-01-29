@@ -46,7 +46,7 @@ type JobFactory struct {
 	decisionBuilders                 map[string]jsl.ConditionalDecisionBuilder      // Registered builders for conditional decisions.
 	splitBuilders                    map[string]jsl.SplitBuilder                    // Registered builders for split elements.
 	partitionerBuilders              map[string]port.PartitionerBuilder             // Registered builders for partitioners.
-	jobParametersIncrementerBuilders map[string]jsl.JobParametersIncrementerBuilder // Registered builders for job parameters incrementers.
+	jobParametersIncrementerBuilders map[string]jsl.JobParametersIncrementerBuilder // Registered builders for job parameters pincrements.
 	notificationListenerBuilders     map[string]jsl.NotificationListenerBuilder     // Registered builders for notification listeners.
 	metadataTxManager                tx.TransactionManager                          // Transaction manager for metadata operations.
 	stepFactory                      step_factory.StepFactory                       // Factory for creating step instances.

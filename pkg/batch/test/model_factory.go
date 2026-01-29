@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	model "surfin/pkg/batch/core/domain/model"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
 // NewTestJobParameters creates JobParameters for testing.

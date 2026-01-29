@@ -7,19 +7,27 @@ import (
 	"testing"
 	"time"
 
-	"surfin/pkg/batch/core/config"
-	"surfin/pkg/batch/core/domain/model"
-	"surfin/pkg/batch/core/tx"
-	"surfin/pkg/batch/engine/step/item"
-	"surfin/pkg/batch/support/util/exception"
+	"github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	"github.com/tigerroll/surfin/pkg/batch/core/tx"
+	"github.com/tigerroll/surfin/pkg/batch/engine/step/item"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	testutil "github.com/tigerroll/surfin/pkg/batch/test"
 )
+
+// Dummy usage to prevent "imported and not used" error for 'port' package
+var _ = port.ErrNoMoreItems
 
 // --- Mocks ---
 
-// MockItemReader は port.ItemReader のモック実装です。
+// MockItemReader is a mock implementation of port.ItemReader.
 type MockItemReader struct {
 	mock.Mock
 	readCount int
@@ -44,7 +52,7 @@ func (m *MockItemReader) GetExecutionContext(ctx context.Context) (model.Executi
 	return args.Get(0).(model.ExecutionContext), args.Error(1)
 }
 
-// MockItemProcessor は port.ItemProcessor のモック実装です。
+// MockItemProcessor is a mock implementation of port.ItemProcessor.
 type MockItemProcessor struct {
 	mock.Mock
 }
@@ -64,7 +72,7 @@ func (m *MockItemProcessor) GetExecutionContext(ctx context.Context) (model.Exec
 	return args.Get(0).(model.ExecutionContext), args.Error(1)
 }
 
-// MockItemWriter は port.ItemWriter のモック実装です。
+// MockItemWriter is a mock implementation of port.ItemWriter.
 type MockItemWriter struct {
 	mock.Mock
 }
@@ -88,7 +96,19 @@ func (m *MockItemWriter) GetExecutionContext(ctx context.Context) (model.Executi
 	return args.Get(0).(model.ExecutionContext), args.Error(1)
 }
 
-// MockJobRepository は repository.JobRepository のモック実装です。
+// Added: GetTableName() implementation because it was added to the port.ItemWriter interface.
+func (m *MockItemWriter) GetTableName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+// Added: GetTargetDBName() implementation because it was added to the port.ItemWriter interface.
+func (m *MockItemWriter) GetTargetDBName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+// MockJobRepository is a mock implementation of repository.JobRepository.
 type MockJobRepository struct {
 	mock.Mock
 }
@@ -127,10 +147,10 @@ func (m *MockJobRepository) GetJobInstanceCount(ctx context.Context, jobName str
 }
 func (m *MockJobRepository) GetJobNames(ctx context.Context) ([]string, error) {
 	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if res, ok := args.Get(0).([]string); ok {
+		return res, args.Error(1)
 	}
-	return args.Get(0).([]string), args.Error(1)
+	return nil, args.Error(1)
 }
 
 // JobExecution methods
@@ -142,24 +162,24 @@ func (m *MockJobRepository) UpdateJobExecution(ctx context.Context, execution *m
 }
 func (m *MockJobRepository) FindJobExecutionByID(ctx context.Context, id string) (*model.JobExecution, error) {
 	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if res, ok := args.Get(0).(*model.JobExecution); ok {
+		return res, args.Error(1)
 	}
-	return args.Get(0).(*model.JobExecution), args.Error(1)
+	return nil, args.Error(1)
 }
 func (m *MockJobRepository) FindLatestRestartableJobExecution(ctx context.Context, jobInstanceID string) (*model.JobExecution, error) {
 	args := m.Called(ctx, jobInstanceID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if res, ok := args.Get(0).(*model.JobExecution); ok {
+		return res, args.Error(1)
 	}
-	return args.Get(0).(*model.JobExecution), args.Error(1)
+	return nil, args.Error(1)
 }
 func (m *MockJobRepository) FindJobExecutionsByJobInstance(ctx context.Context, instance *model.JobInstance) ([]*model.JobExecution, error) {
 	args := m.Called(ctx, instance)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if res, ok := args.Get(0).([]*model.JobExecution); ok {
+		return res, args.Error(1)
 	}
-	return args.Get(0).([]*model.JobExecution), args.Error(1)
+	return nil, args.Error(1)
 }
 
 // StepExecution methods
@@ -194,7 +214,7 @@ func (m *MockJobRepository) Close() error {
 	return m.Called().Error(0)
 }
 
-// MockTransactionManager は tx.TransactionManager のモック実装です。
+// MockTransactionManager is a mock implementation of tx.TransactionManager.
 type MockTransactionManager struct {
 	mock.Mock
 }
@@ -213,27 +233,7 @@ func (m *MockTransactionManager) Rollback(adapter tx.Tx) error {
 	return m.Called(adapter).Error(0)
 }
 
-// MockTransactionAdapter は tx.Tx のモック実装です。
-type MockTransactionAdapter struct {
-	mock.Mock
-}
-
-func (m *MockTransactionAdapter) ExecuteUpdate(ctx context.Context, model interface{}, operation string, tableName string, query map[string]interface{}) (rowsAffected int64, err error) {
-	args := m.Called(ctx, model, operation, tableName, query)
-	return args.Get(0).(int64), args.Error(1)
-}
-func (m *MockTransactionAdapter) ExecuteUpsert(ctx context.Context, model interface{}, tableName string, conflictColumns []string, updateColumns []string) (rowsAffected int64, err error) {
-	args := m.Called(ctx, model, tableName, conflictColumns, updateColumns)
-	return args.Get(0).(int64), args.Error(1)
-}
-func (m *MockTransactionAdapter) Savepoint(name string) error {
-	return m.Called(name).Error(0)
-}
-func (m *MockTransactionAdapter) RollbackToSavepoint(name string) error {
-	return m.Called(name).Error(0)
-}
-
-// MockMetricRecorder は metrics.MetricRecorder のモック実装です。
+// MockMetricRecorder is a mock implementation of metrics.MetricRecorder.
 type MockMetricRecorder struct {
 	mock.Mock
 }
@@ -272,7 +272,7 @@ func (m *MockMetricRecorder) RecordDuration(ctx context.Context, name string, du
 	m.Called(ctx, name, duration, tags)
 }
 
-// MockTracer は metrics.Tracer のモック実装です。
+// MockTracer is a mock implementation of metrics.Tracer.
 type MockTracer struct {
 	mock.Mock
 }
@@ -298,21 +298,81 @@ func (m *MockTracer) RecordEvent(ctx context.Context, name string, attributes ma
 	m.Called(ctx, name, attributes)
 }
 
-// --- Test Setup (修正) ---
+// MockTransactionManagerFactory is a mock implementation of tx.TransactionManagerFactory.
+type MockTransactionManagerFactory struct {
+	mock.Mock
+	TxManager *MockTransactionManager
+}
 
-func setupChunkStep(t *testing.T) (*item.ChunkStep, *MockItemReader, *MockItemProcessor, *MockItemWriter, *MockJobRepository, *MockTransactionManager, *MockMetricRecorder, *MockTracer) {
+func (m *MockTransactionManagerFactory) NewTransactionManager(conn adapter.DBConnection) tx.TransactionManager {
+	m.Called(conn)
+	return m.TxManager
+}
+
+// MockDBConnection is a mock implementation of adapter.DBConnection.
+type MockDBConnection struct {
+	mock.Mock
+}
+
+func (m *MockDBConnection) Close() error { return m.Called().Error(0) }
+func (m *MockDBConnection) Type() string { return m.Called().String(0) }
+func (m *MockDBConnection) Name() string { return m.Called().String(0) }
+func (m *MockDBConnection) RefreshConnection(ctx context.Context) error {
+	return m.Called(ctx).Error(0)
+}
+func (m *MockDBConnection) Config() dbconfig.DatabaseConfig { // Changed config.DatabaseConfig to dbconfig.DatabaseConfig
+	args := m.Called()
+	return args.Get(0).(dbconfig.DatabaseConfig)
+}
+func (m *MockDBConnection) GetSQLDB() (*sql.DB, error) {
+	args := m.Called() // Added
+	return args.Get(0).(*sql.DB), args.Error(1)
+}
+func (m *MockDBConnection) ExecuteQuery(ctx context.Context, target interface{}, query map[string]interface{}) error {
+	return m.Called(ctx, target, query).Error(0) // Added
+}
+func (m *MockDBConnection) ExecuteQueryAdvanced(ctx context.Context, target interface{}, query map[string]interface{}, orderBy string, limit int) error {
+	return m.Called(ctx, target, query, orderBy, limit).Error(0) // Added
+}
+func (m *MockDBConnection) Count(ctx context.Context, model interface{}, query map[string]interface{}) (int64, error) {
+	args := m.Called(ctx, model, query) // Added
+	return args.Get(0).(int64), args.Error(1)
+}
+func (m *MockDBConnection) Pluck(ctx context.Context, model interface{}, column string, target interface{}, query map[string]interface{}) error {
+	return m.Called(ctx, model, column, target, query).Error(0) // Added
+}
+func (m *MockDBConnection) ExecuteUpdate(ctx context.Context, model interface{}, operation string, tableName string, query map[string]interface{}) (rowsAffected int64, err error) {
+	args := m.Called(ctx, model, operation, tableName, query) // Added
+	return args.Get(0).(int64), args.Error(1)
+}
+func (m *MockDBConnection) ExecuteUpsert(ctx context.Context, model interface{}, tableName string, conflictColumns []string, updateColumns []string) (rowsAffected int64, err error) {
+	args := m.Called(ctx, model, tableName, conflictColumns, updateColumns) // Added
+	return args.Get(0).(int64), args.Error(1)
+}
+func (m *MockDBConnection) IsTableNotExistError(err error) bool { return m.Called(err).Bool(0) } // Added
+
+// --- Test Setup ---
+
+func setupChunkStep(t *testing.T) (*item.ChunkStep, *MockItemReader, *MockItemProcessor, *MockItemWriter, *MockJobRepository, *MockTransactionManager, *MockMetricRecorder, *MockTracer, *testutil.MockDBConnectionResolver) {
 	reader := new(MockItemReader)
 	processor := new(MockItemProcessor)
 	writer := new(MockItemWriter)
 	repo := new(MockJobRepository)
 	txManager := new(MockTransactionManager)
+	txManagerFactory := &MockTransactionManagerFactory{TxManager: txManager} // Create TxManagerFactory
 	metricRecorder := new(MockMetricRecorder)
 	tracer := new(MockTracer)
+	dbConn := new(MockDBConnection) // Create MockDBConnection (implements adapter.DBConnection)
+
+	// Create MockDBConnectionResolver instance and mock ResolveDBConnectionName and ResolveDBConnection
+	dbConnResolver := new(testutil.MockDBConnectionResolver)
+	dbConnResolver.On("ResolveDBConnectionName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("mock_db", nil)
+	dbConnResolver.On("ResolveDBConnection", mock.Anything, "mock_db").Return(dbConn, nil)
 
 	// Default configurations for policies
 	retryConfig := &config.RetryConfig{MaxAttempts: 3}
 	itemRetryConfig := config.ItemRetryConfig{MaxAttempts: 3, RetryableExceptions: []string{"TransientError"}}
-	// isSkippable=true な BatchError をスキップ可能とするために、"BatchError" を型名で指定
+	// To allow skippable BatchError (isSkippable=true), specify "BatchError" by type name
 	itemSkipConfig := config.ItemSkipConfig{SkipLimit: 5, SkippableExceptions: []string{"BatchError"}}
 
 	step := item.NewJSLAdaptedStep(
@@ -330,45 +390,45 @@ func setupChunkStep(t *testing.T) (*item.ChunkStep, *MockItemReader, *MockItemPr
 		model.NewExecutionContextPromotion(),
 		"SERIALIZABLE",
 		"REQUIRED",
-		txManager,
+		txManagerFactory, // Pass tx.TransactionManagerFactory
 		metricRecorder,
 		tracer,
+		dbConnResolver, // Pass port.DBConnectionResolver
 	)
-
 	// Ensure the step is correctly initialized
 	assert.NotNil(t, step)
 
-	return step, reader, processor, writer, repo, txManager, metricRecorder, tracer
+	return step, reader, processor, writer, repo, txManager, metricRecorder, tracer, dbConnResolver
 }
 
 // --- Tests ---
 
-// TestChunkStep_ChunkSplittingOnSkippableWriteFailure は、チャンク書き込み失敗時にチャンク分割処理が正しく行われることを検証します。
-// 成功アイテムはコミットされ、スキップ可能エラーアイテムはスキップされます。
+// TestChunkStep_ChunkSplittingOnSkippableWriteFailure verifies that chunk splitting is correctly performed on chunk write failure.
+// Successful items are committed, and skippable error items are skipped.
 func TestChunkStep_ChunkSplittingOnSkippableWriteFailure(t *testing.T) {
-	step, _, _, writer, repo, txManager, recorder, tracer := setupChunkStep(t)
+	step, _, _, writer, repo, txManager, recorder, tracer, _ := setupChunkStep(t) // txManager is MockTransactionManager
 	ctx := context.Background()
 
 	// Initial Step Execution setup
 	jobExec := model.NewJobExecution(model.NewID(), "testJob", model.NewJobParameters())
 	se := model.NewStepExecution(model.NewID(), jobExec, "testStep")
-	se.WriteCount = 10 // 既に10件の書き込みがあったと仮定
+	se.WriteCount = 10 // Assume 10 items were already written
 
 	originalItems := []any{"item1", "item2", "item3"}
 
 	// Define the skippable error
 	skippableErr := exception.NewBatchError("testStep", "DB constraint violation", errors.New("unique constraint failed"), true, false) // S=true, R=false
-	// Note: exception.AddExceptionName は存在しないため、ここではエラーメッセージまたは型名でマッチさせる
+	// Note: exception.AddExceptionName does not exist, so match by error message or type name here.
 
-	// Mock Transaction Adapters for chunk splitting (one per item)
-	txAdapter1 := new(MockTransactionAdapter)
-	txAdapter2 := new(MockTransactionAdapter)
-	txAdapter3 := new(MockTransactionAdapter)
+	// Mock Transaction Adapters for chunk splitting (one per item) - Use testutil.MockTx
+	txAdapter1 := new(testutil.MockTx)
+	txAdapter2 := new(testutil.MockTx)
+	txAdapter3 := new(testutil.MockTx)
 
 	// Mock JobRepository calls for StepExecution updates (Save/Update)
 	repo.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
 
-	// Mock Tracer Span End function (ダミー)
+	// Mock Tracer Span End function (dummy)
 	mockSpanEnd := func() {}
 	tracer.On("StartJobSpan", mock.Anything, mock.Anything).Return(ctx, mockSpanEnd).Maybe()
 	tracer.On("StartStepSpan", mock.Anything, mock.Anything).Return(ctx, mockSpanEnd).Maybe()
@@ -400,7 +460,7 @@ func TestChunkStep_ChunkSplittingOnSkippableWriteFailure(t *testing.T) {
 
 	// 3. Listener/Metric Mocks
 	// Item 2 Skip notification
-	tracer.On("RecordError", mock.Anything, "testStep", mock.AnythingOfType("*exception.BatchError")).Once() // エラー型を明示
+	tracer.On("RecordError", mock.Anything, "testStep", mock.AnythingOfType("*exception.BatchError")).Once() // Explicit error type
 	recorder.On("RecordItemSkip", mock.Anything, "testStep", "write").Once()
 
 	// Item 1 and Item 3 success
@@ -408,15 +468,15 @@ func TestChunkStep_ChunkSplittingOnSkippableWriteFailure(t *testing.T) {
 
 	// --- Execution ---
 
-	// HandleSkippableWriteFailure は public に変更されている前提
-	remainingItems, fatalErr := step.HandleSkippableWriteFailure(ctx, originalItems, se)
+	// Assuming HandleSkippableWriteFailure is public
+	remainingItems, fatalErr := step.HandleSkippableWriteFailure(ctx, originalItems, se, txManager) // Pass txManager as argument
 
 	// --- Assertions ---
 
 	assert.Nil(t, fatalErr, "Chunk splitting should not result in a fatal error")
 	assert.Empty(t, remainingItems, "All items should have been processed (committed or skipped)")
 
-	// Item 1 (Success) + Item 3 (Success) = 2 new writes
+	// Item 1 (Success) + Item 3 (Success) = 2 new writes (se.WriteCount is already 10, so total 12)
 	assert.Equal(t, 12, se.WriteCount, "Write count should be updated (10 initial + 2 successful commits)")
 
 	// Item 2 (Skipped) = 1 skip
@@ -429,26 +489,26 @@ func TestChunkStep_ChunkSplittingOnSkippableWriteFailure(t *testing.T) {
 	tracer.AssertExpectations(t)
 }
 
-// TestChunkStep_ChunkSplitting_FatalError は、チャンク分割中に致命的なエラーが発生した場合に、処理が中断されることを検証します。
+// TestChunkStep_ChunkSplitting_FatalError verifies that processing is interrupted if a fatal error occurs during chunk splitting.
 func TestChunkStep_ChunkSplitting_FatalError(t *testing.T) {
-	step, _, _, writer, repo, txManager, recorder, tracer := setupChunkStep(t)
+	step, _, _, writer, repo, txManager, recorder, tracer, _ := setupChunkStep(t) // txManager is MockTransactionManager
 	ctx := context.Background()
 
 	jobExec := model.NewJobExecution(model.NewID(), "testJob", model.NewJobParameters())
 	se := model.NewStepExecution(model.NewID(), jobExec, "testStep")
 	originalItems := []any{"item1", "item2"}
 
-	// スキップ可能ではない致命的なエラー
+	// Non-skippable fatal error
 	fatalWriteErr := errors.New("database connection lost")
 
 	// Mock Transaction Adapters
-	txAdapter1 := new(MockTransactionAdapter)
-	txAdapter2 := new(MockTransactionAdapter)
+	txAdapter1 := new(testutil.MockTx)
+	txAdapter2 := new(testutil.MockTx)
 
 	// Mock JobRepository calls for StepExecution updates (Save/Update)
 	repo.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
 
-	// Mock Tracer Span End function (ダミー)
+	// Mock Tracer Span End function (dummy)
 	mockSpanEnd := func() {}
 	tracer.On("StartJobSpan", mock.Anything, mock.Anything).Return(ctx, mockSpanEnd).Maybe()
 	tracer.On("StartStepSpan", mock.Anything, mock.Anything).Return(ctx, mockSpanEnd).Maybe()
@@ -463,12 +523,12 @@ func TestChunkStep_ChunkSplitting_FatalError(t *testing.T) {
 	txManager.On("Begin", mock.Anything, mock.Anything).Return(txAdapter2, nil).Once()
 	writer.On("Write", mock.Anything, txAdapter2, []any{"item2"}).Return(fatalWriteErr).Once()
 
-	// Fatal errorが発生した場合、そのアイテムのトランザクションはロールバックされる
+	// If a fatal error occurs, the transaction for that item is rolled back.
 	txManager.On("Rollback", txAdapter2).Return(nil).Once()
 
 	// --- Execution ---
 
-	remainingItems, resultErr := step.HandleSkippableWriteFailure(ctx, originalItems, se)
+	remainingItems, resultErr := step.HandleSkippableWriteFailure(ctx, originalItems, se, txManager) // Pass txManager as argument
 
 	// --- Assertions ---
 
@@ -476,10 +536,10 @@ func TestChunkStep_ChunkSplitting_FatalError(t *testing.T) {
 	assert.True(t, exception.IsBatchError(resultErr), "Error should be wrapped as BatchError")
 	assert.Contains(t, resultErr.Error(), "Item write failed during chunk splitting (Fatal or limit reached)", "Error message should indicate fatal failure")
 
-	// Item 1はコミットされた
+	// Item 1 was committed
 	assert.Equal(t, 1, se.WriteCount, "Write count should reflect committed items before fatal error")
 	assert.Equal(t, 0, se.SkipWriteCount, "No skips occurred")
-	assert.Empty(t, remainingItems, "処理が中断されたため、残りのアイテムは空であるべき")
+	assert.Empty(t, remainingItems, "Remaining items should be empty because processing was interrupted")
 
 	// Verify mocks
 	txManager.AssertExpectations(t)
