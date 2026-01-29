@@ -32,8 +32,8 @@ graph LR
     end
 
     subgraph "アダプター層"
-        B["ObjectStorageAdapter<br>(pkg/batch/core/adaptor/storage.go)"]
-        C["GCSアダプター<br>(pkg/batch/adaptor/storage/gcs)"]
+        B["ObjectStorageAdapter<br>(pkg/batch/core/adapter/storage.go)"]
+        C["GCSアダプター<br>(pkg/batch/adapter/storage/gcs)"]
     end
 
     D["Google Cloud Storage (GCS)"]
@@ -47,8 +47,8 @@ graph LR
 
 ### 5.1. 共通インターフェース定義
 
-*   **ファイルパス**: `pkg/batch/core/adaptor/storage.go`
-*   **パッケージ**: `adaptor`
+*   **ファイルパス**: `pkg/batch/core/adapter/storage.go`
+*   **パッケージ**: `adapter`
 *   **インターフェース**: `ObjectStorageAdapter`
     *   **目的**: 
         *   汎用的なオブジェクトストレージ操作を定義する。
@@ -62,11 +62,11 @@ graph LR
         | `ListObjects`  | 指定されたバケットとプレフィックス内のオブジェクトをリストし、オブジェクト名をコールバック関数 `fn` に渡して逐次処理します。これにより、メモリ負荷を抑えつつ大量のオブジェクトを扱えます。 |
         | `DeleteObject` | 指定されたバケットとオブジェクト名を削除します。|
         | `Close`        | アダプターが保持するリソース（例: 内部のクライアント接続）を解放します。|
-        | `Config`       | このアダプターが使用している設定（`pkg/batch/adaptor/storage/config.StorageConfig`）を返します。|
+        | `Config`       | このアダプターが使用している設定（`pkg/batch/adapter/storage/config.StorageConfig`）を返します。|
 
 ### 5.2. GCSアダプター実装
 
-*   **ファイルパス**: `pkg/batch/adaptor/storage/gcs/adapter.go`
+*   **ファイルパス**: `pkg/batch/adapter/storage/gcs/adapter.go`
 *   **推奨されるインターフェース修正案 (Go)**:
 
     ```go
@@ -86,10 +86,10 @@ graph LR
     ```
 *   **パッケージ**: `gcs`
 *   **実装構造体**: `gcsAdapter`
-    *   内部に `*storage.Client` (Google Cloud Storage Go SDKのクライアント) と、`pkg/batch/adaptor/storage/config.StorageConfig` を保持します。
-*   **コンストラクタ**: `NewGCSAdapter(ctx context.Context, cfg *config.Config, name string) (adaptor.ObjectStorageAdapter, error)`
+    *   内部に `*storage.Client` (Google Cloud Storage Go SDKのクライアント) と、`pkg/batch/adapter/storage/config.StorageConfig` を保持します。
+*   **コンストラクタ**: `NewGCSAdapter(ctx context.Context, cfg *config.Config, name string) (adapter.ObjectStorageAdapter, error)`
     *   アプリケーション全体の `config.Config` オブジェクトと、解決するストレージ接続の名前 (`name`) を受け取ります。
-    *   `config.Config` から、指定された名前のストレージ接続設定を抽出し、`pkg/batch/adaptor/storage/config.StorageConfig` にデコードして利用します。
+    *   `config.Config` から、指定された名前のストレージ接続設定を抽出し、`pkg/batch/adapter/storage/config.StorageConfig` にデコードして利用します。
 *   **依存ライブラリ**: `cloud.google.com/go/storage`
     *   **新規依存ライブラリ**: `github.com/mitchellh/mapstructure` (設定のデコードのため)
     *   **メソッド実装**:
@@ -101,30 +101,30 @@ graph LR
         | `ListObjects` | GCS Go SDKの`Objects`メソッドとイテレータ機能を利用して、指定されたバケットとプレフィックスに一致するオブジェクト名を列挙します。**HIVEパーティショニングが有効な場合、`prefix`の解釈ロジックにHIVEパーティションのパスを含めることを考慮します。** |
         | `DeleteObject` | GCS Go SDKの`Delete`メソッドを利用して、GCSオブジェクトを削除します。**HIVEパーティショニングが有効な場合、`objectName`の解決ロジックにHIVEパーティションのパスを含めることを考慮します。** |
         | `Close` | 内部のGCSクライアントをクローズし、関連するリソースを解放します。 |
-        | `Config` | アダプターが使用している `pkg/batch/adaptor/storage/config.StorageConfig` を返します。 |
+        | `Config` | アダプターが使用している `pkg/batch/adapter/storage/config.StorageConfig` を返します。 |
 
 ## 6. 認証・認可
 
 GCSアダプターは、Google Cloud Storageへの認証に以下の方法をサポートします。
 
 1.  **デフォルト認証（推奨）**:
-    *   `pkg/batch/core/config/config.go` の `adaptor_configs.storage.datasources.<name>.credentials_file` に空文字列 (`""`) を設定することで、Google Cloud Storage Go SDKが提供するデフォルトの認証メカニズムを利用します。
+    *   `pkg/batch/core/config/config.go` の `adapter_configs.storage.datasources.<name>.credentials_file` に空文字列 (`""`) を設定することで、Google Cloud Storage Go SDKが提供するデフォルトの認証メカニズムを利用します。
     *   これにより、Cloud Run、GKE、Compute EngineなどのGCP環境で実行される場合、インスタンスに紐付けられたサービスアカウントの権限が自動的に適用されます。
     *   ローカル開発環境では、`GOOGLE_APPLICATION_CREDENTIALS` 環境変数で指定されたサービスアカウントキーファイルが利用されます。
 
 2.  **サービスアカウントキーファイルによる明示的な認証**:
-    *   `pkg/batch/core/config/config.go` の `adaptor_configs.storage.datasources.<name>.credentials_file` にサービスアカウントキー（JSON形式）のファイルパスを設定することで、指定されたサービスアカウントとして認証を行います。
+    *   `pkg/batch/core/config/config.go` の `adapter_configs.storage.datasources.<name>.credentials_file` にサービスアカウントキー（JSON形式）のファイルパスを設定することで、指定されたサービスアカウントとして認証を行います。
     *   **シークレットマネージャーからのキー利用**: 
         *   シークレットマネージャー（例: Google Secret Manager）にサービスアカウントキーが格納されている場合、アプリケーション起動時にそのキーを取得し、一時ファイルとして保存した後、その一時ファイルのパスを `credentials_file` に渡すことで対応可能です。
 
 ## 7. 設定管理とHIVEパーティショニング
 
-オブジェクトストレージの設定は、`pkg/batch/core/config/config.go` の `surfin.adaptor_configs.storage.datasources` 以下に定義されます。各ストレージ接続は名前で識別され、`pkg/batch/adaptor/storage/config.StorageConfig` 構造体としてアダプター側で解釈されます。
+オブジェクトストレージの設定は、`pkg/batch/core/config/config.go` の `surfin.adapter_configs.storage.datasources` 以下に定義されます。各ストレージ接続は名前で識別され、`pkg/batch/adapter/storage/config.StorageConfig` 構造体としてアダプター側で解釈されます。
 
-`pkg/batch/adaptor/storage/config/config.go` で定義される `StorageConfig` および `HivePartitionConfig` は以下の通りです。
+`pkg/batch/adapter/storage/config/config.go` で定義される `StorageConfig` および `HivePartitionConfig` は以下の通りです。
 
 ```go
-// pkg/batch/adaptor/storage/config/config.go
+// pkg/batch/adapter/storage/config/config.go
 
 package config
 
@@ -152,7 +152,7 @@ HIVEパーティショニングに関する設定も `StorageConfig` 内に含�
 ```yaml
 surfin:
   # ... その他のフレームワーク共通設定
-  adaptor_configs:
+  adapter_configs:
     storage: # ストレージアダプターの設定
       datasources:
         default_gcs:

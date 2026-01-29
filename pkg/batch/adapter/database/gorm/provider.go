@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/mitchellh/mapstructure"
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
@@ -48,7 +48,7 @@ type BaseProvider struct {
 	cfg    *config.Config
 	dbType string
 	// Map to hold connections managed by this provider (name -> DBConnection)
-	connections map[string]adaptor.DBConnection
+	connections map[string]adapter.DBConnection
 	mu          sync.RWMutex
 }
 
@@ -57,7 +57,7 @@ func NewBaseProvider(cfg *config.Config, dbType string) *BaseProvider {
 	return &BaseProvider{
 		cfg:         cfg,
 		dbType:      dbType,
-		connections: make(map[string]adaptor.DBConnection),
+		connections: make(map[string]adapter.DBConnection),
 	}
 }
 
@@ -67,7 +67,7 @@ func (p *BaseProvider) Type() string {
 }
 
 // GetConnection retrieves an existing connection or establishes a new one.
-func (p *BaseProvider) GetConnection(name string) (adaptor.DBConnection, error) {
+func (p *BaseProvider) GetConnection(name string) (adapter.DBConnection, error) {
 	p.mu.RLock()
 	conn, ok := p.connections[name]
 	p.mu.RUnlock()
@@ -90,11 +90,11 @@ func (p *BaseProvider) GetConnection(name string) (adaptor.DBConnection, error) 
 }
 
 // createAndStoreConnection establishes a new connection and stores it in the map.
-func (p *BaseProvider) createAndStoreConnection(name string) (adaptor.DBConnection, error) {
+func (p *BaseProvider) createAndStoreConnection(name string) (adapter.DBConnection, error) {
 	var dbConfig dbconfig.DatabaseConfig
-	rawConfig, ok := p.cfg.Surfin.AdaptorConfigs[name]
+	rawConfig, ok := p.cfg.Surfin.AdapterConfigs[name]
 	if !ok {
-		return nil, fmt.Errorf("database configuration '%s' not found in adaptor.database configs", name)
+		return nil, fmt.Errorf("database configuration '%s' not found in adapter.database configs", name)
 	}
 	if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
 		return nil, fmt.Errorf("failed to decode database config for '%s': %w", name, err)
@@ -118,7 +118,7 @@ func (p *BaseProvider) createAndStoreConnection(name string) (adaptor.DBConnecti
 }
 
 // ForceReconnect attempts to close and reopen a connection if it exists.
-func (p *BaseProvider) ForceReconnect(name string) (adaptor.DBConnection, error) {
+func (p *BaseProvider) ForceReconnect(name string) (adapter.DBConnection, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -204,7 +204,7 @@ type PostgresDBProvider struct {
 }
 
 // NewPostgresProvider creates a new PostgreSQL DBProvider.
-func NewPostgresProvider(cfg *config.Config) adaptor.DBProvider {
+func NewPostgresProvider(cfg *config.Config) adapter.DBProvider {
 	return &PostgresDBProvider{BaseProvider: NewBaseProvider(cfg, "postgres")}
 }
 
@@ -219,7 +219,7 @@ type MySQLDBProvider struct {
 	*BaseProvider
 }
 
-func NewMySQLProvider(cfg *config.Config) adaptor.DBProvider {
+func NewMySQLProvider(cfg *config.Config) adapter.DBProvider {
 	return &MySQLDBProvider{BaseProvider: NewBaseProvider(cfg, "mysql")}
 }
 
@@ -245,7 +245,7 @@ type SQLiteDBProvider struct {
 	*BaseProvider
 }
 
-func NewSQLiteProvider(cfg *config.Config) adaptor.DBProvider {
+func NewSQLiteProvider(cfg *config.Config) adapter.DBProvider {
 	return &SQLiteDBProvider{BaseProvider: NewBaseProvider(cfg, "sqlite")}
 }
 
@@ -257,7 +257,7 @@ func (p *SQLiteDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string {
 // --- Test Utility Functions ---
 
 // GetProviderForTest retrieves the appropriate concrete DBProvider instance for testing purposes.
-func GetProviderForTest(cfg dbconfig.DatabaseConfig) (adaptor.DBProvider, error) {
+func GetProviderForTest(cfg dbconfig.DatabaseConfig) (adapter.DBProvider, error) {
 	// Note: We need a dummy config.Config instance to initialize the providers,
 	// as they expect it for BaseProvider initialization.
 	dummyCfg := config.NewConfig()

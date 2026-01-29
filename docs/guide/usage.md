@@ -138,7 +138,7 @@ func getDBProviderOptions() []fx.Option {
     // 例:
     // import (
     //     "go.uber.org/fx"
-    //     "github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm" // gormパッケージをインポート
+    //     "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm" // gormパッケージをインポート
     // )
     // return []fx.Option{
     //     fx.Provide(fx.Annotate(gorm.NewPostgresProvider, fx.ResultTags(`group:"db_providers"`))),

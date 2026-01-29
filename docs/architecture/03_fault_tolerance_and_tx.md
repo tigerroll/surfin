@@ -49,4 +49,4 @@ Stepの実行は、Springのトランザクション伝播属性に類似した�
 データベーススキーマの管理は、`MigrationTasklet` を使用して Job フローの一部として実行されます。
 
 *   `MigrationTasklet` は `golang-migrate/migrate/v4` ライブラリを使用します。
-*   マイグレーションの実行後、データベース接続プールが変更されたスキーマを認識できるように、`surfin/pkg/batch/adaptor/database/gorm.DBProvider.ForceReconnect` を呼び出して接続を強制的に再確立するロジックが組み込まれています。
+*   マイグレーションの実行後、データベース接続プールが変更されたスキーマを認識できるように、`surfin/pkg/batch/adapter/database/gorm.DBProvider.ForceReconnect` を呼び出して接続を強制的に再確立するロジックが組み込まれています。

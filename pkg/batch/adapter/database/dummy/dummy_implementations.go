@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
@@ -40,11 +40,11 @@ func (d *dummyTxManager) Rollback(t tx.Tx) error { return nil }
 // It always returns a dummy TransactionManager.
 type DummyTxManagerFactory struct{}
 
-func (d *DummyTxManagerFactory) NewTransactionManager(conn adaptor.DBConnection) tx.TransactionManager {
+func (d *DummyTxManagerFactory) NewTransactionManager(conn adapter.DBConnection) tx.TransactionManager {
 	return &dummyTxManager{}
 }
 
-// dummyDBConnection is a dummy implementation of the adaptor.DBConnection interface.
+// dummyDBConnection is a dummy implementation of the adapter.DBConnection interface.
 // It performs no actual operations.
 type DummyDBConnection struct{}
 
@@ -74,20 +74,20 @@ func (d *DummyDBConnection) RefreshConnection(ctx context.Context) error { retur
 func (d *DummyDBConnection) Config() dbconfig.DatabaseConfig             { return dbconfig.DatabaseConfig{} }
 func (d *DummyDBConnection) GetSQLDB() (*sql.DB, error)                  { return nil, nil }
 
-// dummyDBProvider is a dummy implementation of the adaptor.DBProvider interface.
+// dummyDBProvider is a dummy implementation of the adapter.DBProvider interface.
 // It always returns a dummy DBConnection.
 type dummyDBProvider struct{}
 
-func (d *dummyDBProvider) GetConnection(name string) (adaptor.DBConnection, error) {
+func (d *dummyDBProvider) GetConnection(name string) (adapter.DBConnection, error) {
 	return &DummyDBConnection{}, nil
 }
-func (d *dummyDBProvider) ForceReconnect(name string) (adaptor.DBConnection, error) {
+func (d *dummyDBProvider) ForceReconnect(name string) (adapter.DBConnection, error) {
 	return &DummyDBConnection{}, nil
 }
 func (d *dummyDBProvider) CloseAll() error { return nil }
 func (d *dummyDBProvider) Type() string    { return "dummy" }
 
-// DefaultDBConnectionResolver is a dummy implementation of the adaptor.DBConnectionResolver.
+// DefaultDBConnectionResolver is a dummy implementation of the adapter.DBConnectionResolver.
 type DefaultDBConnectionResolver struct{}
 
 // NewDefaultDBConnectionResolver creates a new DefaultDBConnectionResolver.
@@ -98,7 +98,7 @@ func NewDefaultDBConnectionResolver() *DefaultDBConnectionResolver {
 
 // ResolveDBConnection resolves a database connection instance by name.
 // It returns a dummy DBConnection.
-func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adaptor.DBConnection, error) {
+func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adapter.DBConnection, error) {
 	logger.Warnf("Attempted to resolve DB connection '%s' in DB-less mode. Returning dummy connection.", name)
 	return &DummyDBConnection{}, nil
 }

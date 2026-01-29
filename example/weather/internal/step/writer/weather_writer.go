@@ -6,7 +6,7 @@ import (
 
 	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
 	appRepo "github.com/tigerroll/surfin/example/weather/internal/repository"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	batch_config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -27,7 +27,7 @@ type WeatherWriterConfig struct {
 type WeatherItemWriter struct {
 	Repo appRepo.WeatherRepository // Repo is the repository resolved at runtime based on the database type.
 
-	AllDBConnections map[string]adaptor.DBConnection
+	AllDBConnections map[string]adapter.DBConnection
 	DBResolver       port.DBConnectionResolver
 	Config           *batch_config.Config
 	TargetDBName     string // Target database name resolved from JSL properties.
@@ -53,7 +53,7 @@ var _ port.ItemWriter[any] = (*WeatherItemWriter)(nil)
 // properties is a map of JSL properties for this writer.
 func NewWeatherWriter(
 	cfg *batch_config.Config,
-	allDBConnections map[string]adaptor.DBConnection,
+	allDBConnections map[string]adapter.DBConnection,
 	resolver port.ExpressionResolver,
 	dbResolver port.DBConnectionResolver,
 	properties map[string]string,

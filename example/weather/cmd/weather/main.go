@@ -13,7 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/tigerroll/surfin/example/weather/internal/app"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx"
@@ -38,7 +38,7 @@ var applicationMigrationsFS embed.FS
 var embeddedJSL []byte
 
 // getDBProviderOptions selects the DB Provider to use based on environment variables.
-// If the "DB_ADAPTORS" environment variable is set, it selects DB Providers based on its comma-separated value.
+// If the "DB_ADAPTERS" environment variable is set, it selects DB Providers based on its comma-separated value.
 // If not set, Postgres, MySQL, and SQLite are used by default.
 //
 // Returns:
@@ -46,25 +46,25 @@ var embeddedJSL []byte
 //	A list of fx.Option to provide to the Fx application.
 func getDBProviderOptions() []fx.Option {
 	// Get the list of DB Providers to use from environment variables (e.g., "postgres,sqlite")
-	adaptors := os.Getenv("DB_ADAPTORS")
-	if adaptors == "" {
+	adapters := os.Getenv("DB_ADAPTERS")
+	if adapters == "" {
 		// Use Postgres, MySQL, and SQLite as defaults (for compatibility)
-		adaptors = "postgres,mysql,sqlite"
+		adapters = "postgres,mysql,sqlite"
 	}
 
 	options := make([]fx.Option, 0)
-	for _, adaptorName := range strings.Split(adaptors, ",") {
-		adaptorName = strings.TrimSpace(adaptorName)
-		if adaptorName == "" {
+	for _, adapterName := range strings.Split(adapters, ",") {
+		adapterName = strings.TrimSpace(adapterName)
+		if adapterName == "" {
 			continue
 		}
 
-		if provider, ok := app.DBProviderMap[adaptorName]; ok {
-			// provider is of type func(cfg *config.Config) adaptor.DBProvider
-			options = append(options, fx.Provide(fx.Annotate(provider, fx.ResultTags(`group:"`+adaptor.DBProviderGroup+`"`))))
-			logger.Debugf("DB Provider '%s' selected and registered.", adaptorName)
+		if provider, ok := app.DBProviderMap[adapterName]; ok {
+			// provider is of type func(cfg *config.Config) adapter.DBProvider
+			options = append(options, fx.Provide(fx.Annotate(provider, fx.ResultTags(`group:"`+adapter.DBProviderGroup+`"`))))
+			logger.Debugf("DB Provider '%s' selected and registered.", adapterName)
 		} else {
-			logger.Warnf("DB Provider '%s' is configured but not recognized/supported. Skipping.", adaptorName)
+			logger.Warnf("DB Provider '%s' is configured but not recognized/supported. Skipping.", adapterName)
 		}
 	}
 	return options

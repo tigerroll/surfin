@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"surfin/pkg/batch/adaptor/database"
-	adaptor "surfin/pkg/batch/core/adaptor"
+	"surfin/pkg/batch/adapter/database"
+	adapter "surfin/pkg/batch/core/adapter"
 	config "surfin/pkg/batch/core/config"
 	model "surfin/pkg/batch/core/domain/model"
 	repository "surfin/pkg/batch/core/domain/repository"
@@ -72,15 +72,15 @@ func (m *MockTxManager) Rollback(t tx.Tx) error {
 
 // testSingleConnectionResolver はテスト用の DBConnectionResolver 実装
 type testSingleConnectionResolver struct {
-	conn adaptor.DBConnection
+	conn adapter.DBConnection
 }
 
-func (r *testSingleConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adaptor.DBConnection, error) {
+func (r *testSingleConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adapter.DBConnection, error) {
 	return r.conn, nil
 }
 
 // setupGormJobMock は JobExecution repository テスト用のヘルパーです。
-func setupGormJobMock(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, adaptor.DBConnection, repository.JobRepository) {
+func setupGormJobMock(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, adapter.DBConnection, repository.JobRepository) {
 	sqlDB, mock, err := sqlmock.New()
 	assert.NoError(t, err)
 

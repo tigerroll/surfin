@@ -9,9 +9,9 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"go.uber.org/fx"
 
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/support/expression"
@@ -45,7 +45,7 @@ type RunFrameworkMigrationsHookParams struct {
 	MigratorProvider migration.MigratorProvider    // Provider for database migrators.
 	DBResolver       port.DBConnectionResolver     // Resolver for database connections.
 	AllMigrationFS   map[string]fs.FS              `name:"allMigrationFS"` // A map of file systems containing migration scripts, including "frameworkMigrationsFS".
-	AllDBProviders   map[string]adaptor.DBProvider // All registered DB providers, mapped by their database type.
+	AllDBProviders   map[string]adapter.DBProvider // All registered DB providers, mapped by their database type.
 }
 
 // runFrameworkMigrationsHook registers an Fx lifecycle hook to execute necessary
@@ -65,9 +65,9 @@ func runFrameworkMigrationsHook(
 
 			// Get DB Configuration to determine DB Type
 			var dbConfig dbconfig.DatabaseConfig
-			rawConfig, ok := p.Cfg.Surfin.AdaptorConfigs[p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef]
+			rawConfig, ok := p.Cfg.Surfin.AdapterConfigs[p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef]
 			if !ok {
-				return fmt.Errorf("database configuration '%s' not found in adaptor.database configs for JobRepositoryDBRef", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
+				return fmt.Errorf("database configuration '%s' not found in adapter.database configs for JobRepositoryDBRef", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
 			}
 			if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
 				return fmt.Errorf("failed to decode database config for '%s': %w", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef, err)
@@ -100,7 +100,7 @@ func runFrameworkMigrationsHook(
 			// Regardless of migration success or failure, force re-establishment of the JobRepositoryDBRef's DB connection.
 			// This ensures that the connection used by JobRepository is always fresh and valid.
 			// Re-decode the config to ensure we have the latest, correct structure.
-			rawConfig, ok = p.Cfg.Surfin.AdaptorConfigs[p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef]
+			rawConfig, ok = p.Cfg.Surfin.AdapterConfigs[p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef]
 			if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
 				return fmt.Errorf("failed to decode database config for '%s' during reconnect: %w", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef, err)
 			}

@@ -21,24 +21,24 @@
 ### 3.1. BigQuery (BQ) アダプター
 
 *   **目的:** Google BigQueryとのデータ連携を可能にする。
-*   **パス:** `pkg/batch/adaptor/bigquery/gorm/`
+*   **パス:** `pkg/batch/adapter/bigquery/gorm/`
 *   **内容:**
     *   BigQuery用のGORMライブラリを利用したアダプターを実装します。
-    *   既存の `adaptor.DBConnection`、`adaptor.DBProvider`、`tx.TransactionManager` などのインターフェースをBigQuery向けに実装します。
+    *   既存の `adapter.DBConnection`、`adapter.DBProvider`、`tx.TransactionManager` などのインターフェースをBigQuery向けに実装します。
     *   BigQuery特有の認証（サービスアカウントなど）や接続設定をサポートします。
 
 ### 3.2. ストレージアダプター
 
 *   **目的:** S3やGCSなどのオブジェクトストレージとのファイル連携（JSON, Parquetなどのアップロード/ダウンロード）を可能にする。
 *   **パス:**
-    *   S3: `pkg/batch/adaptor/storage/s3/`
-    *   GCS: `pkg/batch/adaptor/storage/gcs/`
-*   **共通インターフェースパス:** `pkg/batch/core/adaptor/storage.go`
+    *   S3: `pkg/batch/adapter/storage/s3/`
+    *   GCS: `pkg/batch/adapter/storage/gcs/`
+*   **共通インターフェースパス:** `pkg/batch/core/adapter/storage.go`
 *   **個別アダプターパス:**
-    *   S3: `pkg/batch/adaptor/storage/s3/` (例: `s3_adapter.go`)
-    *   GCS: `pkg/batch/adaptor/storage/gcs/` (例: `gcs_adapter.go`)
+    *   S3: `pkg/batch/adapter/storage/s3/` (例: `s3_adapter.go`)
+    *   GCS: `pkg/batch/adapter/storage/gcs/` (例: `gcs_adapter.go`)
 *   **内容:**
-    *   `pkg/batch/core/adaptor/storage.go` に、`ObjectStorageAdapter` という汎用的なオブジェクトストレージ操作インターフェースを定義します。
+    *   `pkg/batch/core/adapter/storage.go` に、`ObjectStorageAdapter` という汎用的なオブジェクトストレージ操作インターフェースを定義します。
     *   S3およびGCSそれぞれに対応するアダプター（例: `gcsAdapter`）は、この `ObjectStorageAdapter` インターフェースを実装します。
     *   ファイル（JSON, Parquetなど）のアップロード、ダウンロード、リスト、削除などの基本操作をサポートします。
     *   **設定:** `pkg/batch/core/config/config.go` に、`Datasources` と同様に、名前付きのオブジェクトストレージ接続設定（例: `StorageConnections map[string]StorageConfig`）を追加することを検討します。これにより、複数のストレージ接続を一元的に管理し、名前で解決できるようになります。
@@ -46,7 +46,7 @@
 ### 3.3. Redshift アダプター
 
 *   **目的:** Amazon Redshiftとの連携を最適化する。
-*   **パス:** `pkg/batch/adaptor/redshift/gorm/`
+*   **パス:** `pkg/batch/adapter/redshift/gorm/`
 *   **内容:**
     *   GORMとAWS SDK for Goの両方を組み合わせたアダプターを実装します。
     *   GORMを用いて基本的なCRUD操作をカバーし、AWS SDKを用いてRedshift固有の機能（例: S3からの`COPY`/`UNLOAD`コマンド、クラスタ管理操作など）をサポートします。
@@ -54,7 +54,7 @@
 ### 3.4. SQLビルダーアダプター
 
 *   **目的:** 複雑な動的SQLクエリの構築を支援し、データベース非依存のクエリ生成を可能にする。
-*   **パス:** `pkg/batch/adaptor/database/sqlbuilder/`
+*   **パス:** `pkg/batch/adapter/database/sqlbuilder/`
 *   **内容:**
     *   SQLクエリをプログラム的に構築するための機能を提供します。
     *   これにより、生SQLの記述を減らし、SQLインジェクションのリスクを低減しながら、動的なクエリを安全かつ読みやすく生成できるようにします。
@@ -62,17 +62,17 @@
 ### 3.5. Ent (ORM) アダプター
 
 *   **目的:** Entフレームワークを利用したORM機能を提供する。
-*   **パス:** `pkg/batch/adaptor/database/ent/`
+*   **パス:** `pkg/batch/adapter/database/ent/`
 *   **内容:**
     *   Entフレームワークを利用したORMアダプターを実装します。
-    *   既存の `adaptor.DBConnection` や `adaptor.DBProvider` インターフェースをEntベースで実装し、フレームワーク全体の一貫性を保ちます。
+    *   既存の `adapter.DBConnection` や `adapter.DBProvider` インターフェースをEntベースで実装し、フレームワーク全体の一貫性を保ちます。
 
 ### 3.6. セキュリティプロキシアダプター
 
 *   **目的:** ネットワーク通信におけるセキュリティ機能（フィルタリング、モックなど）を提供する。
 *   **パス:**
-    *   DNS関連: `pkg/batch/adaptor/security/dns/`
-    *   HTTPプロキシ関連: `pkg/batch/adaptor/security/proxy/http/`
+    *   DNS関連: `pkg/batch/adapter/security/dns/`
+    *   HTTPプロキシ関連: `pkg/batch/adapter/security/proxy/http/`
 *   **内容:**
     *   **DNS:** キャッシュ、フィルタリング、特定のドメインをモック用のサービスURLに解決する機能（例: localhostへのモック）を実装します。
     *   **HTTPプロキシ:** SWG (Secure Web Gateway) や CASB (Cloud Access Security Broker) に類似するセキュリティ機能（コンテンツフィルタリング、DLP、アクセス制御、脅威防御など）と、特定のURLへのリクエストをモック応答に置き換える機能を実装します。

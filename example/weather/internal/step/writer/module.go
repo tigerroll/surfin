@@ -11,7 +11,7 @@ import (
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support" // Support utilities for configuration
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor" // Database adaptor interfaces
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter" // Database adapter interfaces
 )
 
 // WeatherWriterComponentBuilderParams defines the dependencies for NewWeatherWriterComponentBuilder.
@@ -24,7 +24,7 @@ type WeatherWriterComponentBuilderParams struct {
 	fx.In
 	// AllDBConnections is a map of all established database connections,
 	// provided by the main application module.
-	AllDBConnections map[string]adaptor.DBConnection
+	AllDBConnections map[string]adapter.DBConnection
 }
 
 // NewWeatherWriterComponentBuilder creates a jsl.ComponentBuilder for the weatherItemWriter.

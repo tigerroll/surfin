@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"surfin/pkg/batch/adaptor/database"
-	adaptor "surfin/pkg/batch/core/adaptor"
+	"surfin/pkg/batch/adapter/database"
+	adapter "surfin/pkg/batch/core/adapter"
 	config "surfin/pkg/batch/core/config"
 	model "surfin/pkg/batch/core/domain/model"
 	repository "surfin/pkg/batch/core/domain/repository"
@@ -20,7 +20,7 @@ import (
 )
 
 // setupGormStepMock is a setup helper for StepExecution repository tests.
-func setupGormStepMock(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, adaptor.DBConnection, repository.JobRepository) {
+func setupGormStepMock(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, adapter.DBConnection, repository.JobRepository) {
 	sqlDB, mock, err := sqlmock.New()
 	assert.NoError(t, err)
 

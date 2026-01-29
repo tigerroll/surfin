@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"surfin/pkg/batch/adaptor/database"
-	adaptor "surfin/pkg/batch/core/adaptor"
-	adaptor_core "surfin/pkg/batch/core/adaptor"
+	"surfin/pkg/batch/adapter/database"
+	adapter "surfin/pkg/batch/core/adapter"
+	adapter_core "surfin/pkg/batch/core/adapter"
 	config "surfin/pkg/batch/core/config"
 	model "surfin/pkg/batch/core/domain/model"
 	"surfin/pkg/batch/core/domain/repository"
@@ -28,15 +28,15 @@ const sqliteDBFile = "test_metadata_sqlite.db"
 
 var (
 	globalGormDB    *gorm.DB
-	globalDBConn    adaptor.DBConnection
+	globalDBConn    adapter.DBConnection
 	globalTxManager tx.TransactionManager
 	once            sync.Once
-	testDBResolver  adaptor_core.DBConnectionResolver
+	testDBResolver  adapter_core.DBConnectionResolver
 )
 
 // setupSQLiteTestDB は SQLite のテスト環境をセットアップします。
 // テストスイート全体で単一のインメモリDB接続を共有します。
-func setupSQLiteTestDB(t *testing.T) (repository.JobRepository, adaptor.DBConnection, tx.TransactionManager) {
+func setupSQLiteTestDB(t *testing.T) (repository.JobRepository, adapter.DBConnection, tx.TransactionManager) {
 	once.Do(func() {
 		// 既存のDBファイルを削除 (ファイルベースの場合のみ。インメモリでは不要だが、念のため)
 		os.Remove(sqliteDBFile)
@@ -94,7 +94,7 @@ func setupSQLiteTestDB(t *testing.T) (repository.JobRepository, adaptor.DBConnec
 
 // teardownSQLiteTestDB はテストスイートの最後に一度だけ実行されるべきですが、
 // 現在のテスト構造では各テストの defer で呼ばれるため、ここでは何もしません。
-func teardownSQLiteTestDB(t *testing.T, dbConn adaptor.DBConnection) {
+func teardownSQLiteTestDB(t *testing.T, dbConn adapter.DBConnection) {
 	// インメモリDBを使用しているため、クリーンアップは不要
 }
 
