@@ -42,31 +42,33 @@ func resolveComponentRefProperties(resolver core.ExpressionResolver, ref *Compon
 // ConvertJSLToCoreFlow converts a JSL Flow definition into a core.FlowDefinition.
 //
 // This function performs a two-pass conversion:
-// 1. First pass: Builds all steps, decisions, and splits to resolve potential forward references.
-// 2. Second pass: Adds elements to the flow definition and resolves Split references,
-//    including the final construction of Partition Steps.
+//  1. First pass: Builds all steps, decisions, and splits to resolve potential forward references.
+//  2. Second pass: Adds elements to the flow definition and resolves Split references,
+//     including the final construction of Partition Steps.
 //
 // Parameters:
-//   jslFlow: The JSL Flow definition to convert.
-//   componentBuilders: A map of builders for components (Reader, Processor, Writer, Tasklet) referenced in JSL.
-//   jobRepository: The job repository, used if the repository is needed within a step (e.g., PartitionStep).
-//   cfg: The overall application configuration.
-//   decisionBuilders: A map of builders for conditional decisions.
-//   splitBuilders: A map of builders for split elements.
-//   stepFactory: The factory for creating core step instances.
-//   partitionerBuilders: A map of builders for partitioners.
-//   resolver: The expression resolver for dynamic property resolution.
-//   dbResolver: The database connection resolver.
-//   stepListenerBuilders: A map of builders for step execution listeners.
-//   itemReadListenerBuilders: A map of builders for item read listeners.
-//   itemProcessListenerBuilders: A map of builders for item process listeners.
-//   itemWriteListenerBuilders: A map of builders for item write listeners.
-//   skipListenerBuilders: A map of builders for skip listeners.
-//   retryItemListenerBuilders: A map of builders for retry item listeners.
-//   chunkListenerBuilders: A map of builders for chunk listeners.
+//
+//	jslFlow: The JSL Flow definition to convert.
+//	componentBuilders: A map of builders for components (Reader, Processor, Writer, Tasklet) referenced in JSL.
+//	jobRepository: The job repository, used if the repository is needed within a step (e.g., PartitionStep).
+//	cfg: The overall application configuration.
+//	decisionBuilders: A map of builders for conditional decisions.
+//	splitBuilders: A map of builders for split elements.
+//	stepFactory: The factory for creating core step instances.
+//	partitionerBuilders: A map of builders for partitioners.
+//	resolver: The expression resolver for dynamic property resolution.
+//	dbResolver: The database connection resolver.
+//	stepListenerBuilders: A map of builders for step execution listeners.
+//	itemReadListenerBuilders: A map of builders for item read listeners.
+//	itemProcessListenerBuilders: A map of builders for item process listeners.
+//	itemWriteListenerBuilders: A map of builders for item write listeners.
+//	skipListenerBuilders: A map of builders for skip listeners.
+//	retryItemListenerBuilders: A map of builders for retry item listeners.
+//	chunkListenerBuilders: A map of builders for chunk listeners.
 //
 // Returns:
-//   A pointer to the converted core.FlowDefinition and an error if the conversion fails.
+//
+//	A pointer to the converted core.FlowDefinition and an error if the conversion fails.
 func ConvertJSLToCoreFlow(
 	jslFlow Flow,
 	componentBuilders map[string]ComponentBuilder,
@@ -285,7 +287,7 @@ func ConvertJSLToCoreFlow(
 				)
 				if err != nil {
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Chunk Step '%s'", id), err, false, false)
-				}				
+				}
 				logger.Debugf("Chunk Step '%s' built.", id)
 
 			} else if jslStep.Tasklet.Ref != "" {
@@ -301,7 +303,7 @@ func ConvertJSLToCoreFlow(
 				}
 
 				taskletInstance, err := taskletBuilder(cfg, resolver, dbResolver, resolvedTaskletProps) // Remove 'nil' argument
-				if err != nil {					
+				if err != nil {
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Tasklet '%s'", jslStep.Tasklet.Ref), err, false, false)
 				}
 				t, isTasklet := taskletInstance.(core.Tasklet)
@@ -317,8 +319,8 @@ func ConvertJSLToCoreFlow(
 					jslStep.IsolationLevel,
 					jslStep.Propagation,
 				)
-				if err != nil {					
-					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Tasklet Step '%s'", id), err, false, false)					
+				if err != nil {
+					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Tasklet Step '%s'", id), err, false, false)
 				}
 				logger.Debugf("Tasklet Step '%s' built.", id)
 
@@ -345,8 +347,8 @@ func ConvertJSLToCoreFlow(
 				}
 				// PartitionerBuilder only accepts properties map[string]string
 				partitionerInstance, err := partitionerBuilder(resolvedPartitionerRef.Properties)
-				if err != nil {					
-					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Partitioner '%s'", resolvedPartitionerRef.Ref), err, false, false)					
+				if err != nil {
+					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Partitioner '%s'", resolvedPartitionerRef.Ref), err, false, false)
 				}
 				partitioner, isPartitioner := partitionerInstance.(core.Partitioner)
 				if !isPartitioner {
@@ -677,17 +679,19 @@ func ConvertJSLToCoreFlow(
 // buildReaderWriterProcessor is a helper function to build instances of ItemReader, ItemProcessor, and ItemWriter.
 //
 // Parameters:
-//   module: The module name for error reporting.
-//   componentBuilders: A map of component builders.
-//   cfg: The application configuration.
-//   resolver: The expression resolver.
-//   dbResolver: The database connection resolver.
-//   readerRef: The ComponentRef for the ItemReader.
-//   processorRef: The ComponentRef for the ItemProcessor.
-//   writerRef: The ComponentRef for the ItemWriter.
+//
+//	module: The module name for error reporting.
+//	componentBuilders: A map of component builders.
+//	cfg: The application configuration.
+//	resolver: The expression resolver.
+//	dbResolver: The database connection resolver.
+//	readerRef: The ComponentRef for the ItemReader.
+//	processorRef: The ComponentRef for the ItemProcessor.
+//	writerRef: The ComponentRef for the ItemWriter.
 //
 // Returns:
-//   The built ItemReader, ItemProcessor, ItemWriter instances, and an error if building fails.
+//
+//	The built ItemReader, ItemProcessor, ItemWriter instances, and an error if building fails.
 func buildReaderWriterProcessor(
 	module string,
 	componentBuilders map[string]ComponentBuilder,
@@ -751,9 +755,10 @@ func buildReaderWriterProcessor(
 // - Existence of the target element if 'to' is specified.
 //
 // Parameters:
-//   fromElementID: The ID of the source flow element.
-//   t: The Transition rule to validate.
-//   allElements: A map of all flow elements, used to check target element existence.
+//
+//	fromElementID: The ID of the source flow element.
+//	t: The Transition rule to validate.
+//	allElements: A map of all flow elements, used to check target element existence.
 func validateTransition(fromElementID string, t Transition, allElements map[string]interface{}) error {
 	if t.On == "" {
 		return exception.NewBatchError("jsl_converter", fmt.Sprintf("Transition rule for flow element '%s' is missing 'on'", fromElementID), nil, false, false)

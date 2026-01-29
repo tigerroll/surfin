@@ -93,7 +93,8 @@ type DefaultStepFactoryParams struct {
 // NewDefaultStepFactory creates a new instance of DefaultStepFactory.
 //
 // Parameters:
-//   p: The DefaultStepFactoryParams struct containing injected dependencies.
+//
+//	p: The DefaultStepFactoryParams struct containing injected dependencies.
 //
 // Returns: A pointer to the initialized DefaultStepFactory.
 func NewDefaultStepFactory(
@@ -112,25 +113,26 @@ func NewDefaultStepFactory(
 // CreateChunkStep constructs a new ChunkStep instance.
 //
 // Parameters:
-//   name: The unique identifier name of the step.
-//   reader: An implementation of the ItemReader interface for reading items.
-//   processor: An implementation of the ItemProcessor interface for processing items.
-//   writer: An implementation of the ItemWriter interface for writing items.
-//   chunkSize: The maximum number of items to process at once.
-//   commitInterval: The interval at which transactions are committed (usually the same as chunkSize).
-//   retryConfig: Step-level retry configuration.
-//   itemRetryConfig: Item-level retry configuration.
-//   itemSkipConfig: Item-level skip configuration.
-//   stepExecutionListeners: A list of StepExecutionListeners to apply to this step.
-//   itemReadListeners: A list of ItemReadListeners to apply to this step.
-//   itemProcessListeners: A list of ItemProcessListeners to apply to this step.
-//   itemWriteListeners: A list of ItemWriteListeners to apply to this step.
-//   skipListeners: A list of SkipListeners to apply to this step.
-//   retryItemListeners: A list of RetryItemListeners to apply to this step.
-//   chunkListeners: A list of ChunkListeners to apply to this step.
-//   promotion: Promotion settings from StepExecutionContext to JobExecutionContext.
-//   isolationLevel: The transaction isolation level for this step.
-//   propagation: The transaction propagation attribute for this step.
+//
+//	name: The unique identifier name of the step.
+//	reader: An implementation of the ItemReader interface for reading items.
+//	processor: An implementation of the ItemProcessor interface for processing items.
+//	writer: An implementation of the ItemWriter interface for writing items.
+//	chunkSize: The maximum number of items to process at once.
+//	commitInterval: The interval at which transactions are committed (usually the same as chunkSize).
+//	retryConfig: Step-level retry configuration.
+//	itemRetryConfig: Item-level retry configuration.
+//	itemSkipConfig: Item-level skip configuration.
+//	stepExecutionListeners: A list of StepExecutionListeners to apply to this step.
+//	itemReadListeners: A list of ItemReadListeners to apply to this step.
+//	itemProcessListeners: A list of ItemProcessListeners to apply to this step.
+//	itemWriteListeners: A list of ItemWriteListeners to apply to this step.
+//	skipListeners: A list of SkipListeners to apply to this step.
+//	retryItemListeners: A list of RetryItemListeners to apply to this step.
+//	chunkListeners: A list of ChunkListeners to apply to this step.
+//	promotion: Promotion settings from StepExecutionContext to JobExecutionContext.
+//	isolationLevel: The transaction isolation level for this step.
+//	propagation: The transaction propagation attribute for this step.
 //
 // Returns: The constructed port.Step interface and an error.
 func (f *DefaultStepFactory) CreateChunkStep(

@@ -9,6 +9,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"go.uber.org/fx"
 
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
@@ -17,7 +18,6 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/factory"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/partition"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 )
 
 // Module provides bootstrap-related components to Fx.
@@ -33,7 +33,7 @@ var Module = fx.Options(
 	partition.Module,
 
 	// Registers a lifecycle hook to run framework migrations at application startup.
-	fx.Invoke(runFrameworkMigrationsHook), 
+	fx.Invoke(runFrameworkMigrationsHook),
 )
 
 // RunFrameworkMigrationsHookParams defines the dependencies required for the
@@ -44,7 +44,7 @@ type RunFrameworkMigrationsHookParams struct {
 	Cfg              *config.Config                // The application configuration.
 	MigratorProvider migration.MigratorProvider    // Provider for database migrators.
 	DBResolver       port.DBConnectionResolver     // Resolver for database connections.
-	AllMigrationFS   map[string]fs.FS `name:"allMigrationFS"` // A map of file systems containing migration scripts, including "frameworkMigrationsFS".
+	AllMigrationFS   map[string]fs.FS              `name:"allMigrationFS"` // A map of file systems containing migration scripts, including "frameworkMigrationsFS".
 	AllDBProviders   map[string]adaptor.DBProvider // All registered DB providers, mapped by their database type.
 }
 
@@ -67,18 +67,18 @@ func runFrameworkMigrationsHook(
 			var dbConfig dbconfig.DatabaseConfig
 			rawConfig, ok := p.Cfg.Surfin.AdaptorConfigs[p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef]
 			if !ok {
-			    return fmt.Errorf("database configuration '%s' not found in adaptor.database configs for JobRepositoryDBRef", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
+				return fmt.Errorf("database configuration '%s' not found in adaptor.database configs for JobRepositoryDBRef", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
 			}
 			if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
-			    return fmt.Errorf("failed to decode database config for '%s': %w", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef, err)
+				return fmt.Errorf("failed to decode database config for '%s': %w", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef, err)
 			}
 
 			// If JobRepositoryDBRef is configured as 'dummy' type, skip framework migrations.
 			// This supports scenarios like DB-less mode or testing where an actual database
 			// connection is not expected.
 			if strings.TrimSpace(strings.ToLower(dbConfig.Type)) == "dummy" {
-					logger.Infof("JobRepositoryDBRef '%s' is configured as 'dummy'. Skipping framework migrations.", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
-			 		return nil
+				logger.Infof("JobRepositoryDBRef '%s' is configured as 'dummy'. Skipping framework migrations.", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
+				return nil
 			}
 
 			dbConn, err := p.DBResolver.ResolveDBConnection(ctx, p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
@@ -94,7 +94,7 @@ func runFrameworkMigrationsHook(
 			migrator := p.MigratorProvider.NewMigrator(dbConn)
 			// Use DB type as the migration directory name (e.g., "mysql", "postgres", "sqlite").
 			migrationDir := dbConn.Type()
-			
+
 			migrationErr := migrator.Up(ctx, frameworkFS, migrationDir, "batch_framework_migrations")
 
 			// Regardless of migration success or failure, force re-establishment of the JobRepositoryDBRef's DB connection.
@@ -111,10 +111,10 @@ func runFrameworkMigrationsHook(
 					provider, ok = p.AllDBProviders["postgres"]
 				}
 				if !ok {
-					return fmt.Errorf("DBProvider for type '%s' not found for JobRepositoryDBRef", dbConfig.Type) 
+					return fmt.Errorf("DBProvider for type '%s' not found for JobRepositoryDBRef", dbConfig.Type)
 				}
 			}
-			
+
 			// Before calling ForceReconnect, verify that the target connection actually exists.
 			// Connections should already be established by NewDBConnectionsAndTxManagers, but this is a safeguard.
 			_, connExists := p.AllDBProviders[dbConfig.Type]
@@ -126,7 +126,7 @@ func runFrameworkMigrationsHook(
 			// This closes any old connections (if open) and establishes a new one.
 			// The returned DBConnection is ignored, as the DBConnectionResolver is expected to
 			// retrieve the refreshed connection from the provider's internal state.
-			_, forceReconnectErr := provider.ForceReconnect(p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef) 
+			_, forceReconnectErr := provider.ForceReconnect(p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
 			// Note: The returned DBConnection is not directly used here, as the DBConnectionResolver
 			// is expected to retrieve the refreshed connection from the provider's internal state
 			// when JobRepository requests it.

@@ -36,8 +36,9 @@ func NewExecutionContextItemWriter[I any](key string) port.ItemWriter[I] {
 // Open opens resources.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   ec: The ExecutionContext to initialize the writer with.
+//
+//	ctx: The context for the operation.
+//	ec: The ExecutionContext to initialize the writer with.
 func (w *ExecutionContextItemWriter[I]) Open(ctx context.Context, ec model.ExecutionContext) error {
 	logger.Debugf("ExecutionContextItemWriter: Open called.")
 	w.ec = ec
@@ -47,9 +48,10 @@ func (w *ExecutionContextItemWriter[I]) Open(ctx context.Context, ec model.Execu
 // Write stores the number of items in the ExecutionContext.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   tx: The current transaction.
-//   items: The items to be written.
+//
+//	ctx: The context for the operation.
+//	tx: The current transaction.
+//	items: The items to be written.
 func (w *ExecutionContextItemWriter[I]) Write(ctx context.Context, tx tx.Tx, items []I) error {
 	logger.Debugf("ExecutionContextItemWriter: Writing %d items to ExecutionContext key '%s'.", len(items), w.key)
 
@@ -75,7 +77,8 @@ func (w *ExecutionContextItemWriter[I]) Write(ctx context.Context, tx tx.Tx, ite
 // Close closes resources.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 func (w *ExecutionContextItemWriter[I]) Close(ctx context.Context) error {
 	logger.Debugf("ExecutionContextItemWriter: Close called.")
 	return nil
@@ -84,8 +87,9 @@ func (w *ExecutionContextItemWriter[I]) Close(ctx context.Context) error {
 // SetExecutionContext sets the ExecutionContext.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   ec: The ExecutionContext to set.
+//
+//	ctx: The context for the operation.
+//	ec: The ExecutionContext to set.
 func (w *ExecutionContextItemWriter[I]) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	w.ec = ec
 	return nil
@@ -94,11 +98,13 @@ func (w *ExecutionContextItemWriter[I]) SetExecutionContext(ctx context.Context,
 // GetExecutionContext retrieves the ExecutionContext.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 //
 // Returns:
-//   model.ExecutionContext: The current ExecutionContext.
-//   error: An error if retrieval fails.
+//
+//	model.ExecutionContext: The current ExecutionContext.
+//	error: An error if retrieval fails.
 func (w *ExecutionContextItemWriter[I]) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	return w.ec, nil
 }
@@ -106,7 +112,8 @@ func (w *ExecutionContextItemWriter[I]) GetExecutionContext(ctx context.Context)
 // GetTargetDBName returns the name of the target database for this writer.
 //
 // Returns:
-//   string: An empty string, as this writer does not write to a specific database.
+//
+//	string: An empty string, as this writer does not write to a specific database.
 func (w *ExecutionContextItemWriter[I]) GetTargetDBName() string {
 	return "" // This writer does not write to a specific database, so an empty string is returned.
 }
@@ -114,7 +121,8 @@ func (w *ExecutionContextItemWriter[I]) GetTargetDBName() string {
 // GetTableName returns the name of the target table for this writer.
 //
 // Returns:
-//   string: An empty string, as this writer does not write to a specific table.
+//
+//	string: An empty string, as this writer does not write to a specific table.
 func (w *ExecutionContextItemWriter[I]) GetTableName() string {
 	return "" // This writer does not write to a specific table, so an empty string is returned.
 }

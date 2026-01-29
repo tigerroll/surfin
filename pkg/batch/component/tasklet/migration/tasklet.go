@@ -6,13 +6,13 @@ import (
 	"strings"
 
 	"github.com/mitchellh/mapstructure"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
@@ -130,7 +130,7 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 	if !ok {
 		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Database configuration '%s' not found in adaptor.database configs", t.dbConnectionName)
 	}
-		if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
+	if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
 		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Failed to decode database config for '%s': %w", t.dbConnectionName, err)
 	}
 

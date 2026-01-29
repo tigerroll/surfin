@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
-	"github.com/mitchellh/mapstructure"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"gorm.io/gorm"

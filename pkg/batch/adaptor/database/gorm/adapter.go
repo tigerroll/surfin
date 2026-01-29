@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
-	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -127,7 +127,7 @@ func (w *GormWriter) Printf(format string, v ...interface{}) {
 // GormDBAdapter implements adaptor.DBConnection
 type GormDBAdapter struct {
 	db     *gorm.DB
-	sqlDB  *sql.DB // Underlying *sql.DB connection.
+	sqlDB  *sql.DB                 // Underlying *sql.DB connection.
 	cfg    dbconfig.DatabaseConfig // Database configuration.
 	dbType string
 	name   string

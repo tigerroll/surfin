@@ -74,7 +74,7 @@ func NewWeatherWriter(
 	}
 
 	// Check for DBConnection existence. The actual connection is used during Open.
-	_, ok := allDBConnections[dbName] 
+	_, ok := allDBConnections[dbName]
 	if !ok {
 		return nil, fmt.Errorf("database connection '%s' not found", dbName)
 	}

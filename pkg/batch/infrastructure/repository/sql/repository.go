@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
@@ -21,9 +21,9 @@ type SQLJobRepository struct {
 	// dbResolver is used to resolve database connections by name.
 	dbResolver port.DBConnectionResolver
 	// TxManager is the transaction manager for the database.
-	TxManager  tx.TransactionManager
+	TxManager tx.TransactionManager
 	// dbName is the name of the database connection used by this JobRepository (e.g., "metadata").
-	dbName     string
+	dbName string
 }
 
 // NewSQLJobRepository creates a new instance of SQLJobRepository.
@@ -271,7 +271,7 @@ func (r *SQLJobRepository) GetJobNames(ctx context.Context) ([]string, error) {
 	conn, err := r.getDBConnection(ctx)
 	if err != nil {
 		return nil, err
-	}	
+	}
 
 	// Use Pluck to get a list of JobNames
 	err = conn.Pluck(ctx, &JobInstanceEntity{}, "job_name", &jobNames, nil)
@@ -294,7 +294,7 @@ func (r *SQLJobRepository) SaveJobExecution(ctx context.Context, jobExecution *m
 	executor, err := r.getTxExecutor(ctx)
 	if err != nil {
 		return err
-	}	
+	}
 
 	// Use ExecuteUpdate for INSERT operation.
 	_, err = executor.ExecuteUpdate(ctx, entity, "CREATE", entity.TableName(), nil)
@@ -355,7 +355,7 @@ func (r *SQLJobRepository) FindJobExecutionByID(ctx context.Context, executionID
 	conn, err := r.getDBConnection(ctx)
 	if err != nil {
 		return nil, err
-	}	
+	}
 
 	// 1. Load the JobExecution entity.
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"id": executionID}, "", 1)
@@ -396,7 +396,7 @@ func (r *SQLJobRepository) FindStepExecutionsByJobExecutionID(ctx context.Contex
 	conn, err := r.getDBConnection(ctx)
 	if err != nil {
 		return nil, err
-	}	
+	}
 
 	// Use ExecuteQueryAdvanced to search for StepExecution entities by JobExecutionID, sorted by start_time.
 	err = conn.ExecuteQueryAdvanced(ctx, &entities, map[string]interface{}{"job_execution_id": jobExecutionID}, "start_time asc", 0)
@@ -425,7 +425,7 @@ func (r *SQLJobRepository) FindLatestRestartableJobExecution(ctx context.Context
 	conn, err := r.getDBConnection(ctx)
 	if err != nil {
 		return nil, err
-	}	
+	}
 
 	// 1. Load the latest JobExecution entity for the given JobInstanceID.
 	// Filter by JobInstanceID and order by creation time in descending order to get the latest.
@@ -451,13 +451,13 @@ func (r *SQLJobRepository) FindLatestRestartableJobExecution(ctx context.Context
 	} else {
 		domainExecution.StepExecutions = stepExecutions
 	}
-	
+
 	// 3. Check if the JobExecution is restartable.
 	// A JobExecution is considered restartable if its status is FAILED or STOPPED.
 	// It must be a terminal state that is not COMPLETED or ABANDONED.
 	if domainExecution.Status == model.BatchStatusFailed || domainExecution.Status == model.BatchStatusStopped {
 		return domainExecution, nil
-	}	
+	}
 
 	// If running or completed, return nil.
 	return nil, repository.ErrJobExecutionNotFound
@@ -471,7 +471,7 @@ func (r *SQLJobRepository) FindJobExecutionsByJobInstance(ctx context.Context, j
 	conn, err := r.getDBConnection(ctx)
 	if err != nil {
 		return nil, err
-	}	
+	}
 
 	// Filter by JobInstanceID and retrieve all associated JobExecution entities, ordered by creation time descending.
 	err = conn.ExecuteQueryAdvanced(ctx, &entities, map[string]interface{}{"job_instance_id": jobInstance.ID}, "create_time desc", 0)
@@ -508,7 +508,7 @@ func (r *SQLJobRepository) SaveStepExecution(ctx context.Context, stepExecution 
 	executor, err := r.getTxExecutor(ctx)
 	if err != nil {
 		return err
-	}	
+	}
 
 	// Use ExecuteUpdate for INSERT operation.
 	_, err = executor.ExecuteUpdate(ctx, entity, "CREATE", entity.TableName(), nil)
@@ -568,7 +568,7 @@ func (r *SQLJobRepository) FindStepExecutionByID(ctx context.Context, executionI
 	conn, err := r.getDBConnection(ctx)
 	if err != nil {
 		return nil, err
-	}	
+	}
 
 	// Use ExecuteQueryAdvanced to search for a StepExecution entity by ID, limiting to 1 result.
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"id": executionID}, "", 1)
@@ -603,7 +603,7 @@ func (r *SQLJobRepository) SaveCheckpointData(ctx context.Context, data *model.C
 	executor, err := r.getTxExecutor(ctx)
 	if err != nil {
 		return err
-	}	
+	}
 
 	// Use ExecuteUpsert to perform an UPSERT operation (INSERT OR REPLACE / ON CONFLICT DO UPDATE).
 	// Conflict Columns: "step_execution_id" is used to detect conflicts.
@@ -632,7 +632,7 @@ func (r *SQLJobRepository) FindCheckpointData(ctx context.Context, stepExecution
 	conn, err := r.getDBConnection(ctx)
 	if err != nil {
 		return nil, err
-	}	
+	}
 
 	// Use ExecuteQueryAdvanced to search for a CheckpointData entity by step_execution_id, limiting to 1 result.
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"step_execution_id": stepExecutionID}, "", 1)
@@ -666,16 +666,16 @@ var _ repository.JobRepository = (*SQLJobRepository)(nil)
 type JobRepositoryParams struct {
 	fx.In
 	// DBResolver is the database connection resolver.
-	DBResolver        port.DBConnectionResolver
+	DBResolver port.DBConnectionResolver
 	// MetadataTxManager is the transaction manager for the metadata database.
 	MetadataTxManager tx.TransactionManager `name:"metadata"`
 	// Cfg is the application configuration.
-	Cfg               *config.Config
+	Cfg *config.Config
 }
 
 // NewJobRepository creates and returns a JobRepository instance.
 // This function is intended to be used as an Fx provider.
-func NewJobRepository(p JobRepositoryParams) repository.JobRepository {	
+func NewJobRepository(p JobRepositoryParams) repository.JobRepository {
 	// Determine the database connection name for the JobRepository.
 	// It defaults to "metadata" if not explicitly configured in Infrastructure.JobRepositoryDBRef.
 	dbName := p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef

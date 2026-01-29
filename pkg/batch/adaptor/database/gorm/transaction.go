@@ -123,7 +123,6 @@ func (t *GormTxAdapter) IsTableNotExistError(err error) bool {
 		strings.Contains(errMsg, "no such table:") // SQLite
 }
 
-
 // GormTransactionManager implements tx.TransactionManager
 type GormTransactionManager struct {
 	dbResolver adaptor.DBConnectionResolver
