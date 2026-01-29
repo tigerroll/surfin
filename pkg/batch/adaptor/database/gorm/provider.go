@@ -5,15 +5,17 @@ import (
 	"sync"
 	"time"
 
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/mitchellh/mapstructure"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"gorm.io/gorm"
 )
 
-// DialectorFactory generates a gorm.Dialector from a config.DatabaseConfig.
-type DialectorFactory func(cfg config.DatabaseConfig) (gorm.Dialector, error)
+// DialectorFactory generates a gorm.Dialector from a dbconfig.DatabaseConfig.
+type DialectorFactory func(cfg dbconfig.DatabaseConfig) (gorm.Dialector, error)
 
 var (
 	dialectorRegistry = make(map[string]DialectorFactory)
@@ -89,9 +91,13 @@ func (p *BaseProvider) GetConnection(name string) (adaptor.DBConnection, error) 
 
 // createAndStoreConnection establishes a new connection and stores it in the map.
 func (p *BaseProvider) createAndStoreConnection(name string) (adaptor.DBConnection, error) {
-	dbConfig, ok := p.cfg.Surfin.Datasources[name]
+	var dbConfig dbconfig.DatabaseConfig
+	rawConfig, ok := p.cfg.Surfin.AdaptorConfigs[name]
 	if !ok {
-		return nil, fmt.Errorf("database configuration '%s' not found", name)
+		return nil, fmt.Errorf("database configuration '%s' not found in adaptor.database configs", name)
+	}
+	if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
+		return nil, fmt.Errorf("failed to decode database config for '%s': %w", name, err)
 	}
 
 	// Check if the configuration type matches the provider type (or is redshift handled by postgres provider)
@@ -135,7 +141,7 @@ func (p *BaseProvider) ForceReconnect(name string) (adaptor.DBConnection, error)
 }
 
 // connect establishes a GORM connection based on DatabaseConfig.
-func (p *BaseProvider) connect(dbConfig config.DatabaseConfig) (*gorm.DB, error) {
+func (p *BaseProvider) connect(dbConfig dbconfig.DatabaseConfig) (*gorm.DB, error) {
 
 	// Retrieves the DialectorFactory and uses it to create a Dialector.
 	dialectorFactory, err := GetDialectorFactory(dbConfig.Type)
@@ -202,7 +208,7 @@ func NewPostgresProvider(cfg *config.Config) adaptor.DBProvider {
 	return &PostgresDBProvider{BaseProvider: NewBaseProvider(cfg, "postgres")}
 }
 
-func (p *PostgresDBProvider) ConnectionString(c config.DatabaseConfig) string {
+func (p *PostgresDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string {
 	// Adjust to the DSN format expected by GORM (gorm.io/driver/postgres)
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		c.Host, c.Port, c.User, c.Password, c.Database, c.Sslmode)
@@ -217,7 +223,7 @@ func NewMySQLProvider(cfg *config.Config) adaptor.DBProvider {
 	return &MySQLDBProvider{BaseProvider: NewBaseProvider(cfg, "mysql")}
 }
 
-func (p *MySQLDBProvider) ConnectionString(c config.DatabaseConfig) string {
+func (p *MySQLDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string {
 	// DSN format expected by GORM (gorm.io/driver/mysql)
 	// user:password@tcp(host:port)/dbname?charset=utf8mb4&parseTime=True&loc=Local
 	var authPart string
@@ -243,7 +249,7 @@ func NewSQLiteProvider(cfg *config.Config) adaptor.DBProvider {
 	return &SQLiteDBProvider{BaseProvider: NewBaseProvider(cfg, "sqlite")}
 }
 
-func (p *SQLiteDBProvider) ConnectionString(c config.DatabaseConfig) string {
+func (p *SQLiteDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string {
 	// GORM SQLite Dialector expects the file path directly
 	return c.Database
 }
@@ -251,7 +257,7 @@ func (p *SQLiteDBProvider) ConnectionString(c config.DatabaseConfig) string {
 // --- Test Utility Functions ---
 
 // GetProviderForTest retrieves the appropriate concrete DBProvider instance for testing purposes.
-func GetProviderForTest(cfg config.DatabaseConfig) (adaptor.DBProvider, error) {
+func GetProviderForTest(cfg dbconfig.DatabaseConfig) (adaptor.DBProvider, error) {
 	// Note: We need a dummy config.Config instance to initialize the providers,
 	// as they expect it for BaseProvider initialization.
 	dummyCfg := config.NewConfig()
@@ -269,8 +275,8 @@ func GetProviderForTest(cfg config.DatabaseConfig) (adaptor.DBProvider, error) {
 }
 
 // GetConnectionStringForTest retrieves the connection string for a given DatabaseConfig.
-// This is intended for use in configuration tests where a full connection is not needed.
-func GetConnectionStringForTest(cfg config.DatabaseConfig) (string, error) {
+// This is intended for use in configuration tests where a full connection is not needed. (This function is not used in the current code, but it is kept for future use.)
+func GetConnectionStringForTest(cfg dbconfig.DatabaseConfig) (string, error) {
 	provider, err := GetProviderForTest(cfg)
 	if err != nil {
 		return "", err
@@ -290,8 +296,8 @@ func GetConnectionStringForTest(cfg config.DatabaseConfig) (string, error) {
 }
 
 // GetDialectorForTest retrieves the GORM Dialector for a given DatabaseConfig.
-// This is intended for use in repository tests where a GORM Dialector is needed without full provider setup.
-func GetDialectorForTest(cfg config.DatabaseConfig) (gorm.Dialector, error) {
+// This is intended for use in repository tests where a GORM Dialector is needed without full provider setup. (This function is not used in the current code, but it is kept for future use.)
+func GetDialectorForTest(cfg dbconfig.DatabaseConfig) (gorm.Dialector, error) {
 	dialectorFactory, err := GetDialectorFactory(cfg.Type)
 	if err != nil {
 		return nil, err

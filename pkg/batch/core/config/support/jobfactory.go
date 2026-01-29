@@ -14,11 +14,11 @@ import (
 	"go.uber.org/fx"
 )
 
-// JobBuilder is a function type for creating a specific Job.
-// This function takes a JobRepository, Config, a list of JobExecutionListeners, a FlowDefinition,
-// a MetricRecorder, and a Tracer, and returns a port.Job interface and an error.
+// JobBuilder is a function type for creating a specific Job. It takes necessary
+// dependencies and returns a port.Job interface and an error.
 type JobBuilder func(
-	jobRepository repository.JobRepository, // The job repository.
+	// jobRepository: The job repository for persisting job metadata.
+	jobRepository repository.JobRepository,
 	cfg *config.Config,
 	listeners []port.JobExecutionListener,
 	flow *model.FlowDefinition,
@@ -28,31 +28,31 @@ type JobBuilder func(
 
 // JobFactory is a central factory for constructing key elements of the batch framework,
 // such as jobs, steps, components, and listeners, based on JSL (Job Specification Language) definitions.
-// This factory manages registered builder functions and resolves dependencies to generate executable objects.
+// This factory manages registered builder functions and resolves dependencies to generate executable batch objects.
 type JobFactory struct {
-	config                           *config.Config
-	expressionResolver               port.ExpressionResolver
-	dbConnectionResolver             port.DBConnectionResolver
-	componentBuilders                map[string]jsl.ComponentBuilder
-	jobBuilders                      map[string]JobBuilder
-	jobListenerBuilders              map[string]jsl.JobExecutionListenerBuilder
-	stepListenerBuilders             map[string]jsl.StepExecutionListenerBuilder
-	itemReadListenerBuilders         map[string]jsl.ItemReadListenerBuilder
-	itemProcessListenerBuilders      map[string]jsl.ItemProcessListenerBuilder
-	itemWriteListenerBuilders        map[string]jsl.ItemWriteListenerBuilder
-	skipListenerBuilders             map[string]jsl.SkipListenerBuilder
-	retryItemListenerBuilders        map[string]jsl.LoggingRetryItemListenerBuilder
-	chunkListenerBuilders            map[string]jsl.ChunkListenerBuilder
-	decisionBuilders                 map[string]jsl.ConditionalDecisionBuilder
-	splitBuilders                    map[string]jsl.SplitBuilder
-	partitionerBuilders              map[string]port.PartitionerBuilder
-	jobParametersIncrementerBuilders map[string]jsl.JobParametersIncrementerBuilder
-	notificationListenerBuilders     map[string]jsl.NotificationListenerBuilder // ADD: For L4.4
-	metadataTxManager                tx.TransactionManager                      // ADD: For passing to JSL converter
-	stepFactory                      step_factory.StepFactory
-	metricRecorder                   metrics.MetricRecorder
-	tracer                           metrics.Tracer
-	jobRepository                    repository.JobRepository
+	config                           *config.Config                               // Global application configuration.
+	expressionResolver               port.ExpressionResolver                      // Resolver for dynamic expressions.
+	dbConnectionResolver             port.DBConnectionResolver                    // Resolver for database connections.
+	componentBuilders                map[string]jsl.ComponentBuilder              // Registered builders for batch components (readers, processors, writers, tasklets).
+	jobBuilders                      map[string]JobBuilder                        // Registered builders for jobs.
+	jobListenerBuilders              map[string]jsl.JobExecutionListenerBuilder   // Registered builders for job execution listeners.
+	stepListenerBuilders             map[string]jsl.StepExecutionListenerBuilder  // Registered builders for step execution listeners.
+	itemReadListenerBuilders         map[string]jsl.ItemReadListenerBuilder       // Registered builders for item read listeners.
+	itemProcessListenerBuilders      map[string]jsl.ItemProcessListenerBuilder    // Registered builders for item process listeners.
+	itemWriteListenerBuilders        map[string]jsl.ItemWriteListenerBuilder      // Registered builders for item write listeners.
+	skipListenerBuilders             map[string]jsl.SkipListenerBuilder           // Registered builders for skip listeners.
+	retryItemListenerBuilders        map[string]jsl.LoggingRetryItemListenerBuilder // Registered builders for retry item listeners.
+	chunkListenerBuilders            map[string]jsl.ChunkListenerBuilder          // Registered builders for chunk listeners.
+	decisionBuilders                 map[string]jsl.ConditionalDecisionBuilder    // Registered builders for conditional decisions.
+	splitBuilders                    map[string]jsl.SplitBuilder                  // Registered builders for split elements.
+	partitionerBuilders              map[string]port.PartitionerBuilder           // Registered builders for partitioners.
+	jobParametersIncrementerBuilders map[string]jsl.JobParametersIncrementerBuilder // Registered builders for job parameters incrementers.
+	notificationListenerBuilders     map[string]jsl.NotificationListenerBuilder   // Registered builders for notification listeners.
+	metadataTxManager                tx.TransactionManager                        // Transaction manager for metadata operations.
+	stepFactory                      step_factory.StepFactory                     // Factory for creating step instances.
+	metricRecorder                   metrics.MetricRecorder                       // Recorder for metrics.
+	tracer                           metrics.Tracer                               // Tracer for distributed tracing.
+	jobRepository                    repository.JobRepository                     // Repository for job metadata.
 }
 
 // JobFactoryParams defines the parameters that the NewJobFactory function
@@ -60,23 +60,27 @@ type JobFactory struct {
 // Each field represents a dependency required for the JobFactory to fulfill its responsibilities.
 type JobFactoryParams struct {
 	fx.In
-	Repo              repository.JobRepository  // JobRepository used for persisting job metadata. // Re-added
-	Cfg               *config.Config            // Global configuration for the framework.
-	Resolver          port.ExpressionResolver   // ExpressionResolver for resolving dynamic expressions within JSL.
-	MetricRecorder    metrics.MetricRecorder    // MetricRecorder for recording metrics.
-	Tracer            metrics.Tracer            // Tracer for distributed tracing.
-	DBResolver        port.DBConnectionResolver // DBConnectionResolver for resolving database connection names.
-	MetadataTxManager tx.TransactionManager     `name:"metadata"` // ADD: Metadata TxManager
-	StepFactory       step_factory.StepFactory  // StepFactory for building steps.
+	Repo              repository.JobRepository     // JobRepository used for persisting job metadata.
+	Cfg               *config.Config               // Global configuration for the framework.
+	Resolver          port.ExpressionResolver      // ExpressionResolver for resolving dynamic expressions within JSL.
+	MetricRecorder    metrics.MetricRecorder       // MetricRecorder for recording metrics.
+	Tracer            metrics.Tracer               // Tracer for distributed tracing.
+	DBResolver        port.DBConnectionResolver    // DBConnectionResolver for resolving database connection names.
+	MetadataTxManager tx.TransactionManager        `name:"metadata"` // Metadata Transaction Manager, used by JobRepository.
+	StepFactory       step_factory.StepFactory     // StepFactory for building steps.
+	TxFactory         tx.TransactionManagerFactory // Transaction Manager Factory.
 }
 
 // NewJobFactory creates a new instance of JobFactory.
 //
-// p: Receives required dependencies through the JobFactoryParams struct.
-// Returns: A pointer to the initialized JobFactory.
+// Parameters:
+//   p: The JobFactoryParams struct containing injected dependencies.
+//
+// Returns:
+//   A pointer to the initialized JobFactory.
 func NewJobFactory(p JobFactoryParams) *JobFactory {
 	return &JobFactory{
-		jobRepository:                    p.Repo, // Re-added
+		jobRepository:                    p.Repo,
 		expressionResolver:               p.Resolver,
 		dbConnectionResolver:             p.DBResolver,
 		metricRecorder:                   p.MetricRecorder,
@@ -95,10 +99,11 @@ func NewJobFactory(p JobFactoryParams) *JobFactory {
 		splitBuilders:                    make(map[string]jsl.SplitBuilder),
 		partitionerBuilders:              make(map[string]port.PartitionerBuilder),
 		jobParametersIncrementerBuilders: make(map[string]jsl.JobParametersIncrementerBuilder),
-		notificationListenerBuilders:     make(map[string]jsl.NotificationListenerBuilder), // Initialize
-		metadataTxManager:                p.MetadataTxManager,                              // ADD: Initialize metadataTxManager
+		notificationListenerBuilders:     make(map[string]jsl.NotificationListenerBuilder), // Builders for notification listeners.
+		metadataTxManager:                p.MetadataTxManager,                              // Retained as JobRepository and others may use it.
 		stepFactory:                      p.StepFactory,
 		config:                           p.Cfg,
+		// TxFactory is passed to StepFactory, so JobFactory itself does not retain it.
 	}
 }
 
@@ -109,120 +114,135 @@ func (f *JobFactory) GetConfig() *config.Config {
 
 // RegisterComponentBuilder registers a component builder function with the given name.
 //
-// name: The reference name of the component.
-// builder: The function to build the component.
+// Parameters:
+//   name: The reference name of the component.
+//   builder: The function to build the component.
 func (f *JobFactory) RegisterComponentBuilder(name string, builder jsl.ComponentBuilder) {
 	f.componentBuilders[name] = builder
 }
 
 // RegisterJobBuilder registers a job builder function with the given name.
 //
-// name: The reference name of the job.
-// builder: The function to build the job.
+// Parameters:
+//   name: The reference name of the job.
+//   builder: The function to build the job.
 func (f *JobFactory) RegisterJobBuilder(name string, builder JobBuilder) {
 	f.jobBuilders[name] = builder
 }
 
 // RegisterJobListenerBuilder registers a JobExecutionListener builder function with the given name.
 //
-// name: The reference name of the listener.
-// builder: The function to build the JobExecutionListener.
+// Parameters:
+//   name: The reference name of the listener.
+//   builder: The function to build the JobExecutionListener.
 func (f *JobFactory) RegisterJobListenerBuilder(name string, builder jsl.JobExecutionListenerBuilder) {
 	f.jobListenerBuilders[name] = builder
 }
 
 // RegisterNotificationListenerBuilder registers a NotificationListener builder function with the given name.
 //
-// name: The reference name of the listener.
-// builder: The function to build the NotificationListener.
+// Parameters:
+//   name: The reference name of the listener.
+//   builder: The function to build the NotificationListener.
 func (f *JobFactory) RegisterNotificationListenerBuilder(name string, builder jsl.NotificationListenerBuilder) {
 	f.notificationListenerBuilders[name] = builder
 }
 
 // RegisterStepExecutionListenerBuilder registers a StepExecutionListener builder function with the given name.
 //
-// name: The reference name of the listener.
-// builder: The function to build the StepExecutionListener.
+// Parameters:
+//   name: The reference name of the listener.
+//   builder: The function to build the StepExecutionListener.
 func (f *JobFactory) RegisterStepExecutionListenerBuilder(name string, builder jsl.StepExecutionListenerBuilder) {
 	f.stepListenerBuilders[name] = builder
 }
 
 // RegisterItemReadListenerBuilder registers an ItemReadListener builder function with the given name.
 //
-// name: The reference name of the listener.
-// builder: The function to build the ItemReadListener.
+// Parameters:
+//   name: The reference name of the listener.
+//   builder: The function to build the ItemReadListener.
 func (f *JobFactory) RegisterItemReadListenerBuilder(name string, builder jsl.ItemReadListenerBuilder) {
 	f.itemReadListenerBuilders[name] = builder
 }
 
 // RegisterItemProcessListenerBuilder registers an ItemProcessListener builder function with the given name.
 //
-// name: The reference name of the listener.
-// builder: The function to build the ItemProcessListener.
+// Parameters:
+//   name: The reference name of the listener.
+//   builder: The function to build the ItemProcessListener.
 func (f *JobFactory) RegisterItemProcessListenerBuilder(name string, builder jsl.ItemProcessListenerBuilder) {
 	f.itemProcessListenerBuilders[name] = builder
 }
 
 // RegisterItemWriteListenerBuilder registers an ItemWriteListener builder function with the given name.
 //
-// name: The reference name of the listener.
-// builder: The function to build the ItemWriteListener.
+// Parameters:
+//   name: The reference name of the listener.
+//   builder: The function to build the ItemWriteListener.
 func (f *JobFactory) RegisterItemWriteListenerBuilder(name string, builder jsl.ItemWriteListenerBuilder) {
 	f.itemWriteListenerBuilders[name] = builder
 }
 
 // RegisterSkipListenerBuilder registers a SkipListener builder function with the given name.
 //
-// name: The reference name of the listener.
-// builder: The function to build the SkipListener.
+// Parameters:
+//   name: The reference name of the listener.
+//   builder: The function to build the SkipListener.
 func (f *JobFactory) RegisterSkipListenerBuilder(name string, builder jsl.SkipListenerBuilder) {
 	f.skipListenerBuilders[name] = builder
 }
 
 // RegisterRetryItemListenerBuilder registers a RetryItemListener builder function with the given name.
 //
-// name: The reference name of the listener.
-// builder: The function to build the RetryItemListener.
+// Parameters:
+//   name: The reference name of the listener.
+//   builder: The function to build the RetryItemListener.
 func (f *JobFactory) RegisterRetryItemListenerBuilder(name string, builder jsl.LoggingRetryItemListenerBuilder) {
 	f.retryItemListenerBuilders[name] = builder
 }
 
 // RegisterChunkListenerBuilder registers a ChunkListener builder function with the given name.
 //
-// name: The reference name of the listener.
-// builder: The function to build the ChunkListener.
+// Parameters:
+//   name: The reference name of the listener.
+//   builder: The function to build the ChunkListener.
 func (f *JobFactory) RegisterChunkListenerBuilder(name string, builder jsl.ChunkListenerBuilder) {
 	f.chunkListenerBuilders[name] = builder
 }
 
 // RegisterDecisionBuilder registers a Decision builder function with the given name.
 //
-// name: The reference name of the Decision.
-// builder: The function to build the Decision.
+// Parameters:
+//   name: The reference name of the Decision.
+//   builder: The function to build the Decision.
 func (f *JobFactory) RegisterDecisionBuilder(name string, builder jsl.ConditionalDecisionBuilder) {
 	f.decisionBuilders[name] = builder
 }
 
 // RegisterSplitBuilder registers a Split builder function with the given name.
 //
-// name: The reference name of the Split.
-// builder: The function to build the Split.
+// Parameters:
+//   name: The reference name of the Split.
+//   builder: The function to build the Split.
 func (f *JobFactory) RegisterSplitBuilder(name string, builder jsl.SplitBuilder) {
 	f.splitBuilders[name] = builder
 }
 
 // RegisterPartitionerBuilder registers a Partitioner builder function with the given name.
 //
-// name: The reference name of the Partitioner.
-// builder: The function to build the Partitioner.
+// Parameters:
+//   name: The reference name of the Partitioner.
+//   builder: The function to build the Partitioner.
 func (f *JobFactory) RegisterPartitionerBuilder(name string, builder port.PartitionerBuilder) {
 	f.partitionerBuilders[name] = builder
 }
 
 // RegisterJobParametersIncrementerBuilder registers a JobParametersIncrementer builder function with the given name.
 //
-// name: The reference name of the incrementer.
-// builder: The function to build the JobParametersIncrementer.
+// Parameters:
+//   name: The reference name of the incrementer.
+//   builder: The function to build the JobParametersIncrementer.
 func (f *JobFactory) RegisterJobParametersIncrementerBuilder(name string, builder jsl.JobParametersIncrementerBuilder) {
 	f.jobParametersIncrementerBuilders[name] = builder
 }
@@ -231,11 +251,12 @@ func (f *JobFactory) RegisterJobParametersIncrementerBuilder(name string, builde
 // It reads the JSL definition and instantiates the job's flow, components, and listeners
 // using registered builders.
 //
-// jobName: The name of the job to construct.
-// Returns: The constructed port.Job interface and an error.
-//
-//	Returns an error if the JSL definition is not found, the builder is not registered,
-//	or component construction fails.
+// Parameters:
+//   jobName: The name of the job to construct.
+// Returns:
+//   The constructed port.Job interface and an error.
+//   Returns an error if the JSL definition is not found, the builder is not registered,
+//   or component construction fails.
 func (f *JobFactory) CreateJob(jobName string) (port.Job, error) {
 	jslJob, ok := jsl.GetJobDefinition(jobName)
 	if !ok {
@@ -250,12 +271,11 @@ func (f *JobFactory) CreateJob(jobName string) (port.Job, error) {
 	coreFlow, err := jsl.ConvertJSLToCoreFlow(
 		jslJob.Flow,
 		f.componentBuilders,
-		f.jobRepository, // Pass jobRepository
+		f.jobRepository,
 		f.config,
 		f.decisionBuilders,
 		f.splitBuilders,
 		f.stepFactory,
-		f.metadataTxManager, // ADD: Pass metadataTxManager
 		f.partitionerBuilders,
 		f.expressionResolver,
 		f.dbConnectionResolver,
@@ -268,16 +288,15 @@ func (f *JobFactory) CreateJob(jobName string) (port.Job, error) {
 		f.chunkListenerBuilders,
 	)
 	if err != nil {
-		return nil, exception.NewBatchError("job_factory", fmt.Sprintf("Failed to convert JSL flow for job '%s'", jobName), err, false, false)
+		return nil, exception.NewBatchError("job_factory", fmt.Sprintf("Failed to convert JSL flow for job '%s'", jobName), err, false, false)		
 	}
 
 	var jobListeners []port.JobExecutionListener
 
-	// WB1: Automatic inclusion of default logging listener
 	if loggingBuilder, found := f.jobListenerBuilders["loggingJobListener"]; found {
 		listenerInstance, err := loggingBuilder(f.config, map[string]string{})
-		if err != nil {
-			return nil, exception.NewBatchError("job_factory", "Failed to build default loggingJobListener", err, false, false)
+		if err != nil {			
+			return nil, exception.NewBatchError("job_factory", "Failed to build default loggingJobListener", err, false, false)			
 		}
 		jobListeners = append(jobListeners, listenerInstance)
 	}
@@ -298,8 +317,8 @@ func (f *JobFactory) CreateJob(jobName string) (port.Job, error) {
 		}
 
 		listenerInstance, err := builder(f.config, listenerRef.Properties)
-		if err != nil {
-			return nil, exception.NewBatchError("job_factory", fmt.Sprintf("Failed to build JobExecutionListener '%s'", listenerRef.Ref), err, false, false)
+		if err != nil {			
+			return nil, exception.NewBatchError("job_factory", fmt.Sprintf("Failed to build JobExecutionListener '%s'", listenerRef.Ref), err, false, false)			
 		}
 		jobListeners = append(jobListeners, listenerInstance)
 	}
@@ -313,7 +332,7 @@ func (f *JobFactory) CreateJob(jobName string) (port.Job, error) {
 		f.tracer,
 	)
 	if err != nil {
-		return nil, exception.NewBatchError("job_factory", fmt.Sprintf("Failed to instantiate job '%s'", jobName), err, false, false)
+		return nil, exception.NewBatchError("job_factory", fmt.Sprintf("Failed to instantiate job '%s'", jobName), err, false, false)		
 	}
 
 	return jobInstance, nil
@@ -322,8 +341,10 @@ func (f *JobFactory) CreateJob(jobName string) (port.Job, error) {
 // GetJobParametersIncrementer constructs and returns the JobParametersIncrementer for the specified job.
 // Returns nil if no incrementer is specified in the JSL definition or if the corresponding builder is not found.
 //
-// jobName: The name of the job for which to retrieve the incrementer.
-// Returns: The constructed port.JobParametersIncrementer interface, or nil.
+// Parameters:
+//   jobName: The name of the job for which to retrieve the incrementer.
+// Returns:
+//   The constructed port.JobParametersIncrementer interface, or nil if not found or an error occurs during building.
 func (f *JobFactory) GetJobParametersIncrementer(jobName string) port.JobParametersIncrementer {
 	jslJob, ok := jsl.GetJobDefinition(jobName)
 	if !ok || jslJob.Incrementer.Ref == "" {
@@ -341,3 +362,4 @@ func (f *JobFactory) GetJobParametersIncrementer(jobName string) port.JobParamet
 	}
 	return incrementer
 }
+

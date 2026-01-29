@@ -4,58 +4,82 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"strings"
 
+	"github.com/mitchellh/mapstructure"
 	"go.uber.org/fx"
 
 	"github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/support/expression"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/factory"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/partition"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 )
 
-// Module provides initializer-related components to Fx.
+// Module provides bootstrap-related components to Fx.
 var Module = fx.Options(
-	fx.Provide(NewBatchInitializer),   // Defined in initializer.go
-	fx.Invoke(LoadJSLDefinitionsHook), // Defined in initializer.go
-	fx.Invoke(ApplyLoggingConfigHook), // Defined in initializer.go (Corresponds to A_LOG_1)
+	fx.Provide(NewBatchInitializer),   // Provides the BatchInitializer.
+	fx.Invoke(LoadJSLDefinitionsHook), // Registers a lifecycle hook to load JSL definitions.
+	fx.Invoke(ApplyLoggingConfigHook), // Registers a lifecycle hook to apply logging configuration.
 
-	expression.Module, // Provides Expression Resolver
+	expression.Module, // Provides the ExpressionResolver.
 
-	// Engine Components (Provides Step Factory, StepExecutor, Retry Module, Skip Module)
+	// Engine Components: Provides Step Factory, StepExecutor, Retry Module, Skip Module.
 	factory.Module,
 	partition.Module,
 
-	// Add a hook to run framework migrations at application startup.
+	// Registers a lifecycle hook to run framework migrations at application startup.
 	fx.Invoke(runFrameworkMigrationsHook), 
 )
 
-// RunFrameworkMigrationsHookParams defines the dependencies for runFrameworkMigrationsHook.
+// RunFrameworkMigrationsHookParams defines the dependencies required for the
+// runFrameworkMigrationsHook function, injected by Fx.
 type RunFrameworkMigrationsHookParams struct {
 	fx.In
-	Lifecycle        fx.Lifecycle
-	Cfg              *config.Config
-	MigratorProvider migration.MigratorProvider
-	DBResolver       adaptor.DBConnectionResolver
-	AllMigrationFS   map[string]fs.FS `name:"allMigrationFS"` // This map includes "frameworkMigrationsFS".
-	AllDBProviders   map[string]adaptor.DBProvider // All registered DB providers, mapped by type.
+	Lifecycle        fx.Lifecycle                  // The Fx lifecycle to append hooks.
+	Cfg              *config.Config                // The application configuration.
+	MigratorProvider migration.MigratorProvider    // Provider for database migrators.
+	DBResolver       port.DBConnectionResolver     // Resolver for database connections.
+	AllMigrationFS   map[string]fs.FS `name:"allMigrationFS"` // A map of file systems containing migration scripts, including "frameworkMigrationsFS".
+	AllDBProviders   map[string]adaptor.DBProvider // All registered DB providers, mapped by their database type.
 }
 
-// runFrameworkMigrationsHook executes necessary framework migrations at application startup.
+// runFrameworkMigrationsHook registers an Fx lifecycle hook to execute necessary
+// framework migrations at application startup.
 func runFrameworkMigrationsHook(
 	p RunFrameworkMigrationsHookParams,
 ) {
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			// JobRepositoryDBRef is not configured. Framework migrations will be skipped.
+			// If JobRepositoryDBRef is not configured, framework migrations will be skipped.
 			if p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef == "" {
 				logger.Warnf("JobRepositoryDBRef is not configured. Framework migrations will be skipped.")
 				return nil
 			}
 
 			logger.Infof("Running framework migrations for JobRepository database: %s", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
+
+			// Get DB Configuration to determine DB Type
+			var dbConfig dbconfig.DatabaseConfig
+			rawConfig, ok := p.Cfg.Surfin.AdaptorConfigs[p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef]
+			if !ok {
+			    return fmt.Errorf("database configuration '%s' not found in adaptor.database configs for JobRepositoryDBRef", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
+			}
+			if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
+			    return fmt.Errorf("failed to decode database config for '%s': %w", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef, err)
+			}
+
+			// If JobRepositoryDBRef is configured as 'dummy' type, skip framework migrations.
+			// This supports scenarios like DB-less mode or testing where an actual database
+			// connection is not expected.
+			if strings.TrimSpace(strings.ToLower(dbConfig.Type)) == "dummy" {
+					logger.Infof("JobRepositoryDBRef '%s' is configured as 'dummy'. Skipping framework migrations.", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
+			 		return nil
+			}
 
 			dbConn, err := p.DBResolver.ResolveDBConnection(ctx, p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
 			if err != nil {
@@ -70,18 +94,19 @@ func runFrameworkMigrationsHook(
 			migrator := p.MigratorProvider.NewMigrator(dbConn)
 			// Use DB type as the migration directory name (e.g., "mysql", "postgres", "sqlite").
 			migrationDir := dbConn.Type()
-
+			
 			migrationErr := migrator.Up(ctx, frameworkFS, migrationDir, "batch_framework_migrations")
 
 			// Regardless of migration success or failure, force re-establishment of the JobRepositoryDBRef's DB connection.
 			// This ensures that the connection used by JobRepository is always fresh and valid.
-			dbConfig, ok := p.Cfg.Surfin.Datasources[p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef]
-			if !ok {
-				return fmt.Errorf("database configuration '%s' not found for JobRepositoryDBRef", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef) 
+			// Re-decode the config to ensure we have the latest, correct structure.
+			rawConfig, ok = p.Cfg.Surfin.AdaptorConfigs[p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef]
+			if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
+				return fmt.Errorf("failed to decode database config for '%s' during reconnect: %w", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef, err)
 			}
 			provider, ok := p.AllDBProviders[dbConfig.Type]
 			if !ok {
-				// Handle special cases like Redshift (similar to DefaultDBConnectionResolver).
+				// Handle special cases like Redshift
 				if dbConfig.Type == "redshift" {
 					provider, ok = p.AllDBProviders["postgres"]
 				}

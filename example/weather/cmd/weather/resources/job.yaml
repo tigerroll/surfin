@@ -31,7 +31,7 @@ flow:
       tasklet:
         ref: migrationTasklet
         properties:
-          dbRef: "metadata" # Workload DB connection name
+          dbRef: "workload" # Workload DB connection name
           migrationFSName: "weatherAppFS" # Application migration FS name
           migrationDir: "postgres" # Directory containing SQLite migration files
           isFramework: "false" # Indicates this is an application migration
@@ -52,7 +52,7 @@ flow:
       writer: # Write to database
         ref: weatherItemWriter
         properties:
-          targetDBName: "metadata" # Specify target DB name for Writer
+          targetDBName: "workload" # Specify target DB name for Writer
       chunk:
         item-count: 50 # Use config.Batch.ChunkSize
         commit-interval: 1

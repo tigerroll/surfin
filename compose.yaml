@@ -8,6 +8,7 @@ services:
       - "2345:2345"
     environment:
       TZ: 'Asia/Tokyo'
+      GOPROXY: 'https://proxy.golang.org'
     env_file:
       - .env
     privileged: true
@@ -30,7 +31,7 @@ services:
     image: "mysql:8.0.28-debian"
     platform: linux/amd64
     ports:
-      - "3308:3306"
+      - "3306:3306"
     environment:
       MYSQL_DATABASE: main
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
@@ -46,7 +47,7 @@ services:
     container_name: postgres
     image: "postgres:latest"
     ports:
-      - "5433:5432"
+      - "5432:5432"
     environment:
       POSTGRES_DB: main
       POSTGRES_USER: weather

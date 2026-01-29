@@ -4,6 +4,7 @@ package sqlite
 import (
 	"errors"
 	gormadaptor "github.com/tigerroll/surfin/pkg/batch/adaptor/database/gorm"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"gorm.io/driver/sqlite"
@@ -12,7 +13,7 @@ import (
 
 // init registers the SQLite dialector factory with the gorm adaptor.
 func init() {
-	gormadaptor.RegisterDialector("sqlite", func(cfg config.DatabaseConfig) (gorm.Dialector, error) {
+	gormadaptor.RegisterDialector("sqlite", func(cfg dbconfig.DatabaseConfig) (gorm.Dialector, error) {
 		if cfg.Database == "" {
 			return nil, errors.New("sqlite database path cannot be empty")
 		}

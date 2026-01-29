@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/adaptor"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -125,14 +127,14 @@ func (w *GormWriter) Printf(format string, v ...interface{}) {
 // GormDBAdapter implements adaptor.DBConnection
 type GormDBAdapter struct {
 	db     *gorm.DB
-	sqlDB  *sql.DB
-	cfg    config.DatabaseConfig
+	sqlDB  *sql.DB // Underlying *sql.DB connection.
+	cfg    dbconfig.DatabaseConfig // Database configuration.
 	dbType string
 	name   string
 }
 
 // NewGormDBAdapter creates a new GormDBAdapter.
-func NewGormDBAdapter(db *gorm.DB, cfg config.DatabaseConfig, name string) adaptor.DBConnection {
+func NewGormDBAdapter(db *gorm.DB, cfg dbconfig.DatabaseConfig, name string) adaptor.DBConnection {
 	sqlDB, err := db.DB()
 	if err != nil {
 		logger.Fatalf("Failed to get underlying *sql.DB: %v", err)
@@ -200,7 +202,7 @@ func (a *GormDBAdapter) RefreshConnection(ctx context.Context) error {
 }
 
 // Config implements adaptor.DBConnection.
-func (a *GormDBAdapter) Config() config.DatabaseConfig {
+func (a *GormDBAdapter) Config() dbconfig.DatabaseConfig {
 	return a.cfg
 }
 
@@ -378,19 +380,13 @@ func (a *GormDBAdapter) ExecuteUpsert(ctx context.Context, model interface{}, ta
 	return result.RowsAffected, nil
 }
 
-// NewGormTransactionManager creates a GORM-based TransactionManager.
-// Since it is called via TransactionManagerFactory from outside, change the argument to a concrete adapter type.
-// func NewGormTransactionManager(conn *GormDBAdapter) tx.TransactionManager {
-// 	return &GormTransactionManager{dbConn: conn}
-// }
-
 // GormTransactionManagerFactory is the GORM implementation of tx.TransactionManagerFactory.
 type GormTransactionManagerFactory struct {
-	dbResolver adaptor.DBConnectionResolver // Add
+	dbResolver port.DBConnectionResolver
 }
 
 // NewGormTransactionManagerFactory creates an instance of GormTransactionManagerFactory.
-func NewGormTransactionManagerFactory(dbResolver adaptor.DBConnectionResolver) tx.TransactionManagerFactory {
+func NewGormTransactionManagerFactory(dbResolver port.DBConnectionResolver) tx.TransactionManagerFactory {
 	return &GormTransactionManagerFactory{dbResolver: dbResolver}
 }
 

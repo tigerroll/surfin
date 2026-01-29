@@ -6,7 +6,7 @@ import (
 	"context"
 	"database/sql"
 
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adaptor/database/config"
 )
 
 // DBExecutor is an interface that defines common write operations for a database.
@@ -63,7 +63,7 @@ type DBConnection interface {
 	RefreshConnection(ctx context.Context) error
 	// Config returns the database configuration associated with this connection.
 	// Returns: config.DatabaseConfig struct.
-	Config() config.DatabaseConfig
+	Config() dbconfig.DatabaseConfig
 
 	// GetSQLDB returns the underlying *sql.DB connection.
 	// This exposes low-level dependencies but is necessary for migration tools and raw SQL access.

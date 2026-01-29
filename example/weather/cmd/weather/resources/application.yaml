@@ -1,6 +1,7 @@
 surfin:
   # Data source settings (multiple databases)
-  datasources:
+  #datasources:
+  database:
     # Framework metadata database (Postgres)
     metadata:
       type: "postgres"
