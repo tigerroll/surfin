@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"testing"
 
-	model "surfin/pkg/batch/core/domain/model"
-	job "surfin/pkg/batch/core/domain/repository"
-	metrics "surfin/pkg/batch/core/metrics"
-	tx "surfin/pkg/batch/core/tx"
-	partition "surfin/pkg/batch/engine/step/partition" // SimpleStepExecutor を使用するため追加
-	testutil "surfin/pkg/batch/test"                   // 追加
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	partition "github.com/tigerroll/surfin/pkg/batch/engine/step/partition"
+	mocktx "github.com/tigerroll/surfin/pkg/batch/test"
+	testutil "github.com/tigerroll/surfin/pkg/batch/test"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -159,51 +159,6 @@ func (m *MockJobRepository) Close() error {
 	return nil
 }
 
-// --- Mock Tx and TxManager Implementations ---
-
-// MockTx implements tx.Tx
-type MockTx struct {
-	mock.Mock
-}
-
-func (m *MockTx) ExecuteUpdate(ctx context.Context, model interface{}, operation string, tableName string, query map[string]interface{}) (rowsAffected int64, err error) {
-	args := m.Called(ctx, model, operation, tableName, query)
-	return args.Get(0).(int64), args.Error(1)
-}
-func (m *MockTx) ExecuteUpsert(ctx context.Context, model interface{}, tableName string, conflictColumns []string, updateColumns []string) (rowsAffected int64, err error) {
-	args := m.Called(ctx, model, tableName, conflictColumns, updateColumns)
-	return args.Get(0).(int64), args.Error(1)
-}
-func (m *MockTx) Savepoint(name string) error {
-	args := m.Called(name)
-	return args.Error(0)
-}
-func (m *MockTx) RollbackToSavepoint(name string) error {
-	args := m.Called(name)
-	return args.Error(0)
-}
-
-// MockTxManager implements tx.TransactionManager
-type MockTxManager struct {
-	mock.Mock
-}
-
-func (m *MockTxManager) Begin(ctx context.Context, opts ...*sql.TxOptions) (tx.Tx, error) {
-	args := m.Called(ctx, opts)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(tx.Tx), args.Error(1)
-}
-func (m *MockTxManager) Commit(t tx.Tx) error {
-	args := m.Called(t)
-	return args.Error(0)
-}
-func (m *MockTxManager) Rollback(t tx.Tx) error {
-	args := m.Called(t)
-	return args.Error(0)
-}
-
 // --- Mock Flow Elements ---
 
 // MockPartitioner implements port.Partitioner
@@ -226,13 +181,13 @@ func (m *MockPartitioner) Partition(ctx context.Context, gridSize int) (map[stri
 // MockStep implements port.Step
 type MockStep struct {
 	IDValue string
-	Repo    job.JobRepository // 追加: 永続化シミュレーション用
-	// 追加フィールド
+	Repo    job.JobRepository // For persistence simulation
+	// Additional fields
 	PropagationValue    string
 	IsolationLevelValue sql.IsolationLevel
 	SimulatedError      error
 
-	// port.Step の要件を満たすためのダミーフィールド
+	// Dummy fields to satisfy port.Step interface requirements
 	SetMetricRecorderFunc func(recorder metrics.MetricRecorder)
 	SetTracerFunc         func(tracer metrics.Tracer)
 }
@@ -240,38 +195,39 @@ type MockStep struct {
 func (m *MockStep) ID() string       { return m.IDValue }
 func (m *MockStep) StepName() string { return m.IDValue }
 func (m *MockStep) Execute(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution) error {
-	// 1. STARTED への遷移 (TaskletStep/ChunkStep の Execute 開始時をシミュレート)
+	// 1. Transition to STARTED (Simulate start of TaskletStep/ChunkStep Execute)
 	if stepExecution.Status == model.BatchStatusStarting {
 		stepExecution.MarkAsStarted()
 		if m.Repo != nil {
-			m.Repo.UpdateStepExecution(ctx, stepExecution) // STARTED への遷移を永続化 (1回目)
+			m.Repo.UpdateStepExecution(ctx, stepExecution) // Persist transition to STARTED (1st update)
 		}
 	}
 
-	// エラーをシミュレート
+	// Simulate error
 	if m.SimulatedError != nil {
 		stepExecution.MarkAsFailed(m.SimulatedError)
 		if m.Repo != nil {
-			m.Repo.UpdateStepExecution(ctx, stepExecution) // FAILED への遷移を永続化 (2回目)
+			m.Repo.UpdateStepExecution(ctx, stepExecution) // Persist transition to FAILED (2nd update)
 		}
 		return m.SimulatedError
 	}
 
-	// 成功の場合、COMPLETED に遷移
+	// On success, transition to COMPLETED
 	stepExecution.MarkAsCompleted()
 	if m.Repo != nil {
-		m.Repo.UpdateStepExecution(ctx, stepExecution) // COMPLETED への遷移を永続化 (2回目)
+		m.Repo.UpdateStepExecution(ctx, stepExecution) // Persist transition to COMPLETED (2nd update)
 	}
 	return nil
 }
 
-// 追加: port.Step インターフェースのメソッド
+// Added: Methods for port.Step interface
 func (m *MockStep) GetTransactionOptions() *sql.TxOptions {
 	return &sql.TxOptions{Isolation: m.IsolationLevelValue}
 }
 func (m *MockStep) GetPropagation() string {
 	return m.PropagationValue
 }
+func (m *MockStep) GetExecutionContextPromotion() *model.ExecutionContextPromotion { return nil } // Added
 func (m *MockStep) SetMetricRecorder(recorder metrics.MetricRecorder) {
 	if m.SetMetricRecorderFunc != nil {
 		m.SetMetricRecorderFunc(recorder)
@@ -294,7 +250,7 @@ func (m *MockDecision) DecisionName() string { return m.IDValue }
 func (m *MockDecision) Decide(ctx context.Context, jobExecution *model.JobExecution, jobParameters model.JobParameters) (model.ExitStatus, error) {
 	return m.SimulatedResult, nil
 }
-func (m *MockDecision) SetProperties(properties map[string]string) {} // Mockなので実装は不要
+func (m *MockDecision) SetProperties(properties map[string]string) {} // No implementation needed for mock
 
 // --- Test Job Runner Implementation (Simulating core flow logic) ---
 
@@ -327,7 +283,7 @@ func (r *TestJobRunner) Run(ctx context.Context, flowDef *model.FlowDefinition, 
 	// Initial update (STARTING -> STARTED transition is usually handled outside, but we ensure status is STARTED for flow)
 	if jobExecution.Status == model.BatchStatusStarting {
 		jobExecution.MarkAsStarted()
-		r.Repo.UpdateJobExecution(ctx, jobExecution) // 1回目の更新 (STARTING -> STARTED)
+		r.Repo.UpdateJobExecution(ctx, jobExecution) // 1st update (STARTING -> STARTED)
 	}
 
 	for {
@@ -349,7 +305,7 @@ func (r *TestJobRunner) Run(ctx context.Context, flowDef *model.FlowDefinition, 
 		// 1. Execute Element (Simulated)
 		_, statusFound := r.SimulatedResults[currentElementID]
 
-		// Decisionの場合は、SimulatedResultsに依存せず、Decideメソッドの結果を使用する
+		// If it's a Decision, use the result of the Decide method, not SimulatedResults
 		if !statusFound && !r.isDecisionElement(elementInterface) {
 			err := fmt.Errorf("simulated result not found for element: %s", currentElementID)
 			jobExecution.MarkAsFailed(err)
@@ -366,7 +322,7 @@ func (r *TestJobRunner) Run(ctx context.Context, flowDef *model.FlowDefinition, 
 			stepName := elem.StepName()
 			jobExecution.CurrentStepName = stepName
 
-			// StepExecutionの検索/作成
+			// Search/Create StepExecution
 			var stepExec *model.StepExecution
 			for _, se := range jobExecution.StepExecutions {
 				if se.StepName == stepName {
@@ -384,21 +340,21 @@ func (r *TestJobRunner) Run(ctx context.Context, flowDef *model.FlowDefinition, 
 			}
 
 			// Simulate Step execution and status update
-			// MockStep.Execute内で STARTED -> COMPLETED/FAILED への遷移と永続化がシミュレートされる
+			// Transition to STARTED -> COMPLETED/FAILED and persistence are simulated within MockStep.Execute
 			elementErr = elem.Execute(ctx, jobExecution, stepExec)
-			elementExitStatus = stepExec.ExitStatus // MockStep.Executeで設定された最終ExitStatusを取得
+			elementExitStatus = stepExec.ExitStatus // Get the final ExitStatus set by MockStep.Execute
 
 			if elementErr != nil {
-				// MockStep.Execute内で MarkAsFailed が呼ばれているはず
+				// MarkAsFailed should have been called within MockStep.Execute
 			} else {
-				// MockStep.Execute内で MarkAsCompleted が呼ばれているはず
+				// MarkAsCompleted should have been called within MockStep.Execute
 			}
 
 		case *MockDecision:
 			// --- Decision Execution Logic ---
 			decisionResult, _ := elem.Decide(ctx, jobExecution, jobParameters)
 			elementExitStatus = decisionResult
-			elementErr = nil // Mock Decisionはエラーを返さないと仮定
+			elementErr = nil // Assume Mock Decision does not return errors
 
 		default:
 			err := fmt.Errorf("unknown flow element type: %T (ID: %s)", elementInterface, currentElementID)
@@ -511,8 +467,8 @@ func TestJobRunner_FlowControlIntegration(t *testing.T) {
 		// JobExecution: Initial Start (1) + Final Completion (1) = 2
 		// StepExecution: Save (2) + Update (4) = 6 (StepA: S/U(STARTED)/U(COMPLETED), StepB: S/U(STARTED)/U(COMPLETED))
 		mockRepo.MockJobExecutionRepository.AssertNumberOfCalls(t, "UpdateJobExecution", 2)
-		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "SaveStepExecution", 2)   // Save 2回
-		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "UpdateStepExecution", 4) // Update 4回
+		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "SaveStepExecution", 2)   // 2 Saves
+		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "UpdateStepExecution", 4) // 4 Updates
 	})
 
 	// --- Test Case 2: Decision Flow (StepA -> Decision -> Branch) ---
@@ -546,7 +502,7 @@ func TestJobRunner_FlowControlIntegration(t *testing.T) {
 		flowDef.AddTransitionRule("stepSuccess", string(model.ExitStatusCompleted), "", true, false, false)
 		// decision1 (FAILURE) -> stepFailure -> Fail
 		flowDef.AddTransitionRule("decision1", "FAILURE", "stepFailure", false, false, false)
-		flowDef.AddTransitionRule("stepFailure", string(model.ExitStatusFailed), "", false, true, false) // FAILEDでFail遷移をシミュレート
+		flowDef.AddTransitionRule("stepFailure", string(model.ExitStatusFailed), "", false, true, false) // Simulate Fail transition on FAILED
 
 		// 2. Setup Simulated Results (Decision returns SUCCESS)
 		simulatedResults := map[string]model.ExitStatus{
@@ -568,8 +524,8 @@ func TestJobRunner_FlowControlIntegration(t *testing.T) {
 		// JobExecution: Initial Start (1) + Final Completion (1) = 2
 		// StepExecution: Save (2) + Update (4) = 4
 		mockRepo.MockJobExecutionRepository.AssertNumberOfCalls(t, "UpdateJobExecution", 2)
-		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "SaveStepExecution", 2)   // Save 2回
-		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "UpdateStepExecution", 4) // Update 4回
+		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "SaveStepExecution", 2)   // 2 Saves
+		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "UpdateStepExecution", 4) // 4 Updates
 	})
 
 	// --- Test Case 3: Failure Transition ---
@@ -604,7 +560,7 @@ func TestJobRunner_FlowControlIntegration(t *testing.T) {
 			"stepA":     model.ExitStatusCompleted,
 			"stepError": model.ExitStatusFailed,
 		}
-		// MockStepにエラーを注入
+		// Inject error into MockStep
 		stepError.SimulatedError = errors.New("simulated failure")
 
 		// 3. Run Test Runner
@@ -622,8 +578,8 @@ func TestJobRunner_FlowControlIntegration(t *testing.T) {
 		// JobExecution: Initial Start (1) + Final Failure (1) = 2
 		// StepExecution: Save (2) + Update (4) = 4
 		mockRepo.MockJobExecutionRepository.AssertNumberOfCalls(t, "UpdateJobExecution", 2)
-		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "SaveStepExecution", 2)   // Save 2回
-		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "UpdateStepExecution", 4) // Update 4回
+		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "SaveStepExecution", 2)   // 2 Saves
+		mockRepo.MockStepExecutionRepository.AssertNumberOfCalls(t, "UpdateStepExecution", 4) // 4 Updates
 	})
 }
 
@@ -632,69 +588,69 @@ func TestJobRunner_FlowControlIntegration(t *testing.T) {
 func TestSimpleStepExecutor_NESTED_Propagation(t *testing.T) {
 	ctx := context.Background()
 
-	// 1. モックのセットアップ
+	// 1. Mock setup
 	mockRepo := NewMockJobRepository()
-	mockTxManager := &MockTxManager{}
+	mockTxManager := &mocktx.MockTxManager{}
 
 	jobExecution := testutil.NewTestJobExecution("instanceID", "testJob", model.NewJobParameters())
 	stepExecution := testutil.NewTestStepExecution(jobExecution, "nestedStep")
 
-	// 2. 外部トランザクションのシミュレーション
-	// SimpleStepExecutor はコンテキストに "tx" キーが存在するかどうかで外部トランザクションを検出します。
-	externalTx := &MockTx{}
-	// 外部トランザクションがアクティブなコンテキスト
+	// 2. Simulate external transaction
+	// SimpleStepExecutor detects an external transaction if the "tx" key exists in the context.
+	externalTx := &mocktx.MockTx{}
+	// Context with active external transaction
 	ctxWithExternalTx := context.WithValue(ctx, "tx", externalTx)
 
-	// 3. MockStep の定義 (NESTED伝播、失敗をシミュレート)
+	// 3. Define MockStep (NESTED propagation, simulate failure)
 	simulatedError := errors.New("simulated step failure")
 	nestedStep := &MockStep{
-		Repo:             mockRepo, // 注入
+		Repo:             mockRepo, // Injected
 		IDValue:          "nestedStep",
 		PropagationValue: "NESTED",
-		SimulatedError:   simulatedError, // 実行時にエラーを発生させる
+		SimulatedError:   simulatedError, // Cause error during execution
 	}
 
-	// 4. 期待値の設定
+	// 4. Set expectations
 
-	// 4.1. StepExecution の永続化 (Save/Update)
-	// StepExecutor の実行前に、JobRunner が SaveStepExecution を呼び出すことをシミュレート
+	// 4.1. StepExecution persistence (Save/Update)
+	// Simulate JobRunner calling SaveStepExecution before SimpleStepExecutor execution
 	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once()
 
-	// JobRunnerの役割をシミュレートして初回永続化を実行
+	// Simulate JobRunner's role to perform initial persistence
 	if err := mockRepo.SaveStepExecution(ctx, stepExecution); err != nil {
 		t.Fatalf("Failed to simulate initial SaveStepExecution: %v", err)
 	}
 
-	// UpdateStepExecution (STARTEDへの遷移)
-	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Twice() // STARTED (1回目) -> FAILED (2回目)
+	// UpdateStepExecution (transition to STARTED)
+	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Twice() // STARTED (1st) -> FAILED (2nd)
 
-	// 4.2. NESTED トランザクションの期待値
+	// 4.2. NESTED transaction expectations
 
-	// StepExecutor は Savepoint を呼び出すことを期待
-	// Savepoint 名は "SP_" + stepExecution.ID になることを期待
+	// Expect StepExecutor to call Savepoint
+	// Expect Savepoint name to be "SP_" + stepExecution.ID
 	expectedSavepointName := "SP_" + stepExecution.ID
 	externalTx.On("Savepoint", expectedSavepointName).Return(nil).Once()
 
-	// Step.Execute がエラーを返した場合、RollbackToSavepoint が呼び出されることを期待
+	// Expect RollbackToSavepoint to be called if Step.Execute returns an error
 	externalTx.On("RollbackToSavepoint", expectedSavepointName).Return(nil).Once()
 
-	// 5. SimpleStepExecutor の実行
-	// Tracer は nil で問題ない (ロギングのみ) -> 修正: NoOpTracer と NoOpMetricRecorder を使用
+	// 5. Execute SimpleStepExecutor
+	// Tracer is fine with nil (logging only) -> Correction: Use NoOpTracer and NoOpMetricRecorder
 	executor := partition.NewSimpleStepExecutor(metrics.NewNoOpTracer(), metrics.NewNoOpMetricRecorder(), mockTxManager)
 
 	resultExec, err := executor.ExecuteStep(ctxWithExternalTx, nestedStep, jobExecution, stepExecution)
 
-	// 6. アサーション
+	// 6. Assertions
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), simulatedError.Error())
 	assert.Equal(t, model.BatchStatusFailed, resultExec.Status)
 	assert.Equal(t, model.ExitStatusFailed, resultExec.ExitStatus)
 
-	// 7. モックの検証
+	// 7. Verify mocks
 	externalTx.AssertExpectations(t)
 	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 
-	// TxManager の Begin/Commit/Rollback は呼ばれないことを確認 (外部トランザクションに参加しているため)
+	// Verify that TxManager's Begin/Commit/Rollback are not called (because it's participating in an external transaction)
 	mockTxManager.AssertNotCalled(t, "Begin")
 	mockTxManager.AssertNotCalled(t, "Commit")
 	mockTxManager.AssertNotCalled(t, "Rollback")
@@ -704,54 +660,54 @@ func TestSimpleStepExecutor_NESTED_Propagation(t *testing.T) {
 func TestSimpleStepExecutor_NESTED_Propagation_Success(t *testing.T) {
 	ctx := context.Background()
 
-	// 1. モックのセットアップ
+	// 1. Mock setup
 	mockRepo := NewMockJobRepository()
-	mockTxManager := &MockTxManager{}
+	mockTxManager := &mocktx.MockTxManager{}
 
 	jobExecution := testutil.NewTestJobExecution("instanceID", "testJob", model.NewJobParameters())
 	stepExecution := testutil.NewTestStepExecution(jobExecution, "nestedStep")
 
-	// 外部トランザクションのシミュレーション
-	externalTx := &MockTx{}
+	// Simulate external transaction
+	externalTx := &mocktx.MockTx{}
 	ctxWithExternalTx := context.WithValue(ctx, "tx", externalTx)
 
-	// 3. MockStep の定義 (NESTED伝播、成功をシミュレート)
+	// 3. Define MockStep (NESTED propagation, simulate success)
 	nestedStep := &MockStep{
-		Repo:             mockRepo, // 注入
+		Repo:             mockRepo, // Injected
 		IDValue:          "nestedStep",
 		PropagationValue: "NESTED",
-		SimulatedError:   nil, // 成功
+		SimulatedError:   nil, // Success
 	}
 
-	// 4. 期待値の設定
-	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once() // JobRunnerの役割をシミュレート
+	// 4. Set expectations
+	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once() // Simulate JobRunner's role
 	if err := mockRepo.SaveStepExecution(ctx, stepExecution); err != nil {
 		t.Fatalf("Failed to simulate initial SaveStepExecution: %v", err)
 	}
 	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Twice() // STARTED -> COMPLETED
 
-	// StepExecutor は Savepoint を呼び出すことを期待
+	// Expect StepExecutor to call Savepoint
 	expectedSavepointName := "SP_" + stepExecution.ID
 	externalTx.On("Savepoint", expectedSavepointName).Return(nil).Once()
 
-	// 成功した場合、RollbackToSavepoint は呼ばれないことを期待
+	// Expect RollbackToSavepoint not to be called on success
 	externalTx.AssertNotCalled(t, "RollbackToSavepoint")
 
-	// 5. SimpleStepExecutor の実行
+	// 5. Execute SimpleStepExecutor
 	executor := partition.NewSimpleStepExecutor(metrics.NewNoOpTracer(), metrics.NewNoOpMetricRecorder(), mockTxManager)
 
 	resultExec, err := executor.ExecuteStep(ctxWithExternalTx, nestedStep, jobExecution, stepExecution)
 
-	// 6. アサーション
+	// 6. Assertions
 	assert.NoError(t, err)
 	assert.Equal(t, model.BatchStatusCompleted, resultExec.Status)
 	assert.Equal(t, model.ExitStatusCompleted, resultExec.ExitStatus)
 
-	// 7. モックの検証
+	// 7. Verify mocks
 	externalTx.AssertExpectations(t)
 	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 
-	// TxManager の Begin/Commit/Rollback は呼ばれないことを確認
+	// Verify that TxManager's Begin/Commit/Rollback are not called
 	mockTxManager.AssertNotCalled(t, "Begin")
 	mockTxManager.AssertNotCalled(t, "Commit")
 	mockTxManager.AssertNotCalled(t, "Rollback")
@@ -762,62 +718,62 @@ func TestSimpleStepExecutor_NESTED_Propagation_Success(t *testing.T) {
 func TestSimpleStepExecutor_REQUIRES_NEW_Propagation(t *testing.T) {
 	ctx := context.Background()
 
-	// 1. モックのセットアップ
+	// 1. Mock setup
 	mockRepo := NewMockJobRepository()
-	mockTxManager := &MockTxManager{}
+	mockTxManager := &mocktx.MockTxManager{}
 
 	jobExecution := testutil.NewTestJobExecution("instanceID", "testJob", model.NewJobParameters())
 	stepExecution := testutil.NewTestStepExecution(jobExecution, "requiresNewStep")
 
-	// 2. 外部トランザクションのシミュレーション
-	externalTx := &MockTx{}
-	// 外部トランザクションがアクティブなコンテキスト
+	// 2. Simulate external transaction
+	externalTx := &mocktx.MockTx{}
+	// Context with active external transaction
 	ctxWithExternalTx := context.WithValue(ctx, "tx", externalTx)
 
-	// 3. MockStep の定義 (REQUIRES_NEW伝播、成功をシミュレート)
+	// 3. Define MockStep (REQUIRES_NEW propagation, simulate success)
 	requiresNewStep := &MockStep{
-		Repo:             mockRepo, // 注入
+		Repo:             mockRepo, // Injected
 		IDValue:          "requiresNewStep",
 		PropagationValue: "REQUIRES_NEW",
-		SimulatedError:   nil, // 成功
+		SimulatedError:   nil, // Success
 	}
 
-	// 4. 内部トランザクションのモック
-	internalTx := &MockTx{}
+	// 4. Mock internal transaction
+	internalTx := &mocktx.MockTx{}
 
-	// 5. 期待値の設定
+	// 5. Set expectations
 
-	// 5.1. StepExecution の永続化 (Save/Update)
-	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once() // JobRunnerの役割をシミュレート
+	// 5.1. StepExecution persistence (Save/Update)
+	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once() // Simulate JobRunner's role
 	if err := mockRepo.SaveStepExecution(ctx, stepExecution); err != nil {
 		t.Fatalf("Failed to simulate initial SaveStepExecution: %v", err)
 	}
 
-	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Twice() // STARTED (1回目) -> COMPLETED (2回目)
+	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Twice() // STARTED (1st) -> COMPLETED (2nd)
 
-	// 5.2. REQUIRES_NEW トランザクションの期待値
+	// 5.2. REQUIRES_NEW transaction expectations
 
-	// TxManager は新しいトランザクションを開始することを期待
+	// Expect TxManager to start a new transaction
 	mockTxManager.On("Begin", mock.Anything, mock.Anything).Return(internalTx, nil).Once()
 
-	// Stepが成功した場合、内部トランザクションはコミットされることを期待
+	// Expect internal transaction to be committed if Step succeeds
 	mockTxManager.On("Commit", internalTx).Return(nil).Once()
 
-	// 外部トランザクション (externalTx) はサスペンドされるため、Commit/Rollback/Savepoint は呼ばれないことを期待
+	// Expect external transaction (externalTx) not to be called for Commit/Rollback/Savepoint as it's suspended
 	externalTx.AssertNotCalled(t, "Commit")
 	externalTx.AssertNotCalled(t, "Rollback")
 	externalTx.AssertNotCalled(t, "Savepoint")
 
-	// 6. SimpleStepExecutor の実行
+	// 6. Execute SimpleStepExecutor
 	executor := partition.NewSimpleStepExecutor(metrics.NewNoOpTracer(), metrics.NewNoOpMetricRecorder(), mockTxManager)
 
 	resultExec, err := executor.ExecuteStep(ctxWithExternalTx, requiresNewStep, jobExecution, stepExecution)
 
-	// 7. アサーション
+	// 7. Assertions
 	assert.NoError(t, err)
 	assert.Equal(t, model.BatchStatusCompleted, resultExec.Status)
 
-	// 8. モックの検証
+	// 8. Verify mocks
 	mockTxManager.AssertExpectations(t)
 	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }
@@ -826,66 +782,66 @@ func TestSimpleStepExecutor_REQUIRES_NEW_Propagation(t *testing.T) {
 func TestSimpleStepExecutor_REQUIRES_NEW_Propagation_Failure(t *testing.T) {
 	ctx := context.Background()
 
-	// 1. モックのセットアップ
+	// 1. Mock setup
 	mockRepo := NewMockJobRepository()
-	mockTxManager := &MockTxManager{}
+	mockTxManager := &mocktx.MockTxManager{}
 
 	jobExecution := testutil.NewTestJobExecution("instanceID", "testJob", model.NewJobParameters())
 	stepExecution := testutil.NewTestStepExecution(jobExecution, "requiresNewStep")
 
-	// 2. 外部トランザクションのシミュレーション
-	externalTx := &MockTx{}
+	// 2. Simulate external transaction
+	externalTx := &mocktx.MockTx{}
 	ctxWithExternalTx := context.WithValue(ctx, "tx", externalTx)
 
-	// 3. MockStep の定義 (REQUIRES_NEW伝播、失敗をシミュレート)
+	// 3. Define MockStep (REQUIRES_NEW propagation, simulate failure)
 	simulatedError := errors.New("internal step failure")
 	requiresNewStep := &MockStep{
-		Repo:             mockRepo, // 注入
+		Repo:             mockRepo, // Injected
 		IDValue:          "requiresNewStep",
 		PropagationValue: "REQUIRES_NEW",
-		SimulatedError:   simulatedError, // 実行時にエラーを発生させる
+		SimulatedError:   simulatedError, // Cause error during execution
 	}
 
-	// 4. 内部トランザクションのモック
-	internalTx := &MockTx{}
+	// 4. Mock internal transaction
+	internalTx := &mocktx.MockTx{}
 
-	// 5. 期待値の設定
+	// 5. Set expectations
 
-	// 5.1. StepExecution の永続化 (Save/Update)
-	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once() // JobRunnerの役割をシミュレート
+	// 5.1. StepExecution persistence (Save/Update)
+	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once() // Simulate JobRunner's role
 	if err := mockRepo.SaveStepExecution(ctx, stepExecution); err != nil {
 		t.Fatalf("Failed to simulate initial SaveStepExecution: %v", err)
 	}
 
-	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Twice() // STARTED (1回目) -> FAILED (2回目)
+	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Twice() // STARTED (1st) -> FAILED (2nd)
 
-	// 5.2. REQUIRES_NEW トランザクションの期待値
+	// 5.2. REQUIRES_NEW transaction expectations
 
-	// TxManager は新しいトランザクションを開始することを期待
+	// Expect TxManager to start a new transaction
 	mockTxManager.On("Begin", mock.Anything, mock.Anything).Return(internalTx, nil).Once()
 
-	// Stepが失敗した場合、内部トランザクションはロールバックされることを期待
+	// Expect internal transaction to be rolled back if Step fails
 	mockTxManager.On("Rollback", internalTx).Return(nil).Once()
 
-	// Commit は呼ばれないことを期待
+	// Expect Commit not to be called
 	mockTxManager.AssertNotCalled(t, "Commit")
 
-	// 外部トランザクション (externalTx) はサスペンドされるため、影響を受けないことを期待
+	// Expect external transaction (externalTx) not to be affected as it's suspended
 	externalTx.AssertNotCalled(t, "Commit")
 	externalTx.AssertNotCalled(t, "Rollback")
 	externalTx.AssertNotCalled(t, "Savepoint")
 
-	// 6. SimpleStepExecutor の実行
+	// 6. Execute SimpleStepExecutor
 	executor := partition.NewSimpleStepExecutor(metrics.NewNoOpTracer(), metrics.NewNoOpMetricRecorder(), mockTxManager)
 
 	resultExec, err := executor.ExecuteStep(ctxWithExternalTx, requiresNewStep, jobExecution, stepExecution)
 
-	// 7. アサーション
+	// 7. Assertions
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), simulatedError.Error())
 	assert.Equal(t, model.BatchStatusFailed, resultExec.Status)
 
-	// 8. モックの検証
+	// 8. Verify mocks
 	mockTxManager.AssertExpectations(t)
 	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }

@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	port "surfin/pkg/batch/core/application/port"
-	model "surfin/pkg/batch/core/domain/model"
-	tx "surfin/pkg/batch/core/tx" // 修正
-	"surfin/pkg/batch/support/util/exception"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -211,7 +211,7 @@ func SimulateChunkExecution(
 			if err != nil {
 				be, isBatchError := err.(*exception.BatchError)
 
-				if isBatchError && be.IsRetryable() && readAttempts < maxRetries { // maxRetries はリトライ回数
+				if isBatchError && be.IsRetryable() && readAttempts < maxRetries { // maxRetries is the number of retries
 					readAttempts++
 					// Simulate rollback of read count if necessary (MockReader handles its internal counter)
 					continue // Retry read
@@ -219,8 +219,8 @@ func SimulateChunkExecution(
 
 				if isBatchError && be.IsSkippable() && se.SkipReadCount < maxSkips {
 					se.SkipReadCount++
-					se.AddFailureException(err) // エラーを記録
-					reader.IncrementReadCount() // スキップされたアイテムをスキップするために、Readerの内部カウンタを進める
+					se.AddFailureException(err) // Record the error
+					reader.IncrementReadCount() // Advance the Reader's internal counter to skip the skipped item
 					goto NextItemRead           // Simulate skipping the item and moving to the next read
 				}
 
@@ -255,7 +255,7 @@ ProcessPhase:
 			if err != nil {
 				be, isBatchError := err.(*exception.BatchError)
 
-				if isBatchError && be.IsRetryable() && processAttempts < maxRetries { // maxRetries はリトライ回数
+				if isBatchError && be.IsRetryable() && processAttempts < maxRetries { // maxRetries is the number of retries
 					processAttempts++
 					continue // Retry process
 				}

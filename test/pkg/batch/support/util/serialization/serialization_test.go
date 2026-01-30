@@ -6,11 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	config "surfin/pkg/batch/core/config"
-	"surfin/pkg/batch/support/util/serialization"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/serialization"
 )
 
-// Setup: テスト用のグローバル設定を一時的に設定/リセットするヘルパー
+// setupMaskingConfig is a helper function that temporarily sets the global configuration
+// for masked parameter keys and returns a cleanup function to restore the original state.
 func setupMaskingConfig(keys []string) func() {
 	originalConfig := config.GlobalConfig
 	cfg := config.NewConfig()
@@ -70,7 +71,7 @@ func TestMarshalJobParameters_Masking(t *testing.T) {
 		t.Fatalf("MarshalJobParameters failed: %v", err)
 	}
 
-	// マスキングされたJSONが出力されていることを確認
+	// Verify that the masked JSON is output
 	if !strings.Contains(string(data), `"secret":"********"`) {
 		t.Errorf("Marshaled output did not contain masked value: %s", string(data))
 	}
@@ -106,7 +107,7 @@ func TestExecutionContext_MarshalUnmarshal(t *testing.T) {
 		t.Fatalf("UnmarshalExecutionContext failed: %v", err)
 	}
 
-	// JSON Unmarshal は数値を float64 に変換するため、比較用のマップを調整する
+	// Adjust the comparison map because JSON Unmarshal converts numbers to float64
 	expectedRestored := map[string]interface{}{
 		"step":      "chunk",
 		"index":     float64(5), // JSON Unmarshal converts numbers to float64

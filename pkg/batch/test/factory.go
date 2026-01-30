@@ -5,94 +5,130 @@ import (
 	"database/sql"
 	"testing"
 
-	adapter "surfin/pkg/batch/core/adapter" // Changed from port to adapter
-	config "surfin/pkg/batch/core/config"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 
 	"gorm.io/gorm"
 )
 
-// --- Mock/Helper Structures ---
-
-// MockProviderFactory is defined in pkg/batch/test/factory.go.
-
-// MockDBConnection is a mock implementation of adapter.DBConnection for testing GORM repositories.
+// MockDBConnection is a mock implementation of the adapter.DBConnection interface.
+// It is used for testing purposes, particularly when a real database connection
+// is not required or when simulating specific database behaviors.
 type MockDBConnection struct {
-	DB *gorm.DB
+	DB *gorm.DB // The underlying GORM DB instance, primarily for internal mock logic.
 }
 
-// NewMockDBConnection creates a new MockDBConnection instance.
+// NewMockDBConnection creates a new instance of MockDBConnection.
+//
+// Parameters:
+//   db: An optional *gorm.DB instance. In most mock scenarios, this can be nil.
+//
+// Returns:
+//   adapter.DBConnection: A new mock database connection.
 func NewMockDBConnection(db *gorm.DB) adapter.DBConnection {
 	return &MockDBConnection{DB: db}
 }
 
+// Close simulates closing the database connection.
+// It always returns nil, indicating success.
 func (m *MockDBConnection) Close() error {
 	return nil
 }
+
+// Type returns the simulated database type.
+// It always returns "mock_db".
 func (m *MockDBConnection) Type() string {
-	return "mock_db" // Returns a fixed value for mock.
-}
-func (m *MockDBConnection) RefreshConnection(ctx context.Context) error {
-	return nil
-}
-func (m *MockDBConnection) Config() config.DatabaseConfig {
-	return config.DatabaseConfig{}
+	return "mock_db"
 }
 
+// Name returns the simulated connection name.
+// It always returns "mock_name".
 func (m *MockDBConnection) Name() string {
 	return "mock_name"
 }
 
-// GetSQLDB implements adapter.DBConnection.
+// RefreshConnection simulates refreshing the database connection.
+// It always returns nil, indicating success.
+func (m *MockDBConnection) RefreshConnection(ctx context.Context) error {
+	return nil
+}
+
+// Config returns a dummy database configuration.
+// It returns an empty dbconfig.DatabaseConfig struct.
+func (m *MockDBConnection) Config() dbconfig.DatabaseConfig {
+	return dbconfig.DatabaseConfig{}
+}
+
+// GetSQLDB returns a nil *sql.DB and nil error, as it's a mock.
 func (m *MockDBConnection) GetSQLDB() (*sql.DB, error) {
-	return nil, nil // Returns nil for testing purposes.
+	return nil, nil
 }
 
-// ExecuteQuery implements adapter.DBConnection.
+// ExecuteQuery simulates a database query operation.
+// It does nothing and always returns nil.
 func (m *MockDBConnection) ExecuteQuery(ctx context.Context, target interface{}, query map[string]interface{}) error {
-	return nil // Does nothing as it's a mock.
+	return nil
 }
 
-// ExecuteQueryAdvanced implements adapter.DBConnection.
+// ExecuteQueryAdvanced simulates an advanced database query operation.
+// It does nothing and always returns nil.
 func (m *MockDBConnection) ExecuteQueryAdvanced(ctx context.Context, target interface{}, query map[string]interface{}, orderBy string, limit int) error {
-	return nil // Does nothing as it's a mock.
+	return nil
 }
 
-// Count implements adapter.DBConnection.
+// Count simulates counting records in a database.
+// It always returns 0 and nil error.
 func (m *MockDBConnection) Count(ctx context.Context, model interface{}, query map[string]interface{}) (int64, error) {
-	return 0, nil // Returns 0 as it's a mock.
+	return 0, nil
 }
 
-// Pluck implements adapter.DBConnection.
+// Pluck simulates plucking a column's values from a database.
+// It does nothing and always returns nil.
 func (m *MockDBConnection) Pluck(ctx context.Context, model interface{}, column string, target interface{}, query map[string]interface{}) error {
-	return nil // Does nothing as it's a mock.
+	return nil
 }
 
-// ExecuteUpdate implements adapter.DBConnection.
+// ExecuteUpdate simulates a database update operation (CREATE, UPDATE, DELETE).
+// It returns 1 (simulating one row affected) and nil error for "CREATE" or "UPDATE" operations,
+// and 0 and nil error otherwise.
 func (m *MockDBConnection) ExecuteUpdate(ctx context.Context, model interface{}, operation string, tableName string, query map[string]interface{}) (rowsAffected int64, err error) {
-	// Returns 1 assuming success, as it's a mock.
 	if operation == "CREATE" || operation == "UPDATE" {
 		return 1, nil
 	}
 	return 0, nil
 }
 
-// ExecuteUpsert implements adapter.DBConnection.
+// ExecuteUpsert simulates a database upsert operation.
+// It always returns 1 (simulating one row affected) and nil error.
 func (m *MockDBConnection) ExecuteUpsert(ctx context.Context, model interface{}, tableName string, conflictColumns []string, updateColumns []string) (rowsAffected int64, err error) {
-	// Returns 1 assuming success, as it's a mock.
 	return 1, nil
 }
 
-// MockProviderFactory is a dummy ProviderFactory for testing.
+// IsTableNotExistError simulates checking if an error indicates a table does not exist.
+// It always returns false.
+func (m *MockDBConnection) IsTableNotExistError(err error) bool {
+	return false
+}
+
+// MockProviderFactory is a dummy implementation of a provider factory for testing.
+// It does not provide any actual functionality.
 type MockProviderFactory struct{}
 
-// GetProvider always returns nil.
+// GetProvider always returns nil for both the provider and error.
 func (m *MockProviderFactory) GetProvider(dbType string) (interface{}, error) {
 	return nil, nil
 }
 
-// CreateTestDBConnection creates a DBConnection for testing.
+// CreateTestDBConnection creates a mock DBConnection for testing.
+// This is a helper function to simplify test setups.
+//
+// Parameters:
+//   t: The testing.T instance for test reporting.
+//   db: An optional *gorm.DB instance to be wrapped by the mock.
+//
+// Returns:
+//   adapter.DBConnection: A new mock database connection.
 func CreateTestDBConnection(t *testing.T, db *gorm.DB) adapter.DBConnection {
 	t.Helper()
-	// Uses MockDBConnection.
 	return NewMockDBConnection(db)
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"surfin/pkg/batch/support/util/exception"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 
 	"github.com/stretchr/testify/assert"
 )

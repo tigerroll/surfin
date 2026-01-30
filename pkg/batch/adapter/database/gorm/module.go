@@ -4,9 +4,9 @@ import (
 	"go.uber.org/fx"
 
 	// Blank imports for GORM dialects to ensure they are registered.
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	_ "github.com/mattn/go-sqlite3"
+	_ "gorm.io/driver/mysql"    // MySQL GORM driver
+	_ "gorm.io/driver/postgres" // PostgreSQL GORM driver
+	_ "gorm.io/driver/sqlite"   // SQLite GORM driver
 )
 
 // Module exports the components of the gorm adapter package for dependency injection (excluding concrete DB Providers).
