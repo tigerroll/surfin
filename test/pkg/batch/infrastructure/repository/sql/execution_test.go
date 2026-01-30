@@ -7,7 +7,7 @@ import (
 
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
-	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Alias for clarity
+	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"                  // Alias for clarity
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"               // Add this import
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"     // Alias for clarity
 	sqlrepo "github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/sql" // Alias for clarity

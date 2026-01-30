@@ -81,7 +81,7 @@ func setupSQLiteTestDB(t *testing.T) (repository.JobRepository, adapter.DBConnec
 		gormDB, err := gorm.Open(dialector, &gorm.Config{Logger: gormLogger})
 		assert.NoError(t, err)
 
-		globalGormDB = gormDB // Adjust to NewGormDBAdapter signature
+		globalGormDB = gormDB                                                   // Adjust to NewGormDBAdapter signature
 		globalDBConn = gormadapter.NewGormDBAdapter(gormDB, cfg, "test_sqlite") // Use gormadapter
 
 		// Create Test Resolver: Always returns globalDBConn
@@ -226,7 +226,7 @@ func TestSQLiteJobRepository_OptimisticLocking(t *testing.T) {
 	assert.NoError(t, err)
 	txCtx = context.WithValue(ctx, "tx", txAdapter)
 	repo.SaveJobExecution(txCtx, exec1) // Version 0
-	globalTxManager.Commit(txAdapter) // Get Version 0
+	globalTxManager.Commit(txAdapter)   // Get Version 0
 
 	foundExec, _ := repo.FindJobExecutionByID(ctx, exec1.ID) // Get Version 0
 
