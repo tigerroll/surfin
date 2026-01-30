@@ -1,6 +1,9 @@
+// Package runner provides implementations for job execution runners.
+// It includes the FlowJobRunner, which orchestrates job execution based on a flow definition.
 package runner
 
 import (
+	// Standard library imports
 	"context"
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
@@ -36,20 +39,20 @@ func NewFlowJobRunner(
 func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecution *model.JobExecution, flowDef *model.FlowDefinition) {
 	logger.Infof("FlowJobRunner: Starting execution for Job '%s' (Execution ID: %s).", jobInstance.JobName(), jobExecution.ID)
 
-	// JobExecution のステータスを STARTED に更新
-	jobExecution.MarkAsStarted()
+	// Update JobExecution status to STARTED.
+	jobExecution.MarkAsStarted() // Mark the job execution as started.
 	if err := r.jobRepository.UpdateJobExecution(ctx, jobExecution); err != nil {
 		logger.Errorf("FlowJobRunner: Failed to update JobExecution status to STARTED: %v", err)
 		jobExecution.MarkAsFailed(err)
-		r.jobRepository.UpdateJobExecution(ctx, jobExecution) // 最終ステータスを保存を試みる
+		r.jobRepository.UpdateJobExecution(ctx, jobExecution) // Attempt to save the final status.
 		return
 	}
 
-	// ジョブ実行のトレーシングスパンを開始
+	// Start a tracing span for job execution.
 	jobCtx, endJobSpan := r.tracer.StartJobSpan(ctx, jobExecution)
 	defer endJobSpan()
 
-	// 開始要素を取得
+	// Get the starting element from the flow definition.
 	currentElementID := flowDef.StartElement
 	var currentElement interface{}
 	var ok bool
@@ -57,16 +60,16 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 	for {
 		select {
 		case <-jobCtx.Done():
-			logger.Warnf("FlowJobRunner: Job context cancelled for Job '%s' (Execution ID: %s).", jobInstance.JobName(), jobExecution.ID)
+			logger.Warnf("FlowJobRunner: Job context cancelled for Job '%s' (Execution ID: %s).", jobInstance.JobName(), jobExecution.ID) // Log cancellation.
 			jobExecution.MarkAsStopped()
 			r.jobRepository.UpdateJobExecution(jobCtx, jobExecution)
 			return
 		default:
-			// 続行
+			// Continue
 		}
 
 		currentElement, ok = flowDef.Elements[currentElementID]
-		if !ok {
+		if !ok { // Check if the current element exists in the flow definition.
 			err := exception.NewBatchErrorf("flow_runner", "Flow element '%s' not found in flow definition for job '%s'", currentElementID, jobInstance.JobName())
 			logger.Errorf("FlowJobRunner: %v", err)
 			jobExecution.MarkAsFailed(err)
@@ -79,25 +82,26 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 
 		switch element := currentElement.(type) {
 		case port.Step:
-			logger.Infof("FlowJobRunner: Executing Step '%s' for Job '%s'.", element.StepName(), jobInstance.JobName())
+			logger.Infof("FlowJobRunner: Executing Step '%s' for Job '%s'.", element.StepName(), jobInstance.JobName()) // Log step execution.
 
-			// 新しい StepExecution を作成
+			// Create a new StepExecution.
 			stepExecution := model.NewStepExecution(model.NewID(), jobExecution, element.StepName())
-			jobExecution.AddStepExecution(stepExecution)      // JobExecution のリストに追加
-			jobExecution.CurrentStepName = element.StepName() // 現在のステップ名を更新
+			jobExecution.AddStepExecution(stepExecution)      // Add to the list of StepExecutions for the JobExecution.
+			jobExecution.CurrentStepName = element.StepName() // Update the current step name.
 
-			// StepExecution を最初に保存する (SimpleStepExecutor が保存しない場合のワークアラウンド)
-			// StepExecutor がトランザクション内でこれを処理すべきだが、現在の実装では不足しているため、ここで補完する。
-			// これにより、TaskletStep/ChunkStep 内での最初の UpdateStepExecution 呼び出しが成功するようになる。
+			// Save the StepExecution initially (workaround if SimpleStepExecutor doesn't save).
+			// Although StepExecutor should handle this within a transaction, the current implementation
+			// might be lacking, so this compensates. This ensures that the first UpdateStepExecution
+			// call within TaskletStep/ChunkStep succeeds.
 			if err := r.jobRepository.SaveStepExecution(jobCtx, stepExecution); err != nil {
 				elementErr = exception.NewBatchError(element.StepName(), "Failed to save initial StepExecution", err, false, false)
 				exitStatus = model.ExitStatusFailed
 				logger.Errorf("FlowJobRunner: Failed to save initial StepExecution for Step '%s': %v", element.StepName(), err)
 				jobExecution.MarkAsFailed(elementErr)
 				r.jobRepository.UpdateJobExecution(jobCtx, jobExecution)
-				return // Run メソッドを終了
+				return // Exit the Run method.
 			}
-			// ステップを実行
+			// Execute the step.
 			executedStepExecution, err := r.stepExecutor.ExecuteStep(jobCtx, element, jobExecution, stepExecution)
 			if err != nil {
 				elementErr = err
@@ -108,7 +112,7 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 				logger.Infof("FlowJobRunner: Step '%s' completed with ExitStatus: %s", element.StepName(), exitStatus)
 			}
 
-			// Step から Job への ExecutionContext の昇格
+			// Promote ExecutionContext from Step to Job.
 			if promotion := element.GetExecutionContextPromotion(); promotion != nil {
 				for _, key := range promotion.Keys {
 					if val, ok := executedStepExecution.ExecutionContext.Get(key); ok {
@@ -124,7 +128,7 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 
 		case port.Decision:
 			logger.Infof("FlowJobRunner: Executing Decision '%s' for Job '%s'.", element.DecisionName(), jobInstance.JobName())
-			// 次のパスを決定
+			// Determine the next path based on the decision.
 			decisionExitStatus, err := element.Decide(jobCtx, jobExecution, jobExecution.Parameters)
 			if err != nil {
 				elementErr = err
@@ -137,8 +141,8 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 
 		case port.Split:
 			logger.Infof("FlowJobRunner: Executing Split '%s' for Job '%s'.", element.ID(), jobInstance.JobName())
-			// TODO: Split の並列実行を実装
-			// 現時点では、未実装としてエラーを返す
+			// TODO: Implement parallel execution for Split.
+			// Currently, it returns an error as it's not yet implemented.
 			elementErr = exception.NewBatchErrorf("flow_runner", "Split execution is not yet implemented for Split '%s'", element.ID())
 			exitStatus = model.ExitStatusFailed
 			logger.Errorf("FlowJobRunner: %v", elementErr)
@@ -149,15 +153,14 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 			logger.Errorf("FlowJobRunner: %v", elementErr)
 		}
 
-		// 次の遷移ルールを検索
+		// Search for the next transition rule.
 		nextRule, found := flowDef.GetTransitionRule(currentElementID, exitStatus, elementErr != nil)
 		if !found {
-			// 特定のルールが見つからない場合、ワイルドカードまたはデフォルトを試す
-			nextRule, found = flowDef.GetTransitionRule(currentElementID, model.ExitStatusUnknown, elementErr != nil) // '*' を確認
+			// If a specific rule is not found, try a wildcard or default rule.
+			nextRule, found = flowDef.GetTransitionRule(currentElementID, model.ExitStatusUnknown, elementErr != nil) // Check for '*'
 		}
 
-		if !found {
-			// 遷移ルールが見つからない場合、ジョブは失敗として終了
+		if !found { // If no transition rule is found, the job terminates as failed.
 			err := exception.NewBatchErrorf("flow_runner", "No transition rule found for element '%s' with ExitStatus '%s' (error: %v)", currentElementID, exitStatus, elementErr)
 			logger.Errorf("FlowJobRunner: %v", err)
 			jobExecution.MarkAsFailed(err)
@@ -165,37 +168,37 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 			return
 		}
 
-		// 遷移ルールを適用
+		// Apply the transition rule.
 		if nextRule.Transition.End {
 			jobExecution.MarkAsCompleted()
-			if elementErr != nil { // エラーがあったが 'end' 遷移の場合、それでも完了とする
+			if elementErr != nil { // If there was an error but the transition is 'end', still mark as completed.
 				jobExecution.AddFailureException(elementErr)
 			}
 			logger.Infof("FlowJobRunner: Job '%s' (Execution ID: %s) completed with ExitStatus: %s (Transition: END).", jobInstance.JobName(), jobExecution.ID, jobExecution.ExitStatus)
-			break // ループを終了
+			break // Exit the loop.
 		} else if nextRule.Transition.Fail {
 			jobExecution.MarkAsFailed(elementErr)
 			logger.Infof("FlowJobRunner: Job '%s' (Execution ID: %s) failed with ExitStatus: %s (Transition: FAIL).", jobInstance.JobName(), jobExecution.ID, jobExecution.ExitStatus)
-			break // ループを終了
+			break // Exit the loop.
 		} else if nextRule.Transition.Stop {
 			jobExecution.MarkAsStopped()
 			logger.Infof("FlowJobRunner: Job '%s' (Execution ID: %s) stopped with ExitStatus: %s (Transition: STOP).", jobInstance.JobName(), jobExecution.ID, jobExecution.ExitStatus)
-			break // ループを終了
+			break // Exit the loop.
 		} else if nextRule.Transition.To != "" {
 			currentElementID = nextRule.Transition.To
 			logger.Debugf("FlowJobRunner: Transitioning to next element: '%s'", currentElementID)
 		} else {
-			// バリデーションが正しければ発生しないはずだが、念のため
+			// This should not happen if validation is correct, but as a safeguard.
 			err := exception.NewBatchErrorf("flow_runner", "Invalid transition rule for element '%s': no 'to', 'end', 'fail', or 'stop' specified", currentElementID)
 			logger.Errorf("FlowJobRunner: %v", err)
-			jobExecution.MarkAsFailed(err)
-			break // ループを終了
+			jobExecution.MarkAsFailed(err) // Mark job as failed.
+			break // Exit the loop.
 		}
 	}
 
-	// JobExecution の最終更新 (ブレーク条件で既に更新されていない場合)
-	if !jobExecution.Status.IsFinished() {
-		jobExecution.MarkAsCompleted() // 明示的な終了ステータスなしでループが終了した場合、完了と見なす
+	// Final update of JobExecution (if not already updated by a break condition).
+	if !jobExecution.Status.IsFinished() { // If the loop ends without an explicit final status, consider it completed.
+		jobExecution.MarkAsCompleted()
 	}
 	if err := r.jobRepository.UpdateJobExecution(jobCtx, jobExecution); err != nil {
 		logger.Errorf("FlowJobRunner: Failed to update final JobExecution status: %v", err)

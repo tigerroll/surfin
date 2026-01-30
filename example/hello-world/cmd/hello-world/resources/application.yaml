@@ -1,7 +1,7 @@
 surfin:
   system:
     timezone: Asia/Tokyo
-    logging: # ログレベルをDEBUGに設定
+    logging: # Set log level to DEBUG
       level: DEBUG
   batch:
     job_name: helloWorldJob
@@ -10,12 +10,30 @@ surfin:
     item_retry:
       max_attempts: 3
       initial_interval: 100
-      retryable_exceptions:
+      retryable_exceptions: # Retryable exceptions for item processing
         - "BatchError"
     item_skip:
       skip_limit: 10
-      skippable_exceptions:
-        - "BatchError" # In-memory DB のため、datasources および infrastructure セクションは不要
+      skippable_exceptions: # Skippable exceptions for item processing
+        - "BatchError" # No need for datasources and infrastructure sections for in-memory DB
+    job_repository_db_ref: dummy
+  database: # Renamed from adapter_configs to database
+    metadata: # Dummy configuration for 'metadata' database, referenced by framework migrations
+      type: dummy
+      host: "" # Dummy value
+      port: 0 # Dummy value
+      database: "" # Dummy value
+      user: "" # Dummy value
+      password: "" # Dummy value
+      sslmode: "" # Dummy value
+    dummy: # Dummy configuration for 'dummy' database, which should skip migrations
+      type: dummy
+      host: "" # Dummy value
+      port: 0 # Dummy value
+      database: "" # Dummy value
+      user: "" # Dummy value
+      password: "" # Dummy value
+      sslmode: "" # Dummy value
   security:
     masked_parameter_keys:
       - "password"

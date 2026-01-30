@@ -1,3 +1,5 @@
+// main package is the entry point for the hello-world batch application.
+// It sets up the Fx application, loads configurations, and manages the job execution lifecycle.
 package main
 
 import (
@@ -18,21 +20,24 @@ import (
 	"go.uber.org/fx"
 )
 
-// embeddedConfig はアプリケーションのYAML設定ファイルの内容を埋め込みます。
+// embeddedConfig embeds the content of the application's YAML configuration file.
 //
 //go:embed resources/application.yaml
 var embeddedConfig []byte
 
-// embeddedJSL はジョブ仕様言語 (JSL) ファイルの内容を埋め込みます。
+// embeddedJSL embeds the content of the Job Specification Language (JSL) file.
+// This file defines the batch job's structure and components.
 //
 //go:embed resources/job.yaml
 var embeddedJSL []byte
 
-// startJobExecution はアプリケーション起動時にジョブ実行を開始する Fx Hook ヘルパー関数です。
+// startJobExecution is an Fx Hook helper function that initiates job execution
+// upon application startup. It registers OnStart and OnStop hooks with the Fx lifecycle.
 func startJobExecution(
 	lc fx.Lifecycle,
 	shutdowner fx.Shutdowner,
-	jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
+	// jobLauncher is the concrete SimpleJobLauncher instance responsible for launching jobs.
+	jobLauncher *usecase.SimpleJobLauncher,
 	jobRepository jobRepo.JobRepository,
 	cfg *config.Config,
 	appCtx context.Context,
@@ -43,9 +48,12 @@ func startJobExecution(
 	})
 }
 
-// onStartJobExecution is an Fx Hook helper function that starts job execution upon application startup.
+// onStartJobExecution is an Fx Hook helper function that returns a function
+// to be executed when the application starts. It launches the batch job
+// and monitors its execution, triggering application shutdown upon completion.
 func onStartJobExecution(
-	jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
+	// jobLauncher is the concrete SimpleJobLauncher instance responsible for launching jobs.
+	jobLauncher *usecase.SimpleJobLauncher,
 	jobRepository jobRepo.JobRepository,
 	cfg *config.Config,
 	shutdowner fx.Shutdowner,
@@ -116,7 +124,8 @@ func onStartJobExecution(
 	}
 }
 
-// onStopApplication はアプリケーションシャットダウンをログに記録する Fx Hook ヘルパー関数です。
+// onStopApplication is an Fx Hook helper function that returns a function
+// to be executed when the application stops. It logs the application shutdown event.
 func onStopApplication() func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		logger.Infof("Application is shutting down.")
@@ -124,29 +133,33 @@ func onStopApplication() func(ctx context.Context) error {
 	}
 }
 
-// main はアプリケーションのエントリポイントです。
+// main is the entry point of the hello-world batch application.
+// It sets up the application context, handles OS signals for graceful shutdown,
+// loads configuration, and initializes and runs the Fx application.
+//
+// The application will execute the "helloWorldJob" defined in job.yaml.
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// シグナルハンドリング (Ctrl+Cなど)
+	// Handle OS signals (e.g., Ctrl+C) for graceful shutdown.
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM) // シグナルハンドリング (Ctrl+Cなど)
-
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-sigChan
 		logger.Warnf("Received signal '%v'. Attempting to stop the job...", sig)
 		cancel()
 	}()
 
+	// Determine the path to the .env file, defaulting to ".env" if not specified.
 	envFilePath := os.Getenv("ENV_FILE_PATH")
 	if envFilePath == "" {
 		envFilePath = ".env"
 	}
 
-	fxApp := fx.New(GetApplicationOptions(ctx, envFilePath, embeddedConfig, embeddedJSL)...) // GetApplicationOptions から返されたオプションを展開して fx.New に渡す
+	fxApp := fx.New(GetApplicationOptions(ctx, envFilePath, embeddedConfig, embeddedJSL)...)
 	fxApp.Run()
-	if fxApp.Err() != nil {
+	if fxApp.Err() != nil { // Check for errors during Fx application startup or execution.
 		logger.Fatalf("Application run failed: %v", fxApp.Err())
 	}
 	os.Exit(0)

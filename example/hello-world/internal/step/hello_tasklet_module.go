@@ -1,27 +1,29 @@
+// Package step provides the Fx module for the HelloWorldTasklet component.
+// It registers the tasklet builder with the JobFactory.
 package step
 
 import (
 	"go.uber.org/fx"
 
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config" // Import config package
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
-	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
-// NewHelloWorldTaskletComponentBuilder は HelloWorldTasklet の jsl.ComponentBuilder を作成します。
+// NewHelloWorldTaskletComponentBuilder creates a jsl.ComponentBuilder for HelloWorldTasklet.
+// This builder function is responsible for instantiating HelloWorldTasklet
+// with its required properties.
 func NewHelloWorldTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
-		repo job.JobRepository,
 		resolver core.ExpressionResolver,
 		dbResolver core.DBConnectionResolver,
 		properties map[string]string,
 	) (interface{}, error) {
-		_ = cfg // このコンポーネントでは不要な引数は無視します。
-		_ = repo
+		// Unused arguments are ignored for this component.
+		_ = cfg
 		_ = resolver
 		_ = dbResolver
 
@@ -33,16 +35,21 @@ func NewHelloWorldTaskletComponentBuilder() jsl.ComponentBuilder {
 	})
 }
 
-// RegisterHelloWorldTaskletBuilder は作成した ComponentBuilder を JobFactory に登録します。
+// RegisterHelloWorldTaskletBuilder registers the created ComponentBuilder with the JobFactory.
+//
+// This allows the framework to locate and use the HelloWorldTasklet
+// when it's referenced in JSL (Job Specification Language) files.
 func RegisterHelloWorldTaskletBuilder(
 	jf *support.JobFactory,
 	builder jsl.ComponentBuilder,
-) {
-	jf.RegisterComponentBuilder("helloWorldTasklet", builder)                                                        // JSL (job.yaml) の 'ref: helloWorldTasklet' と一致するキーでビルダを登録します。
-	logger.Debugf("ComponentBuilder for HelloWorldTasklet registered with JobFactory. JSL ref: 'helloWorldTasklet'") // この行を追加
+) { // Register the ComponentBuilder with the JobFactory.
+	// The key "helloWorldTasklet" must match the 'ref' attribute in the JSL (e.g., job.yaml).
+	jf.RegisterComponentBuilder("helloWorldTasklet", builder)
+	logger.Debugf("ComponentBuilder for HelloWorldTasklet registered with JobFactory. JSL ref: 'helloWorldTasklet'")
 }
 
-// Module は HelloWorldTasklet コンポーネントの Fx オプションを定義します。
+// Module defines the Fx options for the HelloWorldTasklet component.
+// It provides the component builder and registers it with the JobFactory.
 var Module = fx.Options(
 	fx.Provide(fx.Annotate(
 		NewHelloWorldTaskletComponentBuilder,
