@@ -22,12 +22,15 @@ type MockExpressionResolver struct {
 
 // Resolve mocks the resolution of an expression string.
 // Parameters:
-//   ctx: The context for the operation.
-//   expression: The expression string to resolve.
-//   jobExecution: The current JobExecution.
-//   stepExecution: The current StepExecution.
+//
+//	ctx: The context for the operation.
+//	expression: The expression string to resolve.
+//	jobExecution: The current JobExecution.
+//	stepExecution: The current StepExecution.
+//
 // Returns:
-//   The resolved string and an error if resolution fails.
+//
+//	The resolved string and an error if resolution fails.
 func (m *MockExpressionResolver) Resolve(ctx context.Context, expression string, jobExecution *model.JobExecution, stepExecution *model.StepExecution) (string, error) {
 	args := m.Called(ctx, expression, jobExecution, stepExecution)
 	return args.String(0), args.Error(1)

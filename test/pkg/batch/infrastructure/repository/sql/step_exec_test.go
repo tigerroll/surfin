@@ -33,7 +33,7 @@ func setupGormStepMock(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, adapter.DBConne
 	}), &gorm.Config{})
 	assert.NoError(t, err)
 
-	cfg := dbconfig.DatabaseConfig{Type: "mock_db"} // Use correct DatabaseConfig
+	cfg := dbconfig.DatabaseConfig{Type: "mock_db"}                // Use correct DatabaseConfig
 	dbConn := gormadapter.NewGormDBAdapter(gormDB, cfg, "mock_db") // Use gormadapter
 
 	txManager := &mocktx.MockTxManager{}
