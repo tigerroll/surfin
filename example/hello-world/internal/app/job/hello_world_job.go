@@ -1,6 +1,9 @@
+// Package job provides the implementation of the "helloWorldJob" batch job.
+// This job demonstrates a basic batch process within the Surfin Batch Framework.
 package job
 
 import (
+	// Standard library imports
 	"context"
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
@@ -11,9 +14,9 @@ import (
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
-// HelloWorldJob は port.Job インターフェースを実装するシンプルなジョブです。
-// このチュートリアル用に JobRunner のロジックを直接含まず、
-// JobFactory から渡される FlowDefinition を保持します。
+// HelloWorldJob is a simple job that implements the port.Job interface.
+// For this tutorial, it does not directly contain JobRunner logic but
+// holds the FlowDefinition passed from the JobFactory.
 type HelloWorldJob struct {
 	id             string
 	name           string
@@ -25,7 +28,7 @@ type HelloWorldJob struct {
 	tracer         metrics.Tracer
 }
 
-// NewHelloWorldJob は HelloWorldJob の新しいインスタンスを作成します。
+// NewHelloWorldJob creates a new instance of HelloWorldJob.
 func NewHelloWorldJob(
 	jobRepository repository.JobRepository,
 	cfg *config.Config,
@@ -35,7 +38,7 @@ func NewHelloWorldJob(
 	tracer metrics.Tracer,
 ) (port.Job, error) {
 	return &HelloWorldJob{
-		id:             "helloWorldJob", // JSLのIDと一致
+		id:             "helloWorldJob", // Matches JSL ID
 		name:           "Hello World Batch Job",
 		flow:           flow,
 		jobRepository:  jobRepository,
@@ -46,37 +49,38 @@ func NewHelloWorldJob(
 	}, nil
 }
 
-// Run はジョブの実行ロジックです。
-// SimpleJobLauncher が JobRunner を使ってこの Run を呼び出すため、
-// ここでは直接フローを実行するのではなく、JobRunner に処理を委譲します。
-// ただし、この Job の実装は JobRunner を直接参照しないため、
-// ここでは何もしないか、ログを出す程度に留めます。
+// Run contains the job's execution logic.
+// The SimpleJobLauncher calls this Run method using a JobRunner.
+// Therefore, this method does not directly execute the flow but delegates
+// the processing to the JobRunner. This specific Job implementation
+// does not directly reference the JobRunner, so it performs no operation
+// or just logs.
 func (j *HelloWorldJob) Run(ctx context.Context, jobExecution *model.JobExecution, jobParameters model.JobParameters) error {
 	logger.Infof("HelloWorldJob.Run called for JobExecution ID: %s", jobExecution.ID)
-	// 実際のフロー実行は JobRunner が行います。
+	// The actual flow execution is handled by the JobRunner.
 	return nil
 }
 
-// JobName はジョブの論理名を返します。
+// JobName returns the logical name of the job.
 func (j *HelloWorldJob) JobName() string {
 	return j.name
 }
 
-// ID はジョブ定義のユニークなIDを返します。
+// ID returns the unique ID of the job definition.
 func (j *HelloWorldJob) ID() string {
 	return j.id
 }
 
-// GetFlow はジョブのフロー定義構造を返します。
+// GetFlow returns the job's flow definition structure.
 func (j *HelloWorldJob) GetFlow() *model.FlowDefinition {
 	return j.flow
 }
 
-// ValidateParameters はジョブ実行前にジョブパラメータを検証します。
+// ValidateParameters validates job parameters before job execution.
 func (j *HelloWorldJob) ValidateParameters(params model.JobParameters) error {
-	// このチュートリアルではパラメータ検証は不要
+	// Parameter validation is not needed for this tutorial.
 	return nil
 }
 
-// HelloWorldJob が port.Job インターフェースを実装していることを確認します。
+// HelloWorldJob confirms that it implements the port.Job interface.
 var _ port.Job = (*HelloWorldJob)(nil)

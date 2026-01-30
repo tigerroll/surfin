@@ -1,4 +1,6 @@
+// Package app provides application-level components and utilities for the hello-world example.
+// This package serves as a container for application-specific logic.
 package app
 
-// このファイルは 'internal/app' ディレクトリを有効なGoパッケージとして認識させるために存在します。
-// RunApplication 関数は main.go に移動されました。
+// This file exists to make the 'internal/app' directory recognized as a valid Go package.
+// The RunApplication function has been moved to main.go.
