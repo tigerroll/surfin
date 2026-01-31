@@ -30,7 +30,8 @@
 
 # 新しいプロジェクトディレクトリと必要なサブディレクトリを作成
 mkdir -p example/hello-world/cmd/hello-world/resources
-mkdir -p example/hello-world/internal/app
+mkdir -p example/hello-world/internal/app/job
+mkdir -p example/hello-world/internal/app/runner
 mkdir -p example/hello-world/internal/step
 
 # 新しいプロジェクトディレクトリに移動
@@ -55,7 +56,7 @@ go mod tidy
 surfin:
   system:
     timezone: Asia/Tokyo
-    logging:
+    logging: # Set log level to DEBUG
       level: DEBUG
   batch:
     job_name: helloWorldJob
@@ -64,12 +65,16 @@ surfin:
     item_retry:
       max_attempts: 3
       initial_interval: 100
-      retryable_exceptions:
+      retryable_exceptions: # Retryable exceptions for item processing
         - "BatchError"
     item_skip:
       skip_limit: 10
-      skippable_exceptions:
-        - "BatchError" # In-memory DB のため、datasources および infrastructure セクションは不要
+      skippable_exceptions: # Skippable exceptions for item processing
+        - "BatchError" # No need for datasources and infrastructure sections for in-memory DB
+    job_repository_db_ref: dummy
+  database: # Renamed from adapter_configs to database
+    metadata: # Dummy configuration for 'metadata' database, referenced by framework migrations
+      type: dummy
   security:
     masked_parameter_keys:
       - "password"
@@ -82,15 +87,14 @@ surfin:
 version: '3'
 
 vars:
-  APP_MODULE_PATH: surfin/example/hello-world/cmd/hello-world
+  APP_MODULE_PATH: ./cmd/hello-world
   APP_BINARY_NAME: hello-world
   BUILD_OUTPUT_DIR: ../../dist
 
 tasks:
   default:
     desc: "List tasks for the hello-world application."
-    cmds:
-      - task --list
+    cmds: [task --list]
 
   build:
     desc: "Build the hello-world application executable."
@@ -113,13 +117,11 @@ tasks:
 
   clean:
     desc: "Remove build artifacts for hello-world application."
-    cmds:
-      - rm -f {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}
+    cmds: ["rm -f {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"]
 
   test:
     desc: "Run tests for the hello-world application."
-    cmds:
-      - go test ./internal/... -v -count=1
+    cmds: ["go test ./internal/... -v -count=1"]
 ```
 
 以降の変更は、この `example/hello-world` ディレクトリ内で行うことを想定しています。
@@ -175,28 +177,31 @@ import (
 	"fmt"
 
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 )
 
 // HelloWorldTaskletConfig は JSL から渡されるプロパティをバインドするための構造体です。
+// It defines the configuration parameters for the HelloWorldTasklet.
 type HelloWorldTaskletConfig struct {
-	Message string `yaml:"message"` // JSLのproperties.messageに対応
+	Message string `yaml:"message"` // Corresponds to properties.message in JSL.
 }
 
 // HelloWorldTasklet はシンプルなTaskletの実装です。
+// It prints a configurable message to the console.
 type HelloWorldTasklet struct {
-	config *HelloWorldTaskletConfig
-	executionContext model.ExecutionContext // Taskletの内部状態を保持するためのExecutionContext
+	config           *HelloWorldTaskletConfig // Configuration for the tasklet.
+	executionContext model.ExecutionContext   // ExecutionContext to hold the internal state of the Tasklet.
 }
 
 // NewHelloWorldTasklet は HelloWorldTasklet の新しいインスタンスを作成します。
+// It binds the provided properties to the tasklet's configuration.
 func NewHelloWorldTasklet(properties map[string]string) (*HelloWorldTasklet, error) {
 	taskletCfg := &HelloWorldTaskletConfig{}
-	
-	if err := configbinder.BindProperties(properties, taskletCfg); err != nil { // JSLプロパティを構造体にバインドします。
-		// isSkippable と isRetryable は false に設定
+
+	if err := configbinder.BindProperties(properties, taskletCfg); err != nil { // Binds JSL properties to the struct.
+		// isSkippable and isRetryable are set to false.
 		return nil, exception.NewBatchError("hello_world_tasklet", "Failed to bind properties", err, false, false)
 	}
 
@@ -205,36 +210,41 @@ func NewHelloWorldTasklet(properties map[string]string) (*HelloWorldTasklet, err
 	}
 
 	return &HelloWorldTasklet{
-		config: taskletCfg,
+		config:           taskletCfg,
 		executionContext: model.NewExecutionContext(),
 	}, nil
 }
 
-// Execute は Tasklet の主要なロジックを実行します。
+// Execute runs the main business logic of the Tasklet.
+// It logs the configured message to the console.
 func (t *HelloWorldTasklet) Execute(ctx context.Context, stepExecution *model.StepExecution) (model.ExitStatus, error) {
 	select {
 	case <-ctx.Done():
 		return model.ExitStatusFailed, ctx.Err()
 	default:
 	}
-
+	// Add a debug log to confirm the message content.
+	logger.Debugf("HelloWorldTasklet: Attempting to log message: '%s'", t.config.Message) // Log the message being processed.
 	logger.Infof("HelloWorldTasklet: %s", t.config.Message)
 	return model.ExitStatusCompleted, nil
 }
 
-// Close はリソースを解放します。
+// Close releases any resources held by the Tasklet.
+// For HelloWorldTasklet, there are no specific resources to close.
 func (t *HelloWorldTasklet) Close(ctx context.Context) error {
 	logger.Debugf("HelloWorldTasklet: Close called.")
 	return nil
 }
 
-// SetExecutionContext は Tasklet の ExecutionContext を設定します。
+// SetExecutionContext sets the ExecutionContext for the Tasklet.
+// This method allows the framework to inject or restore the tasklet's state.
 func (t *HelloWorldTasklet) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	t.executionContext = ec
 	return nil
 }
 
-// GetExecutionContext は Tasklet の ExecutionContext を取得します。
+// GetExecutionContext retrieves the current ExecutionContext of the Tasklet.
+// This method allows the framework to persist the tasklet's state.
 func (t *HelloWorldTasklet) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	return t.executionContext, nil
 }
@@ -259,24 +269,24 @@ import (
 	"go.uber.org/fx"
 
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config" // Import config package
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
-	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
-// NewHelloWorldTaskletComponentBuilder は HelloWorldTasklet の jsl.ComponentBuilder を作成します。
+// NewHelloWorldTaskletComponentBuilder creates a jsl.ComponentBuilder for HelloWorldTasklet.
+// This builder function is responsible for instantiating HelloWorldTasklet
+// with its required properties.
 func NewHelloWorldTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
-		repo job.JobRepository,
 		resolver core.ExpressionResolver,
 		dbResolver core.DBConnectionResolver,
 		properties map[string]string,
 	) (interface{}, error) {
-		_ = cfg // このコンポーネントでは不要な引数は無視します。
-		_ = repo
+		// Unused arguments are ignored for this component.
+		_ = cfg
 		_ = resolver
 		_ = dbResolver
 
@@ -288,15 +298,21 @@ func NewHelloWorldTaskletComponentBuilder() jsl.ComponentBuilder {
 	})
 }
 
-// RegisterHelloWorldTaskletBuilder は作成した ComponentBuilder を JobFactory に登録します。
+// RegisterHelloWorldTaskletBuilder registers the created ComponentBuilder with the JobFactory.
+//
+// This allows the framework to locate and use the HelloWorldTasklet
+// when it's referenced in JSL (Job Specification Language) files.
 func RegisterHelloWorldTaskletBuilder(
 	jf *support.JobFactory,
 	builder jsl.ComponentBuilder,
-) {
-	jf.RegisterComponentBuilder("helloWorldTasklet", builder) // JSL (job.yaml) の 'ref: helloWorldTasklet' と一致するキーでビルダを登録します。
+) { // Register the ComponentBuilder with the JobFactory.
+	// The key "helloWorldTasklet" must match the 'ref' attribute in the JSL (e.g., job.yaml).
+	jf.RegisterComponentBuilder("helloWorldTasklet", builder)
+	logger.Debugf("ComponentBuilder for HelloWorldTasklet registered with JobFactory. JSL ref: 'helloWorldTasklet'")
 }
 
-// Module は HelloWorldTasklet コンポーネントの Fx オプションを定義します。
+// Module defines the Fx options for the HelloWorldTasklet component.
+// It provides the component builder and registers it with the JobFactory.
 var Module = fx.Options(
 	fx.Provide(fx.Annotate(
 		NewHelloWorldTaskletComponentBuilder,
@@ -326,10 +342,11 @@ Surfin Batch Framework では、ジョブの実行ロジックを定義する `p
 package job
 
 import (
+	// Standard library imports
 	"context"
 
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
@@ -360,7 +377,7 @@ func NewHelloWorldJob(
 	tracer metrics.Tracer,
 ) (port.Job, error) {
 	return &HelloWorldJob{
-		id:             "helloWorldJob", // JSLのIDと一致
+		id:             "helloWorldJob", // Matches JSL ID
 		name:           "Hello World Batch Job",
 		flow:           flow,
 		jobRepository:  jobRepository,
@@ -371,39 +388,40 @@ func NewHelloWorldJob(
 	}, nil
 }
 
-// Run はジョブの実行ロジックです。
-// SimpleJobLauncher が JobRunner を使ってこの Run を呼び出すため、
-// ここでは直接フローを実行するのではなく、JobRunner に処理を委譲します。
-// ただし、この Job の実装は JobRunner を直接参照しないため、
-// ここでは何もしないか、ログを出す程度に留めます。
+// Run contains the job's execution logic.
+// The SimpleJobLauncher calls this Run method using a JobRunner.
+// Therefore, this method does not directly execute the flow but delegates
+// the processing to the JobRunner. This specific Job implementation
+// does not directly reference the JobRunner, so it performs no operation
+// or just logs.
 func (j *HelloWorldJob) Run(ctx context.Context, jobExecution *model.JobExecution, jobParameters model.JobParameters) error {
 	logger.Infof("HelloWorldJob.Run called for JobExecution ID: %s", jobExecution.ID)
-	// 実際のフロー実行は JobRunner が行います。
+	// The actual flow execution is handled by the JobRunner.
 	return nil
 }
 
-// JobName はジョブの論理名を返します。
+// JobName returns the logical name of the job.
 func (j *HelloWorldJob) JobName() string {
 	return j.name
 }
 
-// ID はジョブ定義のユニークなIDを返します。
+// ID returns the unique ID of the job definition.
 func (j *HelloWorldJob) ID() string {
 	return j.id
 }
 
-// GetFlow はジョブのフロー定義構造を返します。
+// GetFlow returns the job's flow definition structure.
 func (j *HelloWorldJob) GetFlow() *model.FlowDefinition {
 	return j.flow
 }
 
-// ValidateParameters はジョブ実行前にジョブパラメータを検証します。
+// ValidateParameters validates job parameters before job execution.
 func (j *HelloWorldJob) ValidateParameters(params model.JobParameters) error {
-	// このチュートリアルではパラメータ検証は不要
+	// Parameter validation is not needed for this tutorial.
 	return nil
 }
 
-// HelloWorldJob が port.Job インターフェースを実装していることを確認します。
+// HelloWorldJob confirms that it implements the port.Job interface.
 var _ port.Job = (*HelloWorldJob)(nil)
 ```
 
@@ -419,16 +437,21 @@ import support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 import logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 // RegisterHelloWorldJobBuilder は作成した JobBuilder を JobFactory に登録します。
+// It ensures that the "helloWorldJob" can be instantiated by the framework
+// when referenced in JSL (Job Specification Language) files.
 func RegisterHelloWorldJobBuilder(
 	jf *support.JobFactory,
 	builder support.JobBuilder,
 ) {
-	jf.RegisterJobBuilder("helloWorldJob", builder) // JobFactory に JobBuilder を登録
-	logger.Debugf("JobBuilder for helloWorldJob registered with JobFactory. JSL id: 'helloWorldJob'") // JSL (job.yaml) の 'id: helloWorldJob' と一致するキーでビルダを登録します。
+	// Register the JobBuilder with the JobFactory using the key "helloWorldJob".
+	// This key must match the 'id' field in the JSL (e.g., job.yaml).
+	jf.RegisterJobBuilder("helloWorldJob", builder)
+	logger.Debugf("JobBuilder for helloWorldJob registered with JobFactory. JSL id: 'helloWorldJob'")
 }
 
 // provideHelloWorldJobBuilder は NewHelloWorldJob 関数を support.JobBuilder 型として提供します。
-// NewHelloWorldJob の依存関係は、この関数が返す JobBuilder が実際に呼び出される際に解決されます。
+// The dependencies of NewHelloWorldJob are resolved when the JobBuilder returned by this function
+// is actually invoked by the framework.
 func provideHelloWorldJobBuilder() support.JobBuilder {
 	return NewHelloWorldJob
 }
@@ -436,8 +459,8 @@ func provideHelloWorldJobBuilder() support.JobBuilder {
 // Module は helloWorldJob コンポーネントの Fx オプションを定義します。
 var Module = fx.Options(
 	fx.Provide(fx.Annotate(
-		provideHelloWorldJobBuilder, // provideHelloWorldJobBuilder 関数が support.JobBuilder 型を返します
-		fx.ResultTags(`name:"helloWorldJob"`), // JobFactory がこの名前で JobBuilder を取得できるようにタグ付け
+		provideHelloWorldJobBuilder,           // The provideHelloWorldJobBuilder function returns a support.JobBuilder type.
+		fx.ResultTags(`name:"helloWorldJob"`), // Tags the result so JobFactory can retrieve the JobBuilder by this name.
 	)),
 	fx.Invoke(fx.Annotate(
 		RegisterHelloWorldJobBuilder,
@@ -454,6 +477,7 @@ var Module = fx.Options(
 package runner
 
 import (
+	// Standard library imports
 	"context"
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
@@ -489,20 +513,20 @@ func NewFlowJobRunner(
 func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecution *model.JobExecution, flowDef *model.FlowDefinition) {
 	logger.Infof("FlowJobRunner: Starting execution for Job '%s' (Execution ID: %s).", jobInstance.JobName(), jobExecution.ID)
 
-	// JobExecution のステータスを STARTED に更新
-	jobExecution.MarkAsStarted()
+	// Update JobExecution status to STARTED.
+	jobExecution.MarkAsStarted() // Mark the job execution as started.
 	if err := r.jobRepository.UpdateJobExecution(ctx, jobExecution); err != nil {
 		logger.Errorf("FlowJobRunner: Failed to update JobExecution status to STARTED: %v", err)
 		jobExecution.MarkAsFailed(err)
-		r.jobRepository.UpdateJobExecution(ctx, jobExecution) // 最終ステータスを保存を試みる
+		r.jobRepository.UpdateJobExecution(ctx, jobExecution) // Attempt to save the final status.
 		return
 	}
 
-	// ジョブ実行のトレーシングスパンを開始
+	// Start a tracing span for job execution.
 	jobCtx, endJobSpan := r.tracer.StartJobSpan(ctx, jobExecution)
 	defer endJobSpan()
 
-	// 開始要素を取得
+	// Get the starting element from the flow definition.
 	currentElementID := flowDef.StartElement
 	var currentElement interface{}
 	var ok bool
@@ -510,16 +534,16 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 	for {
 		select {
 		case <-jobCtx.Done():
-			logger.Warnf("FlowJobRunner: Job context cancelled for Job '%s' (Execution ID: %s).", jobInstance.JobName(), jobExecution.ID)
+			logger.Warnf("FlowJobRunner: Job context cancelled for Job '%s' (Execution ID: %s).", jobInstance.JobName(), jobExecution.ID) // Log cancellation.
 			jobExecution.MarkAsStopped()
 			r.jobRepository.UpdateJobExecution(jobCtx, jobExecution)
 			return
 		default:
-			// 続行
+			// Continue
 		}
 
 		currentElement, ok = flowDef.Elements[currentElementID]
-		if !ok {
+		if !ok { // Check if the current element exists in the flow definition.
 			err := exception.NewBatchErrorf("flow_runner", "Flow element '%s' not found in flow definition for job '%s'", currentElementID, jobInstance.JobName())
 			logger.Errorf("FlowJobRunner: %v", err)
 			jobExecution.MarkAsFailed(err)
@@ -532,25 +556,26 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 
 		switch element := currentElement.(type) {
 		case port.Step:
-			logger.Infof("FlowJobRunner: Executing Step '%s' for Job '%s'.", element.StepName(), jobInstance.JobName())
+			logger.Infof("FlowJobRunner: Executing Step '%s' for Job '%s'.", element.StepName(), jobInstance.JobName()) // Log step execution.
 
-			// 新しい StepExecution を作成
+			// Create a new StepExecution.
 			stepExecution := model.NewStepExecution(model.NewID(), jobExecution, element.StepName())
-			jobExecution.AddStepExecution(stepExecution) // JobExecution のリストに追加
-			jobExecution.CurrentStepName = element.StepName() // 現在のステップ名を更新
+			jobExecution.AddStepExecution(stepExecution)      // Add to the list of StepExecutions for the JobExecution.
+			jobExecution.CurrentStepName = element.StepName() // Update the current step name.
 
-			// StepExecution を最初に保存する (SimpleStepExecutor が保存しない場合のワークアラウンド)
-			// StepExecutor がトランザクション内でこれを処理すべきだが、現在の実装では不足しているため、ここで補完する。
-			// これにより、TaskletStep/ChunkStep 内での最初の UpdateStepExecution 呼び出しが成功するようになる。
+			// Save the StepExecution initially (workaround if SimpleStepExecutor doesn't save).
+			// Although StepExecutor should handle this within a transaction, the current implementation
+			// might be lacking, so this compensates. This ensures that the first UpdateStepExecution
+			// call within TaskletStep/ChunkStep succeeds.
 			if err := r.jobRepository.SaveStepExecution(jobCtx, stepExecution); err != nil {
 				elementErr = exception.NewBatchError(element.StepName(), "Failed to save initial StepExecution", err, false, false)
 				exitStatus = model.ExitStatusFailed
 				logger.Errorf("FlowJobRunner: Failed to save initial StepExecution for Step '%s': %v", element.StepName(), err)
 				jobExecution.MarkAsFailed(elementErr)
 				r.jobRepository.UpdateJobExecution(jobCtx, jobExecution)
-				return // Run メソッドを終了
+				return // Exit the Run method.
 			}
-			// ステップを実行
+			// Execute the step.
 			executedStepExecution, err := r.stepExecutor.ExecuteStep(jobCtx, element, jobExecution, stepExecution)
 			if err != nil {
 				elementErr = err
@@ -561,7 +586,7 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 				logger.Infof("FlowJobRunner: Step '%s' completed with ExitStatus: %s", element.StepName(), exitStatus)
 			}
 
-			// Step から Job への ExecutionContext の昇格
+			// Promote ExecutionContext from Step to Job.
 			if promotion := element.GetExecutionContextPromotion(); promotion != nil {
 				for _, key := range promotion.Keys {
 					if val, ok := executedStepExecution.ExecutionContext.Get(key); ok {
@@ -577,7 +602,7 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 
 		case port.Decision:
 			logger.Infof("FlowJobRunner: Executing Decision '%s' for Job '%s'.", element.DecisionName(), jobInstance.JobName())
-			// 次のパスを決定
+			// Determine the next path based on the decision.
 			decisionExitStatus, err := element.Decide(jobCtx, jobExecution, jobExecution.Parameters)
 			if err != nil {
 				elementErr = err
@@ -590,8 +615,8 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 
 		case port.Split:
 			logger.Infof("FlowJobRunner: Executing Split '%s' for Job '%s'.", element.ID(), jobInstance.JobName())
-			// TODO: Split の並列実行を実装
-			// 現時点では、未実装としてエラーを返す
+			// TODO: Implement parallel execution for Split.
+			// Currently, it returns an error as it's not yet implemented.
 			elementErr = exception.NewBatchErrorf("flow_runner", "Split execution is not yet implemented for Split '%s'", element.ID())
 			exitStatus = model.ExitStatusFailed
 			logger.Errorf("FlowJobRunner: %v", elementErr)
@@ -602,15 +627,14 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 			logger.Errorf("FlowJobRunner: %v", elementErr)
 		}
 
-		// 次の遷移ルールを検索
+		// Search for the next transition rule.
 		nextRule, found := flowDef.GetTransitionRule(currentElementID, exitStatus, elementErr != nil)
 		if !found {
-			// 特定のルールが見つからない場合、ワイルドカードまたはデフォルトを試す
-			nextRule, found = flowDef.GetTransitionRule(currentElementID, model.ExitStatusUnknown, elementErr != nil) // '*' を確認
+			// If a specific rule is not found, try a wildcard or default rule.
+			nextRule, found = flowDef.GetTransitionRule(currentElementID, model.ExitStatusUnknown, elementErr != nil) // Check for '*'
 		}
 
-		if !found {
-			// 遷移ルールが見つからない場合、ジョブは失敗として終了
+		if !found { // If no transition rule is found, the job terminates as failed.
 			err := exception.NewBatchErrorf("flow_runner", "No transition rule found for element '%s' with ExitStatus '%s' (error: %v)", currentElementID, exitStatus, elementErr)
 			logger.Errorf("FlowJobRunner: %v", err)
 			jobExecution.MarkAsFailed(err)
@@ -618,37 +642,37 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 			return
 		}
 
-		// 遷移ルールを適用
+		// Apply the transition rule.
 		if nextRule.Transition.End {
 			jobExecution.MarkAsCompleted()
-			if elementErr != nil { // エラーがあったが 'end' 遷移の場合、それでも完了とする
+			if elementErr != nil { // If there was an error but the transition is 'end', still mark as completed.
 				jobExecution.AddFailureException(elementErr)
 			}
 			logger.Infof("FlowJobRunner: Job '%s' (Execution ID: %s) completed with ExitStatus: %s (Transition: END).", jobInstance.JobName(), jobExecution.ID, jobExecution.ExitStatus)
-			break // ループを終了
+			break // Exit the loop.
 		} else if nextRule.Transition.Fail {
 			jobExecution.MarkAsFailed(elementErr)
 			logger.Infof("FlowJobRunner: Job '%s' (Execution ID: %s) failed with ExitStatus: %s (Transition: FAIL).", jobInstance.JobName(), jobExecution.ID, jobExecution.ExitStatus)
-			break // ループを終了
+			break // Exit the loop.
 		} else if nextRule.Transition.Stop {
 			jobExecution.MarkAsStopped()
 			logger.Infof("FlowJobRunner: Job '%s' (Execution ID: %s) stopped with ExitStatus: %s (Transition: STOP).", jobInstance.JobName(), jobExecution.ID, jobExecution.ExitStatus)
-			break // ループを終了
+			break // Exit the loop.
 		} else if nextRule.Transition.To != "" {
 			currentElementID = nextRule.Transition.To
 			logger.Debugf("FlowJobRunner: Transitioning to next element: '%s'", currentElementID)
 		} else {
-			// バリデーションが正しければ発生しないはずだが、念のため
+			// This should not happen if validation is correct, but as a safeguard.
 			err := exception.NewBatchErrorf("flow_runner", "Invalid transition rule for element '%s': no 'to', 'end', 'fail', or 'stop' specified", currentElementID)
 			logger.Errorf("FlowJobRunner: %v", err)
-			jobExecution.MarkAsFailed(err)
-			break // ループを終了
+			jobExecution.MarkAsFailed(err) // Mark job as failed.
+			break                          // Exit the loop.
 		}
 	}
 
-	// JobExecution の最終更新 (ブレーク条件で既に更新されていない場合)
-	if !jobExecution.Status.IsFinished() {
-		jobExecution.MarkAsCompleted() // 明示的な終了ステータスなしでループが終了した場合、完了と見なす
+	// Final update of JobExecution (if not already updated by a break condition).
+	if !jobExecution.Status.IsFinished() { // If the loop ends without an explicit final status, consider it completed.
+		jobExecution.MarkAsCompleted()
 	}
 	if err := r.jobRepository.UpdateJobExecution(jobCtx, jobExecution); err != nil {
 		logger.Errorf("FlowJobRunner: Failed to update final JobExecution status: %v", err)
@@ -714,34 +738,189 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"io/fs"
 
+	helloTasklet "github.com/tigerroll/surfin/example/hello-world/internal/step"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	dummy "github.com/tigerroll/surfin/pkg/batch/adapter/database/dummy"
+	// Batch framework imports
+	item "github.com/tigerroll/surfin/pkg/batch/component/item"
+	migration "github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
+	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	bootstrap "github.com/tigerroll/surfin/pkg/batch/core/config/bootstrap"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
-	item "github.com/tigerroll/surfin/pkg/batch/component/item"
-	decision "github.com/tigerroll/surfin/pkg/batch/core/job/decision"
-	batchlistener "github.com/tigerroll/surfin/pkg/batch/listener"
-	split "github.com/tigerroll/surfin/pkg/batch/core/job/split"
-	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
-	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	supportConfig "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	decision "github.com/tigerroll/surfin/pkg/batch/core/job/decision"
+	split "github.com/tigerroll/surfin/pkg/batch/core/job/split"
+	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	incrementer "github.com/tigerroll/surfin/pkg/batch/core/support/incrementer"
-	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 	inmemoryRepo "github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/inmemory"
-	helloTasklet "github.com/tigerroll/surfin/example/hello-world/internal/step"
-	dummy "github.com/tigerroll/surfin/pkg/batch/adapter/database/dummy"
-	
+	batchlistener "github.com/tigerroll/surfin/pkg/batch/listener"
+	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+
 	"go.uber.org/fx"
 
 	appjob "github.com/tigerroll/surfin/example/hello-world/internal/app/job"
+	apprunner "github.com/tigerroll/surfin/example/hello-world/internal/app/runner"
 )
 
-// GetApplicationOptions は uber-fx のオプションを構築し、スライスとして返します。
-// この関数は fx.New の呼び出しの前に定義されている必要があります。
+// dummyMigrator is a dummy implementation of the migration.Migrator interface.
+// It performs no actual migration operations, as the hello-world application
+// does not require real database migrations.
+type dummyMigrator struct{}
+
+func (d *dummyMigrator) Up(ctx context.Context, fsys fs.FS, dir, table string) error {
+	logger.Debugf("Dummy Migrator: Up called, doing nothing.")
+	return nil
+}
+func (d *dummyMigrator) Down(ctx context.Context, fsys fs.FS, dir, table string) error {
+	logger.Debugf("Dummy Migrator: Down called, doing nothing.")
+	return nil
+}
+func (d *dummyMigrator) Close() error {
+	logger.Debugf("Dummy Migrator: Close called, doing nothing.")
+	return nil
+}
+
+// dummyMigratorProvider is a dummy implementation of the migration.MigratorProvider interface.
+// It provides dummy Migrator instances, as real migrations are not needed
+// for the hello-world application.
+type dummyMigratorProvider struct{}
+
+func (d *dummyMigratorProvider) NewMigrator(conn adapter.DBConnection) migration.Migrator {
+	return &dummyMigrator{}
+}
+
+// dummyDBConnection is a dummy implementation of the adapter.DBConnection interface.
+// It performs no actual database operations, as the hello-world application
+// runs in a DB-less mode.
+type dummyDBConnection struct{}
+
+// ExecuteUpdate is a dummy implementation of the DBExecutor.ExecuteUpdate method.
+func (d *dummyDBConnection) ExecuteUpdate(ctx context.Context, model interface{}, operation string, tableName string, query map[string]interface{}) (int64, error) {
+	logger.Debugf("Dummy DBConnection: ExecuteUpdate called, doing nothing.")
+	return 0, nil
+}
+
+// ExecuteUpsert is a dummy implementation of the DBExecutor.ExecuteUpsert method.
+func (d *dummyDBConnection) ExecuteUpsert(ctx context.Context, model interface{}, tableName string, uniqueColumns []string, updateColumns []string) (int64, error) {
+	logger.Debugf("Dummy DBConnection: ExecuteUpsert called, doing nothing. Table: %s", tableName)
+	return 0, nil
+}
+
+// ExecuteQuery is a dummy implementation of the DBExecutor.ExecuteQuery method.
+func (d *dummyDBConnection) ExecuteQuery(ctx context.Context, model interface{}, query map[string]interface{}) error {
+	logger.Debugf("Dummy DBConnection: ExecuteQuery called, doing nothing. Query: %v", query)
+	return nil
+}
+
+// Count is a dummy implementation of the DBExecutor.Count method.
+func (d *dummyDBConnection) Count(ctx context.Context, model interface{}, query map[string]interface{}) (int64, error) {
+	logger.Debugf("Dummy DBConnection: Count called, doing nothing. Query: %v", query)
+	return 0, nil
+}
+
+// ExecuteQueryAdvanced is a dummy implementation of the DBExecutor.ExecuteQueryAdvanced method.
+func (d *dummyDBConnection) ExecuteQueryAdvanced(ctx context.Context, model interface{}, query map[string]interface{}, orderBy string, limit int) error {
+	logger.Debugf("Dummy DBConnection: ExecuteQueryAdvanced called, doing nothing. Query: %v, OrderBy: %s, Limit: %d", query, orderBy, limit)
+	return nil
+}
+
+// Pluck is a dummy implementation of the DBExecutor.Pluck method.
+func (d *dummyDBConnection) Pluck(ctx context.Context, dest interface{}, field string, value interface{}, query map[string]interface{}) error {
+	logger.Debugf("Dummy DBConnection: Pluck called, doing nothing. Field: %s, Value: %v, Query: %v", field, value, query)
+	return nil
+}
+
+// RefreshConnection is a dummy implementation of the DBConnection interface.
+func (d *dummyDBConnection) RefreshConnection(ctx context.Context) error {
+	logger.Debugf("Dummy DBConnection: RefreshConnection called, doing nothing.")
+	return nil
+}
+
+// Type returns the type of the dummy database connection.
+func (d *dummyDBConnection) Type() string { return "dummy" }
+
+// Name returns the name of the dummy database connection.
+func (d *dummyDBConnection) Name() string { return "dummy" }
+
+// Close closes the dummy database connection.
+func (d *dummyDBConnection) Close() error { return nil }
+
+// IsTableNotExistError checks if the given error indicates that a table does not exist (always false for dummy).
+func (d *dummyDBConnection) IsTableNotExistError(err error) bool { return false }
+
+// Config is a dummy implementation of the DBConnection interface.
+func (d *dummyDBConnection) Config() dbconfig.DatabaseConfig { return dbconfig.DatabaseConfig{} }
+
+// GetSQLDB is a dummy implementation of the DBConnection interface.
+func (d *dummyDBConnection) GetSQLDB() (*sql.DB, error) {
+	return nil, nil // Returns nil as there's no actual SQL DB.
+}
+
+// dummyDBProvider is a dummy implementation of the adapter.DBProvider interface.
+// It always returns dummy DBConnection instances.
+type dummyDBProvider struct{}
+
+// GetConnection returns a dummy DBConnection.
+func (d *dummyDBProvider) GetConnection(name string) (adapter.DBConnection, error) {
+	logger.Debugf("Dummy DBProvider: GetConnection called for '%s'.", name)
+	return &dummyDBConnection{}, nil
+}
+
+// ForceReconnect returns a new dummy DBConnection, simulating a re-establishment.
+func (d *dummyDBProvider) ForceReconnect(name string) (adapter.DBConnection, error) {
+	logger.Debugf("Dummy DBProvider: ForceReconnect called for '%s'.", name)
+	return &dummyDBConnection{}, nil
+}
+
+// CloseAll performs no operation for dummy connections.
+func (d *dummyDBProvider) CloseAll() error {
+	logger.Debugf("Dummy DBProvider: CloseAll called.")
+	return nil
+}
+
+// Type returns the type of the dummy database provider.
+func (d *dummyDBProvider) Type() string { return "dummy" }
+
+// dummyPortDBConnectionResolver is a dummy implementation of the port.DBConnectionResolver interface.
+// It's used to satisfy dependencies in a DB-less environment.
+type dummyPortDBConnectionResolver struct{}
+
+// ResolveDBConnectionName returns the default connection name for dummy operations.
+func (d *dummyPortDBConnectionResolver) ResolveDBConnectionName(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution, defaultName string) (string, error) {
+	logger.Debugf("Dummy Port DBConnectionResolver: ResolveDBConnectionName called, returning default '%s'.", defaultName)
+	return defaultName, nil
+}
+
+// ResolveDBConnection returns a dummy DBConnection instance.
+func (d *dummyPortDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adapter.DBConnection, error) {
+	logger.Debugf("Dummy Port DBConnectionResolver: ResolveDBConnection called for '%s'.", name)
+	return &dummyDBConnection{}, nil
+}
+
+// dummyAdapterDBConnectionResolver is a dummy implementation of the adapter.DBConnectionResolver interface.
+// It's used to satisfy dependencies in a DB-less environment.
+type dummyAdapterDBConnectionResolver struct{}
+
+// ResolveDBConnection returns a dummy DBConnection instance.
+func (d *dummyAdapterDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adapter.DBConnection, error) {
+	logger.Debugf("Dummy Adapter DBConnectionResolver: ResolveDBConnection called for '%s'.", name)
+	return &dummyDBConnection{}, nil
+}
+
+// GetApplicationOptions constructs and returns a slice of uber-fx options.
+// This function must be defined before the fx.New call.
 func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedConfig config.EmbeddedConfig, embeddedJSL jsl.JSLDefinitionBytes) []fx.Option {
-	cfg, err := config.LoadConfig(envFilePath, embeddedConfig)
-	if err != nil {
-		logger.Fatalf("Failed to load configuration: %v", err)
+	cfg, err := config.LoadConfig(envFilePath, embeddedConfig) // Load application configuration.
+	if err != nil {                                            // Fatal error if configuration loading fails.
+		logger.Fatalf("Failed to load configuration: %v", err) // Log and exit if config loading fails.
 	}
 	logger.SetLogLevel(cfg.Surfin.System.Logging.Level)
 	logger.Infof("Log level set to: %s", cfg.Surfin.System.Logging.Level)
@@ -755,8 +934,32 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 		cfg,
 		fx.Annotate(appCtx, fx.As(new(context.Context)), fx.ResultTags(`name:"appCtx"`)),
 	))
+	// Dummy providers to satisfy framework migration dependencies.
+	options = append(options, fx.Provide(func() migration.MigratorProvider { return &dummyMigratorProvider{} }))
+	options = append(options, fx.Provide(fx.Annotate(
+		func() map[string]fs.FS { return make(map[string]fs.FS) },
+		fx.ResultTags(`name:"allMigrationFS"`),
+	)))
+	// Add dummy providers for missing DB-related dependencies.
+	options = append(options, fx.Provide(func() port.DBConnectionResolver { return &dummyPortDBConnectionResolver{} }))       // Provides port.DBConnectionResolver.
+	options = append(options, fx.Provide(func() adapter.DBConnectionResolver { return &dummyAdapterDBConnectionResolver{} })) // Provides adapter.DBConnectionResolver.
+	options = append(options, fx.Provide(func() map[string]adapter.DBProvider {
+		return map[string]adapter.DBProvider{
+			"default":  &dummyDBProvider{}, // Provides at least one dummy provider.
+			"metadata": &dummyDBProvider{}, // Adds dummy provider for "metadata" database for framework migrations.
+			"dummy":    &dummyDBProvider{}, // Adds dummy provider for "dummy" database for JobRepositoryDBRef.
+		}
+	}))
+	// Add dummy providers for missing transaction manager-related dependencies.
+	options = append(options, fx.Provide(func() tx.TransactionManagerFactory {
+		return &dummy.DummyTxManagerFactory{}
+	}))
+	options = append(options, fx.Provide(func() map[string]tx.TransactionManager {
+		return make(map[string]tx.TransactionManager) // Provides an empty map to satisfy NewMetadataTxManager's dependencies.
+	}))
+	options = append(options, fx.Provide(fx.Annotate(dummy.NewMetadataTxManager, fx.ResultTags(`name:"metadata"`))))
+
 	options = append(options, logger.Module)
-	options = append(options, config.Module)
 	options = append(options, metrics.Module)
 	options = append(options, bootstrap.Module)
 	options = append(options, fx.Provide(supportConfig.NewJobFactory))
@@ -769,9 +972,9 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 	options = append(options, incrementer.Module)
 	options = append(options, item.Module)
 	options = append(options, fx.Invoke(fx.Annotate(startJobExecution, fx.ParamTags("", "", "", "", "", `name:"appCtx"`))))
-	options = append(options, helloTasklet.Module)
-	options = append(options, appjob.Module)    // アプリケーション固有の JobBuilder を提供するモジュールを直接追加
-	options = append(options, dummy.Module)     // ダミーDB関連モジュールを追加
+	options = append(options, helloTasklet.Module) // Include the module for HelloWorldTasklet.
+	options = append(options, appjob.Module)       // Directly include the module that provides application-specific JobBuilders.
+
 	return options
 }
 ```
@@ -799,30 +1002,36 @@ import (
 
 	_ "embed"
 
+	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	jobRepo "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-	
+
 	"go.uber.org/fx"
 )
 
-// embeddedConfig はアプリケーションのYAML設定ファイルの内容を埋め込みます。
+// embeddedConfig embeds the content of the application's YAML configuration file.
 //
 //go:embed resources/application.yaml
 var embeddedConfig []byte
 
-// embeddedJSL はジョブ仕様言語 (JSL) ファイルの内容を埋め込みます。
+// embeddedJSL embeds the content of the Job Specification Language (JSL) file.
+// This file defines the batch job's structure and components.
 //
 //go:embed resources/job.yaml
 var embeddedJSL []byte
 
-
-// startJobExecution はアプリケーション起動時にジョブ実行を開始する Fx Hook ヘルパー関数です。
+// startJobExecution is an Fx Hook helper function that initiates job execution
+// upon application startup. It registers OnStart and OnStop hooks with the Fx lifecycle.
 func startJobExecution(
-    lc fx.Lifecycle,
-    shutdowner fx.Shutdowner,
-    jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
-    jobRepository repository.JobRepository,
-    cfg *config.Config,
-    appCtx context.Context,
+	lc fx.Lifecycle,
+	shutdowner fx.Shutdowner,
+	// jobLauncher is the concrete SimpleJobLauncher instance responsible for launching jobs.
+	jobLauncher *usecase.SimpleJobLauncher,
+	jobRepository jobRepo.JobRepository,
+	cfg *config.Config,
+	appCtx context.Context,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: onStartJobExecution(jobLauncher, jobRepository, cfg, shutdowner, appCtx),
@@ -830,13 +1039,16 @@ func startJobExecution(
 	})
 }
 
-// onStartJobExecution is an Fx Hook helper function that starts job execution upon application startup.
+// onStartJobExecution is an Fx Hook helper function that returns a function
+// to be executed when the application starts. It launches the batch job
+// and monitors its execution, triggering application shutdown upon completion.
 func onStartJobExecution(
-    jobLauncher *usecase.SimpleJobLauncher, // Concrete type used
-    jobRepository repository.JobRepository,
-    cfg *config.Config,
-    shutdowner fx.Shutdowner,
-    appCtx context.Context,
+	// jobLauncher is the concrete SimpleJobLauncher instance responsible for launching jobs.
+	jobLauncher *usecase.SimpleJobLauncher,
+	jobRepository jobRepo.JobRepository,
+	cfg *config.Config,
+	shutdowner fx.Shutdowner,
+	appCtx context.Context,
 ) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		go func() {
@@ -845,7 +1057,7 @@ func onStartJobExecution(
 					logger.Errorf("Panic recovered in job execution: %v", r)
 				}
 				logger.Infof("Requesting application shutdown after job completion.")
-				
+
 				if err := shutdowner.Shutdown(); err != nil {
 					logger.Errorf("Failed to shutdown application: %v", err)
 				}
@@ -873,7 +1085,7 @@ func onStartJobExecution(
 				select {
 				case <-ctx.Done():
 					logger.Warnf("Application context cancelled. Stopping monitoring for job '%s' (Execution ID: %s).", jobName, jobExecution.ID)
-					
+
 					latestExecution, fetchErr := jobRepository.FindJobExecutionByID(context.Background(), jobExecution.ID)
 					if fetchErr == nil && !latestExecution.Status.IsFinished() {
 						logger.Warnf("Job '%s' (Execution ID: %s) was running. Attempting graceful stop via JobOperator.", jobName, jobExecution.ID)
@@ -892,7 +1104,7 @@ func onStartJobExecution(
 					if latestExecution.Status.IsFinished() {
 						logger.Infof("Job '%s' (Execution ID: %s) finished with status: %s, ExitStatus: %s",
 							jobName, latestExecution.ID, latestExecution.Status, latestExecution.ExitStatus)
-						
+
 						return
 					}
 					logger.Debugf("Job '%s' (Execution ID: %s) is still running. Current status: %s", jobName, latestExecution.ID, latestExecution.Status)
@@ -903,7 +1115,8 @@ func onStartJobExecution(
 	}
 }
 
-// onStopApplication はアプリケーションシャットダウンをログに記録する Fx Hook ヘルパー関数です。
+// onStopApplication is an Fx Hook helper function that returns a function
+// to be executed when the application stops. It logs the application shutdown event.
 func onStopApplication() func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		logger.Infof("Application is shutting down.")
@@ -911,30 +1124,33 @@ func onStopApplication() func(ctx context.Context) error {
 	}
 }
 
-// main はアプリケーションのエントリポイントです。
+// main is the entry point of the hello-world batch application.
+// It sets up the application context, handles OS signals for graceful shutdown,
+// loads configuration, and initializes and runs the Fx application.
+//
+// The application will execute the "helloWorldJob" defined in job.yaml.
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// シグナルハンドリング (Ctrl+Cなど)
+	// Handle OS signals (e.g., Ctrl+C) for graceful shutdown.
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
 	go func() {
 		sig := <-sigChan
 		logger.Warnf("Received signal '%v'. Attempting to stop the job...", sig)
 		cancel()
 	}()
 
+	// Determine the path to the .env file, defaulting to ".env" if not specified.
 	envFilePath := os.Getenv("ENV_FILE_PATH")
 	if envFilePath == "" {
 		envFilePath = ".env"
 	}
 
-	// GetApplicationOptions から返されたオプションを展開して fx.New に渡す
-	fxApp := fx.New(GetApplicationOptions(ctx, envFilePath, embeddedConfig, embeddedJSL)...) // GetApplicationOptions から返されたオプションを展開して fx.New に渡す
+	fxApp := fx.New(GetApplicationOptions(ctx, envFilePath, embeddedConfig, embeddedJSL)...)
 	fxApp.Run()
-	if fxApp.Err() != nil {
+	if fxApp.Err() != nil { // Check for errors during Fx application startup or execution.
 		logger.Fatalf("Application run failed: %v", fxApp.Err())
 	}
 	os.Exit(0)
@@ -955,23 +1171,21 @@ func main() {
 version: '3'
 
 vars:
-  APP_MODULE_PATH: surfin/example/hello-world/cmd/hello-world
+  APP_MODULE_PATH: ./cmd/hello-world
   APP_BINARY_NAME: hello-world
   BUILD_OUTPUT_DIR: ../../dist
 
 tasks:
   default:
     desc: "List tasks for the hello-world application."
-    cmds:
-      - task --list
+    cmds: [task --list]
 
   build:
     desc: "Build the hello-world application executable."
     cmds:
       - go build -v -gcflags="all=-N -l" -o {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}} {{.APP_MODULE_PATH}}
       - echo "Built {{.APP_BINARY_NAME}} to {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"
-    generates:
-      - "{{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"
+    generates: ["{{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"]
     sources:
       - "./cmd/hello-world/**/*.go"
       - "./internal/**/*.go"
@@ -984,17 +1198,14 @@ tasks:
     cmds: ["{{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"]
     env:
       BATCH_LOG_LEVEL: DEBUG
-      # ENV_FILE_PATH: .env
 
   clean:
     desc: "Remove build artifacts for hello-world application."
-    cmds:
-      - rm -f {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}
+    cmds: ["rm -f {{.BUILD_OUTPUT_DIR}}/{{.APP_BINARY_NAME}}"]
 
   test:
     desc: "Run tests for the hello-world application."
-    cmds:
-      - go test ./internal/... -v -count=1
+    cmds: ["go test ./internal/... -v -count=1"]
 ```
 
 **内容のポイント:**
