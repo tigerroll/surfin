@@ -20,20 +20,6 @@ surfin:
   database: # Renamed from adapter_configs to database
     metadata: # Dummy configuration for 'metadata' database, referenced by framework migrations
       type: dummy
-      host: "" # Dummy value
-      port: 0 # Dummy value
-      database: "" # Dummy value
-      user: "" # Dummy value
-      password: "" # Dummy value
-      sslmode: "" # Dummy value
-    dummy: # Dummy configuration for 'dummy' database, which should skip migrations
-      type: dummy
-      host: "" # Dummy value
-      port: 0 # Dummy value
-      database: "" # Dummy value
-      user: "" # Dummy value
-      password: "" # Dummy value
-      sslmode: "" # Dummy value
   security:
     masked_parameter_keys:
       - "password"
