@@ -23,7 +23,7 @@ type HelloWorldTaskletConfig struct {
 // It prints a configurable message to the console.
 type HelloWorldTasklet struct {
 	config           *HelloWorldTaskletConfig // Configuration for the tasklet.
-	executionContext model.ExecutionContext // ExecutionContext to hold the internal state of the Tasklet.
+	executionContext model.ExecutionContext   // ExecutionContext to hold the internal state of the Tasklet.
 }
 
 // NewHelloWorldTasklet creates a new instance of HelloWorldTasklet.

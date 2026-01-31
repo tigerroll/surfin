@@ -111,12 +111,16 @@ func (d *dummyDBConnection) RefreshConnection(ctx context.Context) error {
 	logger.Debugf("Dummy DBConnection: RefreshConnection called, doing nothing.")
 	return nil
 }
+
 // Type returns the type of the dummy database connection.
-func (d *dummyDBConnection) Type() string                        { return "dummy" }
+func (d *dummyDBConnection) Type() string { return "dummy" }
+
 // Name returns the name of the dummy database connection.
-func (d *dummyDBConnection) Name() string                        { return "dummy" }
+func (d *dummyDBConnection) Name() string { return "dummy" }
+
 // Close closes the dummy database connection.
-func (d *dummyDBConnection) Close() error                        { return nil }
+func (d *dummyDBConnection) Close() error { return nil }
+
 // IsTableNotExistError checks if the given error indicates that a table does not exist (always false for dummy).
 func (d *dummyDBConnection) IsTableNotExistError(err error) bool { return false }
 
@@ -137,16 +141,19 @@ func (d *dummyDBProvider) GetConnection(name string) (adapter.DBConnection, erro
 	logger.Debugf("Dummy DBProvider: GetConnection called for '%s'.", name)
 	return &dummyDBConnection{}, nil
 }
+
 // ForceReconnect returns a new dummy DBConnection, simulating a re-establishment.
 func (d *dummyDBProvider) ForceReconnect(name string) (adapter.DBConnection, error) {
 	logger.Debugf("Dummy DBProvider: ForceReconnect called for '%s'.", name)
 	return &dummyDBConnection{}, nil
 }
+
 // CloseAll performs no operation for dummy connections.
 func (d *dummyDBProvider) CloseAll() error {
 	logger.Debugf("Dummy DBProvider: CloseAll called.")
 	return nil
 }
+
 // Type returns the type of the dummy database provider.
 func (d *dummyDBProvider) Type() string { return "dummy" }
 
@@ -180,7 +187,7 @@ func (d *dummyAdapterDBConnectionResolver) ResolveDBConnection(ctx context.Conte
 // This function must be defined before the fx.New call.
 func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedConfig config.EmbeddedConfig, embeddedJSL jsl.JSLDefinitionBytes) []fx.Option {
 	cfg, err := config.LoadConfig(envFilePath, embeddedConfig) // Load application configuration.
-	if err != nil { // Fatal error if configuration loading fails.
+	if err != nil {                                            // Fatal error if configuration loading fails.
 		logger.Fatalf("Failed to load configuration: %v", err) // Log and exit if config loading fails.
 	}
 	logger.SetLogLevel(cfg.Surfin.System.Logging.Level)
@@ -206,9 +213,9 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 	options = append(options, fx.Provide(func() adapter.DBConnectionResolver { return &dummyAdapterDBConnectionResolver{} })) // Provides adapter.DBConnectionResolver.
 	options = append(options, fx.Provide(func() map[string]adapter.DBProvider {
 		return map[string]adapter.DBProvider{
-			"default":  &dummyDBProvider{},  // Provides at least one dummy provider.
-			"metadata": &dummyDBProvider{},  // Adds dummy provider for "metadata" database for framework migrations.
-			"dummy":    &dummyDBProvider{},  // Adds dummy provider for "dummy" database for JobRepositoryDBRef.
+			"default":  &dummyDBProvider{}, // Provides at least one dummy provider.
+			"metadata": &dummyDBProvider{}, // Adds dummy provider for "metadata" database for framework migrations.
+			"dummy":    &dummyDBProvider{}, // Adds dummy provider for "dummy" database for JobRepositoryDBRef.
 		}
 	}))
 	// Add dummy providers for missing transaction manager-related dependencies.
