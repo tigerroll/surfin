@@ -192,7 +192,7 @@ func (r *FlowJobRunner) Run(ctx context.Context, jobInstance port.Job, jobExecut
 			err := exception.NewBatchErrorf("flow_runner", "Invalid transition rule for element '%s': no 'to', 'end', 'fail', or 'stop' specified", currentElementID)
 			logger.Errorf("FlowJobRunner: %v", err)
 			jobExecution.MarkAsFailed(err) // Mark job as failed.
-			break // Exit the loop.
+			break                          // Exit the loop.
 		}
 	}
 

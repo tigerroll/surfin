@@ -51,10 +51,12 @@ func (r *testSingleConnectionResolver) ResolveDBConnectionName(ctx context.Conte
 // that always returns a specific connection.
 //
 // Parameters:
-//   conn: The adapter.DBConnection instance that this resolver will always return.
+//
+//	conn: The adapter.DBConnection instance that this resolver will always return.
 //
 // Returns:
-//   appport.DBConnectionResolver: A new test-specific DB connection resolver.
+//
+//	appport.DBConnectionResolver: A new test-specific DB connection resolver.
 func NewTestSingleConnectionResolver(conn adapter.DBConnection) appport.DBConnectionResolver {
 	return &testSingleConnectionResolver{conn: conn}
 }

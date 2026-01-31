@@ -21,10 +21,12 @@ type MockDBConnection struct {
 // NewMockDBConnection creates a new instance of MockDBConnection.
 //
 // Parameters:
-//   db: An optional *gorm.DB instance. In most mock scenarios, this can be nil.
+//
+//	db: An optional *gorm.DB instance. In most mock scenarios, this can be nil.
 //
 // Returns:
-//   adapter.DBConnection: A new mock database connection.
+//
+//	adapter.DBConnection: A new mock database connection.
 func NewMockDBConnection(db *gorm.DB) adapter.DBConnection {
 	return &MockDBConnection{DB: db}
 }
@@ -123,11 +125,13 @@ func (m *MockProviderFactory) GetProvider(dbType string) (interface{}, error) {
 // This is a helper function to simplify test setups.
 //
 // Parameters:
-//   t: The testing.T instance for test reporting.
-//   db: An optional *gorm.DB instance to be wrapped by the mock.
+//
+//	t: The testing.T instance for test reporting.
+//	db: An optional *gorm.DB instance to be wrapped by the mock.
 //
 // Returns:
-//   adapter.DBConnection: A new mock database connection.
+//
+//	adapter.DBConnection: A new mock database connection.
 func CreateTestDBConnection(t *testing.T, db *gorm.DB) adapter.DBConnection {
 	t.Helper()
 	return NewMockDBConnection(db)
