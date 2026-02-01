@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"io/fs"
+	"os"
 
 	helloTasklet "github.com/tigerroll/surfin/example/hello-world/internal/step"
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
@@ -183,20 +184,20 @@ func (d *dummyAdapterDBConnectionResolver) ResolveDBConnection(ctx context.Conte
 	return &dummyDBConnection{}, nil
 }
 
-// dummyEnvironmentExpander is a dummy implementation of the config.EnvironmentExpander interface.
-// It simply returns the input byte slice as is, as no environment variable expansion is needed
-// for this simple example.
-type dummyEnvironmentExpander struct{}
+// realEnvironmentExpander implements the config.EnvironmentExpander interface
+// by expanding environment variables using os.ExpandEnv.
+type realEnvironmentExpander struct{}
 
 // Expand implements the Expand method of the config.EnvironmentExpander interface.
-func (d *dummyEnvironmentExpander) Expand(input []byte) ([]byte, error) {
-	logger.Debugf("Dummy EnvironmentExpander: Expand called, returning input as is.")
-	return input, nil
+func (r *realEnvironmentExpander) Expand(input []byte) ([]byte, error) {
+	expanded := os.ExpandEnv(string(input))
+	logger.Debugf("Real EnvironmentExpander: Expanded '%s' to '%s'", string(input), expanded)
+	return []byte(expanded), nil
 }
 
-// provideDummyEnvironmentExpander provides a dummy implementation of config.EnvironmentExpander.
-func provideDummyEnvironmentExpander() config.EnvironmentExpander {
-	return &dummyEnvironmentExpander{}
+// provideRealEnvironmentExpander provides a real implementation of config.EnvironmentExpander.
+func provideRealEnvironmentExpander() config.EnvironmentExpander {
+	return &realEnvironmentExpander{}
 }
 
 // GetApplicationOptions constructs and returns a slice of uber-fx options.
@@ -243,8 +244,8 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 	}))
 	options = append(options, fx.Provide(fx.Annotate(dummy.NewMetadataTxManager, fx.ResultTags(`name:"metadata"`))))
 
-	// Add dummy provider for config.EnvironmentExpander
-	options = append(options, fx.Provide(provideDummyEnvironmentExpander))
+	// Add real provider for config.EnvironmentExpander
+	options = append(options, fx.Provide(provideRealEnvironmentExpander))
 
 	options = append(options, logger.Module)
 	options = append(options, metrics.Module)
