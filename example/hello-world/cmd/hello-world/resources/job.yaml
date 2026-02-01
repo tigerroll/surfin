@@ -10,7 +10,7 @@ flow:
       tasklet:
         ref: helloWorldTasklet
         properties:
-          message: "Hello, Surfin Batch World!"
+          message: "${MSG}" # "Hello, Surfin Batch World!"
       listeners:
         - ref: loggingStepListener
       transitions:
