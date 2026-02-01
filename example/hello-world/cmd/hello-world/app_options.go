@@ -183,6 +183,22 @@ func (d *dummyAdapterDBConnectionResolver) ResolveDBConnection(ctx context.Conte
 	return &dummyDBConnection{}, nil
 }
 
+// dummyEnvironmentExpander is a dummy implementation of the config.EnvironmentExpander interface.
+// It simply returns the input byte slice as is, as no environment variable expansion is needed
+// for this simple example.
+type dummyEnvironmentExpander struct{}
+
+// Expand implements the Expand method of the config.EnvironmentExpander interface.
+func (d *dummyEnvironmentExpander) Expand(input []byte) ([]byte, error) {
+	logger.Debugf("Dummy EnvironmentExpander: Expand called, returning input as is.")
+	return input, nil
+}
+
+// provideDummyEnvironmentExpander provides a dummy implementation of config.EnvironmentExpander.
+func provideDummyEnvironmentExpander() config.EnvironmentExpander {
+	return &dummyEnvironmentExpander{}
+}
+
 // GetApplicationOptions constructs and returns a slice of uber-fx options.
 // This function must be defined before the fx.New call.
 func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedConfig config.EmbeddedConfig, embeddedJSL jsl.JSLDefinitionBytes) []fx.Option {
@@ -226,6 +242,9 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 		return make(map[string]tx.TransactionManager) // Provides an empty map to satisfy NewMetadataTxManager's dependencies.
 	}))
 	options = append(options, fx.Provide(fx.Annotate(dummy.NewMetadataTxManager, fx.ResultTags(`name:"metadata"`))))
+
+	// Add dummy provider for config.EnvironmentExpander
+	options = append(options, fx.Provide(provideDummyEnvironmentExpander))
 
 	options = append(options, logger.Module)
 	options = append(options, metrics.Module)
