@@ -1,3 +1,5 @@
+// Package config provides utilities for loading and managing application configuration
+// from various sources, including YAML files and environment variables.
 package config
 
 import (
@@ -16,9 +18,7 @@ import (
 	"go.uber.org/fx"
 )
 
-// Package config provides utilities for loading and managing application configuration
-// from various sources, including YAML files and environment variables.
-
+// moduleName is used for error reporting within this package.
 const moduleName = "config"
 
 // ConfigParams defines the dependencies for NewConfigProvider.
@@ -28,13 +28,20 @@ type ConfigParams struct {
 	EnvFilePath    string         `name:"envFilePath" optional:"true"` // EnvFilePath is the path to the .env file, if any.
 }
 
-// loadConfig loads configuration from a file and environment variables.
+// loadConfig loads configuration from an embedded source and environment variables.
 // This function is intended to be called only once during application startup.
+// It performs the following steps:
+// 1. Loads .env file (if specified).
+// 2. Initializes a default Config struct.
+// 3. Expands environment variables within the embedded YAML configuration.
+// 4. Unmarshals the expanded YAML into a temporary Config struct.
+// 5. Merges the YAML configuration into the default Config.
+// 6. Overrides values with environment variables.
 //
 // Parameters:
 //
 //	envFilePath: The path to the .env file.
-//	embeddedConfig: The embedded configuration bytes.
+//	embeddedConfig: The embedded configuration bytes (typically from application.yaml).
 //
 // Returns:
 //
@@ -54,17 +61,25 @@ func loadConfig(envFilePath string, embeddedConfig EmbeddedConfig) (*Config, err
 
 	// 1. Load defaults from NewConfig()
 
-	// 2. Load configuration from embedded YAML into a temporary Config struct.
-	// This ensures that YAML values are correctly parsed into their respective types.
-	var yamlConfig Config
-	if err := yaml.Unmarshal(embeddedConfig, &yamlConfig); err != nil {
-		return nil, exception.NewBatchError(moduleName, "failed to unmarshal embedded config", err, false, false)
+	// 2. Expand environment variables in the embedded configuration.
+	expander := NewOsEnvironmentExpander()
+	expandedConfig, err := expander.Expand(embeddedConfig)
+	if err != nil {
+		// os.ExpandEnv does not return an error, but this check is kept for future expander implementations.
+		return nil, exception.NewBatchError(moduleName, "failed to expand environment variables in embedded config", err, false, false)
 	}
 
-	// 3. Merge YAML configuration into the default configuration.
+	// 3. Load configuration from embedded YAML into a temporary Config struct.
+	// This ensures that YAML values are correctly parsed into their respective types.
+	var yamlConfig Config
+	if err := yaml.Unmarshal(expandedConfig, &yamlConfig); err != nil {
+		return nil, exception.NewBatchError(moduleName, "failed to unmarshal expanded embedded config", err, false, false)
+	}
+
+	// 4. Merge YAML configuration into the default configuration.
 	mergeConfig(cfg, &yamlConfig)
 
-	// 4. Override with environment variables
+	// 5. Override with environment variables
 	if err := loadStructFromEnv(reflect.ValueOf(cfg).Elem(), ""); err != nil {
 		return nil, exception.NewBatchError(moduleName, "failed to load config from environment variables", err, false, false)
 	}
@@ -106,6 +121,7 @@ func NewConfigProvider(params ConfigParams) (*Config, error) {
 
 // LoadConfig loads configuration from configuration files and environment variables.
 // This function is expected to be called only once during application startup.
+// It is a wrapper around loadConfig for external use.
 //
 // Parameters:
 //
@@ -120,6 +136,14 @@ func LoadConfig(envFilePath string, embeddedConfig EmbeddedConfig) (*Config, err
 }
 
 // validateExceptionClasses validates that configured exception class names exist in the registry.
+//
+// Parameters:
+//
+//	cfg: The application configuration.
+//
+// Returns:
+//
+//	An error if any configured exception class is not registered.
 func validateExceptionClasses(cfg *Config) error {
 	// 1. Validate ItemRetry settings (RetryableExceptions)
 	if cfg.Surfin.Batch.ItemRetry.RetryableExceptions != nil {
@@ -213,7 +237,6 @@ func mergeSurfinConfig(dest, source *SurfinConfig) {
 	}
 }
 
-// Helper merge functions for nested structs (example, extend as needed)
 // mergeRetryConfig merges source into dest.
 //
 // Parameters:
@@ -297,6 +320,10 @@ func mergeSystemConfig(dest, source *SystemConfig) {
 //
 //	classNames: A slice of strings representing exception class names.
 //	configType: A string indicating the configuration type (e.g., "ItemRetry", "ItemSkip") for error messages.
+//
+// Returns:
+//
+//	An error if any exception class is not registered.
 func checkExceptionClasses(classNames []string, configType string) error {
 	for _, name := range classNames {
 		if !exception.IsErrorTypeRegistered(name) {
@@ -314,7 +341,9 @@ func checkExceptionClasses(classNames []string, configType string) error {
 //	val: The reflect.Value of the struct to populate.
 //	prefix: The prefix for environment variable names (e.g., "SURFIN_BATCH_").
 //
-// Returns: An error if any field cannot be set.
+// Returns:
+//
+//	An error if any field cannot be set.
 func loadStructFromEnv(val reflect.Value, prefix string) error {
 	typ := val.Type()
 	for i := 0; i < typ.NumField(); i++ {
@@ -365,6 +394,10 @@ func loadStructFromEnv(val reflect.Value, prefix string) error {
 //
 //	mapField: The reflect.Value of the map field (e.g., `cfg.Surfin.AdapterConfigs`).
 //	prefix: The environment variable prefix for this map (e.g., "SURFIN_DATABASE_").
+//
+// Returns:
+//
+//	An error if any field cannot be set.
 func loadMapOfStructsFromEnv(mapField reflect.Value, prefix string) error {
 	if mapField.IsNil() {
 		mapField.Set(reflect.MakeMap(mapField.Type()))
@@ -380,7 +413,7 @@ func loadMapOfStructsFromEnv(mapField reflect.Value, prefix string) error {
 		}
 
 		// Extract key and field name from environment variable name
-		// Example: DATABASES_JOBDB_HOST=localhost -> keyAndField="JOBDB_HOST", envValue="localhost"
+		// Example: DATABASES_JOBDB_HOST=localhost -> keyPartWithValue="JOBDB_HOST", envValue="localhost"
 		keyPartWithValue := strings.TrimPrefix(env, prefix)
 		parts := strings.SplitN(keyPartWithValue, "=", 2)
 		if len(parts) != 2 {
@@ -390,7 +423,7 @@ func loadMapOfStructsFromEnv(mapField reflect.Value, prefix string) error {
 		envValue := parts[1]
 
 		// Separate map key and struct field name from keyAndField
-		// Example: JOBDB_HOST -> mapKey="metadata", structFieldName="Host"
+		// Example: JOBDB_HOST -> mapKey="jobdb", structFieldName="HOST"
 		keyAndFieldParts := strings.Split(keyAndField, "_")
 		if len(keyAndFieldParts) < 2 {
 			continue
@@ -423,7 +456,9 @@ func loadMapOfStructsFromEnv(mapField reflect.Value, prefix string) error {
 //	fieldName: The name of the field to set (derived from the environment variable).
 //	value: The string value to set.
 //
-// Returns: An error if the field cannot be set due to type conversion issues.
+// Returns:
+//
+//	An error if the field cannot be set due to type conversion issues.
 func setStructFieldFromEnv(structVal reflect.Value, fieldName string, value string) error {
 	typ := structVal.Type()
 	for i := 0; i < typ.NumField(); i++ {
@@ -449,6 +484,10 @@ func setStructFieldFromEnv(structVal reflect.Value, fieldName string, value stri
 //
 //	field: The reflect.Value of the field to set.
 //	value: The string value to convert and set.
+//
+// Returns:
+//
+//	An error if the value cannot be converted to the field's type.
 func setField(field reflect.Value, value string) error {
 	if !field.CanSet() {
 		return nil

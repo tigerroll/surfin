@@ -34,17 +34,25 @@ func ApplyLoggingConfigHook(cfg *config.Config) {
 	}
 }
 
+// LoadJSLDefinitionsHookParams defines the parameters for LoadJSLDefinitionsHook.
+type LoadJSLDefinitionsHookParams struct {
+	fx.In
+	Lifecycle   fx.Lifecycle
+	Initializer *BatchInitializer
+	Expander    config.EnvironmentExpander
+}
+
 // LoadJSLDefinitionsHook registers an Fx lifecycle hook to load JSL definitions.
-func LoadJSLDefinitionsHook(lc fx.Lifecycle, initializer *BatchInitializer) {
-	lc.Append(fx.Hook{
-		OnStart: onStartLoadJSLDefinitions(initializer),
+func LoadJSLDefinitionsHook(p LoadJSLDefinitionsHookParams) {
+	p.Lifecycle.Append(fx.Hook{
+		OnStart: onStartLoadJSLDefinitions(p.Initializer, p.Expander),
 	})
 }
 
 // onStartLoadJSLDefinitions is a helper for the OnStart hook that loads JSL definitions.
-func onStartLoadJSLDefinitions(initializer *BatchInitializer) func(ctx context.Context) error {
+func onStartLoadJSLDefinitions(initializer *BatchInitializer, expander config.EnvironmentExpander) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		logger.Infof("Loading JSL definitions.")
-		return jsl.LoadJSLDefinitionFromBytes(initializer.GetJSLDefinitionBytes())
+		return jsl.LoadJSLDefinitionFromBytes(initializer.GetJSLDefinitionBytes(), expander)
 	}
 }
