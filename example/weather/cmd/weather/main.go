@@ -14,13 +14,15 @@ import (
 
 	"github.com/tigerroll/surfin/example/weather/internal/app"
 	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	"github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx"
 )
 
-// embeddedConfig embeds the content of the application's YAML configuration file.
-// This file is used to load configuration at application startup.
+// embeddedConfig embeds the content of the application's YAML configuration file (application.yaml).
+// This is used for loading configuration at application startup.
 //
 //go:embed resources/application.yaml
 var embeddedConfig []byte
@@ -31,7 +33,7 @@ var embeddedConfig []byte
 //go:embed all:resources/migrations
 var applicationMigrationsFS embed.FS
 
-// embeddedJSL embeds the content of the Job Specification Language (JSL) file.
+// embeddedJSL embeds the content of the Job Specification Language (JSL) file (job.yaml).
 // This file defines the flow and components of the batch job.
 //
 //go:embed resources/job.yaml
@@ -72,6 +74,8 @@ func getDBProviderOptions() []fx.Option {
 
 // main is the entry point of the application.
 // It manages the startup of the batch application, signal handling, and execution of the Fx container.
+// This function sets up a channel (`jobDoneChan`) for signaling job completion, initializes the
+// application context and configuration, and starts the batch process.
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -79,6 +83,10 @@ func main() {
 	// Signal handling for graceful shutdown (e.g., Ctrl+C)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Create a channel for JobCompletionSignaler.
+	// This channel is used to notify the application externally about job completion.
+	jobDoneChan := make(chan struct{})
 
 	go func() {
 		sig := <-sigChan
@@ -95,8 +103,9 @@ func main() {
 	// Provide selected DB Providers to Fx
 	dbProviderOptions := getDBProviderOptions()
 
-	// Run the application
-	app.RunApplication(ctx, envFilePath, embeddedConfig, embeddedJSL, applicationMigrationsFS, dbProviderOptions)
-	// Exit the process with exit code 0 after application execution completes
+	// Run the application.
+	// Cast embeddedConfig and embeddedJSL to their respective type aliases and add jobDoneChan.
+	app.RunApplication(ctx, envFilePath, config.EmbeddedConfig(embeddedConfig), jsl.JSLDefinitionBytes(embeddedJSL), applicationMigrationsFS, dbProviderOptions, jobDoneChan)
+	// Exit the process with exit code 0 after application execution completes.
 	os.Exit(0)
 }
