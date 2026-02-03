@@ -20,12 +20,12 @@ import (
 	"go.uber.org/fx"
 )
 
-// embeddedConfig embeds the content of the application's YAML configuration file.
+// embeddedConfig embeds the content of the application's YAML configuration file (application.yaml).
 //
 //go:embed resources/application.yaml
 var embeddedConfig []byte
 
-// embeddedJSL embeds the content of the Job Specification Language (JSL) file.
+// embeddedJSL embeds the content of the Job Specification Language (JSL) file (job.yaml).
 // This file defines the batch job's structure and components.
 //
 //go:embed resources/job.yaml
@@ -33,10 +33,17 @@ var embeddedJSL []byte
 
 // startJobExecution is an Fx Hook helper function that initiates job execution
 // upon application startup. It registers OnStart and OnStop hooks with the Fx lifecycle.
+//
+// Parameters:
+//   lc: The Fx lifecycle to register hooks with.
+//   shutdowner: The Fx shutdowner to trigger application shutdown.
+//   jobLauncher: The concrete SimpleJobLauncher instance responsible for launching jobs.
+//   jobRepository: The repository for persisting and retrieving job metadata.
+//   cfg: The overall application configuration.
+//   appCtx: The root context for the application.
 func startJobExecution(
 	lc fx.Lifecycle,
 	shutdowner fx.Shutdowner,
-	// jobLauncher is the concrete SimpleJobLauncher instance responsible for launching jobs.
 	jobLauncher *usecase.SimpleJobLauncher,
 	jobRepository jobRepo.JobRepository,
 	cfg *config.Config,
@@ -51,8 +58,17 @@ func startJobExecution(
 // onStartJobExecution is an Fx Hook helper function that returns a function
 // to be executed when the application starts. It launches the batch job
 // and monitors its execution, triggering application shutdown upon completion.
+//
+// Parameters:
+//   jobLauncher: The concrete SimpleJobLauncher instance responsible for launching jobs.
+//   jobRepository: The repository for persisting and retrieving job metadata.
+//   cfg: The overall application configuration.
+//   shutdowner: The Fx shutdowner to trigger application shutdown.
+//   appCtx: The root context for the application.
+//
+// Returns:
+//   A function that returns an error, to be executed on application startup.
 func onStartJobExecution(
-	// jobLauncher is the concrete SimpleJobLauncher instance responsible for launching jobs.
 	jobLauncher *usecase.SimpleJobLauncher,
 	jobRepository jobRepo.JobRepository,
 	cfg *config.Config,
@@ -126,6 +142,9 @@ func onStartJobExecution(
 
 // onStopApplication is an Fx Hook helper function that returns a function
 // to be executed when the application stops. It logs the application shutdown event.
+//
+// Returns:
+//   A function that returns an error, to be executed on application stop.
 func onStopApplication() func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		logger.Infof("Application is shutting down.")
@@ -151,13 +170,24 @@ func main() {
 		cancel()
 	}()
 
+	// Create a channel for JobCompletionSignaler.
+	// This channel is used to notify the application externally about job completion.
+	jobDoneChan := make(chan struct{})
+
 	// Determine the path to the .env file, defaulting to ".env" if not specified.
 	envFilePath := os.Getenv("ENV_FILE_PATH")
 	if envFilePath == "" {
 		envFilePath = ".env"
 	}
 
-	fxApp := fx.New(GetApplicationOptions(ctx, envFilePath, embeddedConfig, embeddedJSL)...)
+	// Aggregate all Fx options into a temporary slice.
+	var fxOptions []fx.Option
+	fxOptions = append(fxOptions, fx.Provide(func() chan struct{} { return jobDoneChan })) // Provide jobDoneChan to Fx
+	fxOptions = append(fxOptions, GetApplicationOptions(ctx, envFilePath, embeddedConfig, embeddedJSL)...)
+
+	fxApp := fx.New(
+		fx.Options(fxOptions...), // Spread the aggregated options slice into fx.Options
+	)
 	fxApp.Run()
 	if fxApp.Err() != nil { // Check for errors during Fx application startup or execution.
 		logger.Fatalf("Application run failed: %v", fxApp.Err())

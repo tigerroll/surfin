@@ -34,7 +34,7 @@ import (
 )
 
 // RunApplication sets up and runs the batch application using uber-fx.
-func RunApplication(appCtx context.Context, envFilePath string, embeddedConfig config.EmbeddedConfig, embeddedJSL jsl.JSLDefinitionBytes, applicationMigrationsFS embed.FS, dbProviderOptions []fx.Option) {
+func RunApplication(appCtx context.Context, envFilePath string, embeddedConfig config.EmbeddedConfig, embeddedJSL jsl.JSLDefinitionBytes, applicationMigrationsFS embed.FS, dbProviderOptions []fx.Option, jobDoneChan chan struct{}) {
 	// Context setting and signal handling moved to main.go
 
 	cfg, err := config.LoadConfig(envFilePath, embeddedConfig)
@@ -62,6 +62,7 @@ func RunApplication(appCtx context.Context, envFilePath string, embeddedConfig c
 				fx.ResultTags(`name:"appCtx"`),
 			),
 		),
+		fx.Provide(func() chan struct{} { return jobDoneChan }),
 
 		fx.Options(dbProviderOptions...),
 		logger.Module,

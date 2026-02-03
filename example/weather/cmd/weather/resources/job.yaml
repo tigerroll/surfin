@@ -5,6 +5,7 @@ incrementer: # Add
   ref: "timestampIncrementer" # Add: Generates unique parameters using a timestamp every time
 listeners:
   - ref: loggingJobListener # Listener name registered in JobFactory
+  - ref: jobCompletionSignaler
 
 flow:
   start-element: migrateMetadataStep # Starting element of the flow
