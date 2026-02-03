@@ -35,12 +35,13 @@ var embeddedJSL []byte
 // upon application startup. It registers OnStart and OnStop hooks with the Fx lifecycle.
 //
 // Parameters:
-//   lc: The Fx lifecycle to register hooks with.
-//   shutdowner: The Fx shutdowner to trigger application shutdown.
-//   jobLauncher: The concrete SimpleJobLauncher instance responsible for launching jobs.
-//   jobRepository: The repository for persisting and retrieving job metadata.
-//   cfg: The overall application configuration.
-//   appCtx: The root context for the application.
+//
+//	lc: The Fx lifecycle to register hooks with.
+//	shutdowner: The Fx shutdowner to trigger application shutdown.
+//	jobLauncher: The concrete SimpleJobLauncher instance responsible for launching jobs.
+//	jobRepository: The repository for persisting and retrieving job metadata.
+//	cfg: The overall application configuration.
+//	appCtx: The root context for the application.
 func startJobExecution(
 	lc fx.Lifecycle,
 	shutdowner fx.Shutdowner,
@@ -60,14 +61,16 @@ func startJobExecution(
 // and monitors its execution, triggering application shutdown upon completion.
 //
 // Parameters:
-//   jobLauncher: The concrete SimpleJobLauncher instance responsible for launching jobs.
-//   jobRepository: The repository for persisting and retrieving job metadata.
-//   cfg: The overall application configuration.
-//   shutdowner: The Fx shutdowner to trigger application shutdown.
-//   appCtx: The root context for the application.
+//
+//	jobLauncher: The concrete SimpleJobLauncher instance responsible for launching jobs.
+//	jobRepository: The repository for persisting and retrieving job metadata.
+//	cfg: The overall application configuration.
+//	shutdowner: The Fx shutdowner to trigger application shutdown.
+//	appCtx: The root context for the application.
 //
 // Returns:
-//   A function that returns an error, to be executed on application startup.
+//
+//	A function that returns an error, to be executed on application startup.
 func onStartJobExecution(
 	jobLauncher *usecase.SimpleJobLauncher,
 	jobRepository jobRepo.JobRepository,
@@ -144,7 +147,8 @@ func onStartJobExecution(
 // to be executed when the application stops. It logs the application shutdown event.
 //
 // Returns:
-//   A function that returns an error, to be executed on application stop.
+//
+//	A function that returns an error, to be executed on application stop.
 func onStopApplication() func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		logger.Infof("Application is shutting down.")

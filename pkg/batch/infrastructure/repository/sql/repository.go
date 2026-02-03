@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
-	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
@@ -18,8 +17,7 @@ import (
 
 // SQLJobRepository implements the repository.JobRepository interface.
 type SQLJobRepository struct {
-	// dbResolver is used to resolve database connections by name.
-	dbResolver port.DBConnectionResolver
+	dbResolver adapter.DBConnectionResolver // dbResolver is used to resolve database connections.
 	// TxManager is the transaction manager for the database.
 	TxManager tx.TransactionManager
 	// dbName is the name of the database connection used by this JobRepository (e.g., "metadata").
@@ -27,12 +25,19 @@ type SQLJobRepository struct {
 }
 
 // NewSQLJobRepository creates a new instance of SQLJobRepository.
+//
+// Parameters:
+//
+//	dbResolver: The database connection resolver.
+//	txManager: The transaction manager for the database.
+//	dbName: The name of the database connection to be used by this repository (e.g., "metadata").
+//
+// Returns:
+//
+//	A new instance of repository.JobRepository.
 func NewSQLJobRepository(
-	// dbResolver is the database connection resolver.
-	dbResolver port.DBConnectionResolver,
-	// txManager is the transaction manager for the database.
+	dbResolver adapter.DBConnectionResolver,
 	txManager tx.TransactionManager,
-	// dbName is the name of the database connection to be used by this repository.
 	dbName string,
 ) repository.JobRepository {
 	return &SQLJobRepository{
@@ -665,8 +670,7 @@ var _ repository.JobRepository = (*SQLJobRepository)(nil)
 // JobRepositoryParams defines the dependencies required to create a NewJobRepository.
 type JobRepositoryParams struct {
 	fx.In
-	// DBResolver is the database connection resolver.
-	DBResolver port.DBConnectionResolver
+	DBResolver adapter.DBConnectionResolver // DBResolver is used to resolve database connections.
 	// MetadataTxManager is the transaction manager for the metadata database.
 	MetadataTxManager tx.TransactionManager `name:"metadata"`
 	// Cfg is the application configuration.

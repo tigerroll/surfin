@@ -38,10 +38,12 @@ var Module = fx.Options(
 // This builder receives the JobDoneChan from Fx, which is used to signal job completion.
 //
 // Parameters:
-//   jobDoneChan: A channel of type `chan struct{}` that is closed upon job completion.
+//
+//	jobDoneChan: A channel of type `chan struct{}` that is closed upon job completion.
 //
 // Returns:
-//   A `jsl.JobExecutionListenerBuilder` function that can create a `JobCompletionSignaler` instance.
+//
+//	A `jsl.JobExecutionListenerBuilder` function that can create a `JobCompletionSignaler` instance.
 func NewJobCompletionSignalerBuilder(jobDoneChan chan struct{}) jsl.JobExecutionListenerBuilder {
 	return func(cfg *config.Config, properties map[string]string) (port.JobExecutionListener, error) {
 		return NewJobCompletionSignaler(jobDoneChan), nil
@@ -52,8 +54,9 @@ func NewJobCompletionSignalerBuilder(jobDoneChan chan struct{}) jsl.JobExecution
 // This allows the JobFactory to instantiate `JobCompletionSignaler` when referenced in JSL.
 //
 // Parameters:
-//   jf: The `support.JobFactory` instance to register the builder with.
-//   builder: The `jsl.JobExecutionListenerBuilder` for `JobCompletionSignaler`.
+//
+//	jf: The `support.JobFactory` instance to register the builder with.
+//	builder: The `jsl.JobExecutionListenerBuilder` for `JobCompletionSignaler`.
 func RegisterJobCompletionSignalerBuilder(
 	jf *support.JobFactory,
 	builder jsl.JobExecutionListenerBuilder,

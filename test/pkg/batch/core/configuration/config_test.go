@@ -3,11 +3,38 @@ package configuration_test
 import (
 	"testing"
 
+	"fmt"
 	"github.com/stretchr/testify/assert"
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"  // Correct path for DatabaseConfig
-	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm" // Correct path for GetConnectionStringForTest
-	coreconfig "github.com/tigerroll/surfin/pkg/batch/core/config"            // Path for core configuration
+
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config" // Correct path for DatabaseConfig
+	coreconfig "github.com/tigerroll/surfin/pkg/batch/core/config"           // Path for core configuration
 )
+
+// GetConnectionStringForTest generates a database connection string for testing purposes.
+// This function is a test helper and is not part of the main application logic.
+func GetConnectionStringForTest(cfg dbconfig.DatabaseConfig) (string, error) {
+	switch cfg.Type {
+	case "postgres":
+		// Example: "host=pg_host port=5432 user=pg_user password=pg_password dbname=pg_db sslmode=require"
+		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, cfg.Sslmode), nil
+	case "mysql":
+		// Example: "mysql_user:mysql_password@tcp(mysql_host:3306)/mysql_db?charset=utf8mb4&parseTime=True&loc=Local"
+		// Handle cases with and without password
+		dsn := fmt.Sprintf("%s", cfg.User)
+		if cfg.Password != "" {
+			dsn += fmt.Sprintf(":%s", cfg.Password)
+		}
+		dsn += fmt.Sprintf("@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+			cfg.Host, cfg.Port, cfg.Database)
+		return dsn, nil
+	case "sqlite":
+		// Example: "/path/to/sqlite.db" or ":memory:"
+		return cfg.Database, nil
+	default:
+		return "", fmt.Errorf("unsupported database type for connection string generation: %s", cfg.Type)
+	}
+}
 
 // TestNewConfig_Defaults verifies that the NewConfig function correctly initializes
 // the application configuration with expected default values.
@@ -46,8 +73,8 @@ func TestDatabaseConfig_ConnectionString(t *testing.T) {
 		User:     "pg_user",
 		Password: "pg_password",
 		Sslmode:  "require",
-	}
-	connStr, err := gormadapter.GetConnectionStringForTest(cfg) // Use gormadapter.GetConnectionStringForTest
+	} // Use dbconfig.DatabaseConfig
+	connStr, err := GetConnectionStringForTest(cfg) // Use local GetConnectionStringForTest
 	assert.NoError(t, err)
 	expected := "host=pg_host port=5432 user=pg_user password=pg_password dbname=pg_db sslmode=require"
 	assert.Equal(t, expected, connStr)
@@ -61,7 +88,7 @@ func TestDatabaseConfig_ConnectionString(t *testing.T) {
 		User:     "mysql_user",
 		Password: "mysql_password",
 	}
-	connStr, err = gormadapter.GetConnectionStringForTest(cfg) // Use gormadapter.GetConnectionStringForTest
+	connStr, err = GetConnectionStringForTest(cfg) // Use local GetConnectionStringForTest
 	assert.NoError(t, err)
 	expected = "mysql_user:mysql_password@tcp(mysql_host:3306)/mysql_db?charset=utf8mb4&parseTime=True&loc=Local"
 	assert.Equal(t, expected, connStr)
@@ -75,7 +102,7 @@ func TestDatabaseConfig_ConnectionString(t *testing.T) {
 		User:     "mysql_user",
 		Password: "",
 	}
-	connStr, err = gormadapter.GetConnectionStringForTest(cfg) // Use gormadapter.GetConnectionStringForTest
+	connStr, err = GetConnectionStringForTest(cfg) // Use local GetConnectionStringForTest
 	assert.NoError(t, err)
 	expected = "mysql_user@tcp(mysql_host:3306)/mysql_db?charset=utf8mb4&parseTime=True&loc=Local"
 	assert.Equal(t, expected, connStr)
@@ -84,8 +111,8 @@ func TestDatabaseConfig_ConnectionString(t *testing.T) {
 	cfg = dbconfig.DatabaseConfig{
 		Type:     "sqlite",
 		Database: "/path/to/sqlite.db",
-	}
-	connStr, err = gormadapter.GetConnectionStringForTest(cfg) // Use gormadapter.GetConnectionStringForTest
+	} // Use dbconfig.DatabaseConfig
+	connStr, err = GetConnectionStringForTest(cfg) // Use local GetConnectionStringForTest
 	assert.NoError(t, err)
 	expected = "/path/to/sqlite.db"
 	assert.Equal(t, expected, connStr)

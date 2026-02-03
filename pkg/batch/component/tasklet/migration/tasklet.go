@@ -17,26 +17,33 @@ import (
 )
 
 // MigrationTasklet executes database migrations using provided fs.FS resources.
-// It resolves the necessary database connection, migration file system, and migration table name,
-// then executes the specified migration command ("up" or "down").
-// After migration, it forces a re-connection to ensure the database connection is fresh.
+// It resolves the necessary database connection, migration file system, and migration table name, then executes the specified migration command ("up" or "down").
+// After migration, it forces a re-connection to ensure the database connection is fresh and reflects any schema changes.
 type MigrationTasklet struct {
-	cfg              *config.Config
-	allDBProviders   map[string]adapter.DBProvider
-	resolver         port.ExpressionResolver
-	dbResolver       port.DBConnectionResolver
-	allMigrationFS   map[string]fs.FS
+	cfg            *config.Config
+	allDBProviders map[string]adapter.DBProvider
+	resolver       port.ExpressionResolver
+	// dbResolver is the database connection resolver.
+	dbResolver     adapter.DBConnectionResolver
+	allMigrationFS map[string]fs.FS
+	// properties are the raw properties passed from JSL.
 	properties       map[string]string
 	migratorProvider MigratorProvider
 
-	// Configured properties from JSL
-	dbConnectionName     string
-	fsName               string
-	migrationDir         string
-	command              string // e.g., "up", "down", "status".
-	isFrameworkMigration bool   // Indicates if it's a framework migration.
+	// Configured properties from JSL.
+	// dbConnectionName is the name of the database connection to use for migration.
+	dbConnectionName string
+	// fsName is the name of the `fs.FS` containing migration scripts.
+	fsName string
+	// migrationDir is the directory within the `fs.FS` where migration scripts are located.
+	// If empty, it defaults to the database type.
+	migrationDir string
+	// command is the migration command to execute (e.g., "up", "down").
+	command string
+	// isFrameworkMigration indicates if this is a framework-level migration (influences table name).
+	isFrameworkMigration bool
 
-	// Execution Context
+	// ec is the execution context for the tasklet.
 	ec model.ExecutionContext
 }
 
@@ -47,12 +54,25 @@ type MigrationTasklet struct {
 // properties, and migrator provider. It extracts and validates
 // necessary properties from the `properties` map.
 //
-// Note: `allTxManagers` is currently not used within this tasklet's logic.
+// Parameters:
+//
+//	cfg: The application's global configuration.
+//	resolver: The expression resolver for dynamic property resolution.
+//	txFactory: The transaction manager factory (currently not directly used within this tasklet's logic, but passed for completeness).
+//	dbResolver: The database connection resolver.
+//	migratorProvider: The provider for obtaining Migrator instances.
+//	allMigrationFS: A map of all registered migration file systems.
+//	properties: A map of properties configured in JSL for this tasklet.
+//	allDBProviders: A map of all registered DBProvider instances.
+//
+// Returns:
+//
+//	A new MigrationTasklet instance or an error if initialization fails.
 func NewMigrationTasklet(
 	cfg *config.Config,
 	resolver port.ExpressionResolver,
-	txFactory tx.TransactionManagerFactory,
-	dbResolver port.DBConnectionResolver,
+	txFactory tx.TransactionManagerFactory, // This parameter is currently not used within the tasklet's logic.
+	dbResolver adapter.DBConnectionResolver,
 	migratorProvider MigratorProvider,
 	allMigrationFS map[string]fs.FS,
 	properties map[string]string,
@@ -62,14 +82,14 @@ func NewMigrationTasklet(
 	taskletName := "migration_tasklet"
 	logger.Debugf("MigrationTasklet builder received properties: %v", properties)
 
-	// Required properties from JSL
-	// Using old key 'dbRef' for JobFactory compatibility.
+	// Required properties from JSL.
+	// Note: Using 'dbRef' for JSL compatibility, though 'dbConnectionName' is the internal field name.
 	dbConnectionName, ok := properties["dbRef"]
 	if !ok || dbConnectionName == "" {
 		return nil, exception.NewBatchErrorf(taskletName, "Property 'dbRef' is required for MigrationTasklet")
 	}
 
-	// Using old key 'migrationFSName' for JobFactory compatibility.
+	// Note: Using 'migrationFSName' for JSL compatibility, though 'fsName' is the internal field name.
 	fsName, ok := properties["migrationFSName"]
 	if !ok || fsName == "" {
 		return nil, exception.NewBatchErrorf(taskletName, "Property 'migrationFSName' is required for MigrationTasklet")
@@ -77,7 +97,7 @@ func NewMigrationTasklet(
 
 	migrationDir, ok := properties["migrationDir"]
 	if !ok || migrationDir == "" {
-		// If migrationDir is empty, it will be defaulted to the DB type in Execute.
+		// If 'migrationDir' is empty, it will be defaulted to the database type during execution.
 		// It is recommended to explicitly specify it in JSL for clarity.
 		logger.Warnf("Property 'migrationDir' is missing. It will be defaulted to the database type during execution.")
 	}
@@ -116,9 +136,19 @@ func NewMigrationTasklet(
 }
 
 // Execute runs the database migration logic.
-// It resolves the database connection, migration file system, and migration table name,
-// then executes the specified migration command ("up" or "down").
+// It resolves the database connection, migration file system, and migration table name, then executes the specified migration command ("up" or "down").
+//
 // After migration, it forces a re-connection to ensure the database connection is fresh.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//	stepExecution: The current StepExecution instance.
+//
+// Returns:
+//
+//	model.ExitStatus: The exit status of the tasklet (e.g., Completed, Failed).
+//	error: An error if the migration fails.
 func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.StepExecution) (model.ExitStatus, error) {
 	taskletName := "migration_tasklet"
 	logger.Infof("Starting database migration for DB connection '%s' using FS '%s' and directory '%s' with command '%s'.",
@@ -144,7 +174,7 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 	// 2. Get DBProvider for the specific database type
 	provider, ok := t.allDBProviders[dbConfig.Type]
 	if !ok {
-		// Consider special cases like Redshift, which uses the Postgres provider.
+		// Consider special cases like Redshift, which uses the PostgreSQL provider.
 		if dbConfig.Type == "redshift" {
 			provider, ok = t.allDBProviders["postgres"]
 		}
@@ -229,19 +259,41 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 	return model.ExitStatusCompleted, nil
 }
 
-// Close is the method for releasing resources.
-// For MigrationTasklet, there are no specific resources to close.
+// Close closes the `MigrationTasklet`.
+//
+// For this tasklet, there are no specific resources to close, so it always returns nil.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//
+// Returns:
+//
+//	An error if any resource closing fails (always nil for this tasklet).
 func (t *MigrationTasklet) Close(ctx context.Context) error {
 	return nil
 }
 
-// SetExecutionContext sets the ExecutionContext for the MigrationTasklet.
+// SetExecutionContext sets the `ExecutionContext` for the `MigrationTasklet`.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//	ec: The ExecutionContext to set.
 func (t *MigrationTasklet) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	t.ec = ec
 	return nil
 }
 
-// GetExecutionContext retrieves the current ExecutionContext of the MigrationTasklet.
+// GetExecutionContext retrieves the current `ExecutionContext` of the `MigrationTasklet`.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//
+// Returns:
+//
+//	The current ExecutionContext and an error if retrieval fails (always nil for this tasklet).
 func (t *MigrationTasklet) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	return t.ec, nil
 }

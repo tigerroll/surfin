@@ -10,7 +10,6 @@ import (
 
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
-	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -382,11 +381,11 @@ func (a *GormDBAdapter) ExecuteUpsert(ctx context.Context, model interface{}, ta
 
 // GormTransactionManagerFactory is the GORM implementation of tx.TransactionManagerFactory.
 type GormTransactionManagerFactory struct {
-	dbResolver port.DBConnectionResolver
+	dbResolver adapter.DBConnectionResolver
 }
 
 // NewGormTransactionManagerFactory creates an instance of GormTransactionManagerFactory.
-func NewGormTransactionManagerFactory(dbResolver port.DBConnectionResolver) tx.TransactionManagerFactory {
+func NewGormTransactionManagerFactory(dbResolver adapter.DBConnectionResolver) tx.TransactionManagerFactory {
 	return &GormTransactionManagerFactory{dbResolver: dbResolver}
 }
 

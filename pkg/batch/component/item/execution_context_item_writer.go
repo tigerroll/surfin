@@ -6,6 +6,8 @@ import (
 	"context"
 	"reflect"
 
+	// Import for adapter.DBConnectionResolver
+	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
@@ -16,13 +18,25 @@ import (
 )
 
 // ExecutionContextItemWriter is an ItemWriter that stores the number of items written to the ExecutionContext.
-// It is primarily used for testing and debugging.
+// It is primarily used for testing and debugging, allowing the count of processed items to be
+// easily inspected in the `ExecutionContext`.
 type ExecutionContextItemWriter[I any] struct {
-	ec  model.ExecutionContext
-	key string // Key to store the count in the ExecutionContext.
+	// ec holds the current ExecutionContext, where the item count will be stored.
+	ec model.ExecutionContext
+	// key is the string key under which the item count will be stored in the ExecutionContext.
+	key string
 }
 
 // NewExecutionContextItemWriter creates a new instance of ExecutionContextItemWriter.
+//
+// Parameters:
+//
+//	key: The key under which to store the item count in the ExecutionContext.
+//	     If an empty string is provided, it defaults to "writer.write_count".
+//
+// Returns:
+//
+//	A new `port.ItemWriter` instance configured to write to the ExecutionContext.
 func NewExecutionContextItemWriter[I any](key string) port.ItemWriter[I] {
 	if key == "" {
 		key = "writer.write_count"
@@ -34,7 +48,7 @@ func NewExecutionContextItemWriter[I any](key string) port.ItemWriter[I] {
 }
 
 // Open opens resources.
-//
+// This method initializes the writer with the provided `ExecutionContext`.
 // Parameters:
 //
 //	ctx: The context for the operation.
@@ -46,7 +60,8 @@ func (w *ExecutionContextItemWriter[I]) Open(ctx context.Context, ec model.Execu
 }
 
 // Write stores the number of items in the ExecutionContext.
-//
+// This method increments the count stored under the configured key in the `ExecutionContext`
+// by the number of items provided in the current chunk.
 // Parameters:
 //
 //	ctx: The context for the operation.
@@ -75,7 +90,7 @@ func (w *ExecutionContextItemWriter[I]) Write(ctx context.Context, tx tx.Tx, ite
 }
 
 // Close closes resources.
-//
+// For `ExecutionContextItemWriter`, there are no external resources to close, so this method does nothing.
 // Parameters:
 //
 //	ctx: The context for the operation.
@@ -85,7 +100,7 @@ func (w *ExecutionContextItemWriter[I]) Close(ctx context.Context) error {
 }
 
 // SetExecutionContext sets the ExecutionContext.
-//
+// This method updates the internal `ExecutionContext` used by the writer.
 // Parameters:
 //
 //	ctx: The context for the operation.
@@ -96,7 +111,7 @@ func (w *ExecutionContextItemWriter[I]) SetExecutionContext(ctx context.Context,
 }
 
 // GetExecutionContext retrieves the ExecutionContext.
-//
+// This method returns the current `ExecutionContext` held by the writer.
 // Parameters:
 //
 //	ctx: The context for the operation.
@@ -110,7 +125,7 @@ func (w *ExecutionContextItemWriter[I]) GetExecutionContext(ctx context.Context)
 }
 
 // GetTargetDBName returns the name of the target database for this writer.
-//
+// Since `ExecutionContextItemWriter` does not interact with a database, this method returns an empty string.
 // Returns:
 //
 //	string: An empty string, as this writer does not write to a specific database.
@@ -119,7 +134,7 @@ func (w *ExecutionContextItemWriter[I]) GetTargetDBName() string {
 }
 
 // GetTableName returns the name of the target table for this writer.
-//
+// Since `ExecutionContextItemWriter` does not interact with a database, this method returns an empty string.
 // Returns:
 //
 //	string: An empty string, as this writer does not write to a specific table.
@@ -127,18 +142,25 @@ func (w *ExecutionContextItemWriter[I]) GetTableName() string {
 	return "" // This writer does not write to a specific table, so an empty string is returned.
 }
 
-// ComponentBuilder for ExecutionContextItemWriter (used by JobFactory)
+// NewExecutionContextItemWriterBuilder creates a `jsl.ComponentBuilder` for `ExecutionContextItemWriter`.
+//
+// This builder function is responsible for instantiating `ExecutionContextItemWriter`
+// with its required properties, typically the `key` for storing the count.
+//
+// Returns:
+//
+//	A `jsl.ComponentBuilder` function that can create `ExecutionContextItemWriter` instances.
 func NewExecutionContextItemWriterBuilder() jsl.ComponentBuilder {
 	return func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver port.DBConnectionResolver,
+		dbResolver adapter.DBConnectionResolver, // The database connection resolver.
 		properties map[string]string,
 	) (interface{}, error) {
-		// Arguments unnecessary for this component are ignored.
+		// Unused arguments are ignored for this component.
 		_ = cfg
 		_ = resolver
-		_ = dbResolver
+		_ = dbResolver // This writer does not interact with a database directly.
 
 		key, ok := properties["key"]
 		if !ok {
@@ -150,7 +172,15 @@ func NewExecutionContextItemWriterBuilder() jsl.ComponentBuilder {
 	}
 }
 
-// RegisterExecutionContextItemWriterBuilder registers the builder with the JobFactory.
+// RegisterExecutionContextItemWriterBuilder registers the `ExecutionContextItemWriter` component builder with the `JobFactory`.
+//
+// This allows the framework to locate and use the `ExecutionContextItemWriter` when it's referenced in JSL (Job Specification Language) files.
+// The component is registered under the name "executionContextItemWriter".
+//
+// Parameters:
+//
+//	jf: The JobFactory instance.
+//	builder: The `ExecutionContextItemWriter` component builder.
 func RegisterExecutionContextItemWriterBuilder(jf *support.JobFactory, builder jsl.ComponentBuilder) {
 	jf.RegisterComponentBuilder("executionContextItemWriter", builder)
 	logger.Debugf("Component 'executionContextItemWriter' was registered with JobFactory.")
