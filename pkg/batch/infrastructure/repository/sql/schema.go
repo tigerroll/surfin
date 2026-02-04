@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// Package sql defines the schema models used for persisting batch job metadata
+// to a relational database. These entities are mapped to database tables.
 // JobInstanceEntity is a schema model used for persistence.
 type JobInstanceEntity struct {
 	ID             string
@@ -19,7 +21,7 @@ func (JobInstanceEntity) TableName() string {
 	return "batch_job_instance"
 }
 
-// JobExecutionEntity is a schema model used for persistence.
+// JobExecutionEntity represents the schema for persisting JobExecution data.
 type JobExecutionEntity struct {
 	ID               string
 	JobInstanceID    string
@@ -44,7 +46,7 @@ func (JobExecutionEntity) TableName() string {
 	return "batch_job_execution"
 }
 
-// StepExecutionEntity is a schema model used for persistence.
+// StepExecutionEntity represents the schema for persisting StepExecution data.
 type StepExecutionEntity struct {
 	ID               string
 	StepName         string
@@ -72,7 +74,7 @@ func (StepExecutionEntity) TableName() string {
 	return "batch_step_execution"
 }
 
-// CheckpointDataEntity is a schema model used for persistence.
+// CheckpointDataEntity represents the schema for persisting CheckpointData.
 type CheckpointDataEntity struct {
 	StepExecutionID  string
 	ExecutionContext model.ExecutionContext

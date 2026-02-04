@@ -1,7 +1,7 @@
 package factory
 
 import (
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -127,22 +127,22 @@ type DefaultStepFactory struct {
 	jobRepository        repository.JobRepository
 	stepExecutor         port.StepExecutor
 	metricRecorder       metrics.MetricRecorder
-	tracer               metrics.Tracer
-	dbConnectionResolver adapter.DBConnectionResolver // `dbConnectionResolver` is used to resolve database connections for steps.
-	txManagerFactory     tx.TransactionManagerFactory // `txManagerFactory` is the transaction manager factory for creating transaction managers.
+	tracer               metrics.Tracer                         // Line 131
+	dbConnectionResolver coreAdapter.ResourceConnectionResolver // `dbConnectionResolver` is used to resolve database connections for steps.
+	txManagerFactory     tx.TransactionManagerFactory           // `txManagerFactory` is the transaction manager factory for creating transaction managers.
 }
 
 // DefaultStepFactoryParams defines the parameters that the `NewDefaultStepFactory` function
 // receives via dependency injection (Fx).
 type DefaultStepFactoryParams struct {
-	fx.In
+	fx.In             // Line 144
 	JobRepository     repository.JobRepository
 	MetadataTxManager tx.TransactionManager `name:"metadata"` // Requests the metadata TxManager (used by JobRepository).
 	StepExecutor      port.StepExecutor
-	MetricRecorder    metrics.MetricRecorder
-	Tracer            metrics.Tracer
-	DBResolver        adapter.DBConnectionResolver // `DBResolver` is the database connection resolver.
-	TxFactory         tx.TransactionManagerFactory // `TxFactory` is the transaction manager factory.
+	MetricRecorder    metrics.MetricRecorder                 // Line 147
+	Tracer            metrics.Tracer                         // Line 148
+	DBResolver        coreAdapter.ResourceConnectionResolver // `DBResolver` is the database connection resolver.
+	TxFactory         tx.TransactionManagerFactory           // `TxFactory` is the transaction manager factory.
 }
 
 // NewDefaultStepFactory creates a new instance of `DefaultStepFactory`.

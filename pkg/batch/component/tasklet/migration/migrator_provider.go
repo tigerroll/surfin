@@ -1,7 +1,7 @@
 package migration
 
 import (
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
 )
 
 // migratorProviderImpl implements MigratorProvider
@@ -13,6 +13,6 @@ func NewMigratorProvider() MigratorProvider {
 }
 
 // NewMigrator creates a new migration.Migrator instance by calling the existing NewMigrator function.
-func (p *migratorProviderImpl) NewMigrator(dbConn adapter.DBConnection) Migrator {
+func (p *migratorProviderImpl) NewMigrator(dbConn database.DBConnection) Migrator {
 	return NewMigrator(dbConn)
 }

@@ -7,7 +7,7 @@
 ## 2. 現状の課題
 
 現在の設計では、`pkg/batch/core/adapter/adapter.go` にデータベース関連の具体的なインターフェース（`DBConnection`、`DBProvider` など）が定義されています。これにより、以下の課題が生じています。
-
+ 
 *   **密結合**: Core層がデータベース固有のインターフェースに直接依存しているため、特定の技術（データベース）に密結合しています。
 *   **拡張性の制約**: データベース以外の新しいリソースタイプ（例: オブジェクトストレージ、メッセージキュー）を追加する際、Core層のインターフェース定義に手を入れる必要が生じ、変更範囲が広がる可能性があります。
 *   **依存関係逆転の原則 (DIP) への違反**: 高レベルモジュール（Core層）が低レベルモジュール（具体的なデータベース実装）の抽象に依存する形となり、DIPが十分に適用されていません。
@@ -23,22 +23,21 @@
 *   **`ResourceConnection` インターフェース**:
     *   あらゆる種類のリソース接続に共通する最小限の機能（例: `Close() error`, `Type() string`, `Name() string`）を定義します。
 *   **`ResourceProvider` インターフェース**:
-    *   あらゆる種類のリソースプロバイダーに共通する機能（例: `GetConnection(name string) (ResourceConnection, error)`, `CloseAll() error`）を定義します。
+    *   あらゆる種類のリソースプロバイダーに共通する機能（例: `GetConnection(name string) (ResourceConnection, error)`, `CloseAll() error`, `Type() string`）を定義します。
 *   **`ResourceConnectionResolver` インターフェース**:
-    *   実行コンテキストに基づいて、汎用的な `ResourceConnection` を解決する機能（例: `ResolveConnection(ctx context.Context, name string) (ResourceConnection, error)`, `ResolveConnectionName(...) (string, error)`）を定義します。
+    *   実行コンテキストに基づいて、汎用的な `ResourceConnection` を解決する機能（例: `ResolveConnection(ctx context.Context, name string) (ResourceConnection, error)`, `ResolveConnectionName(ctx context.Context, jobExecution interface{}, stepExecution interface{}) (string, error)`）を定義します。
 
 ### 3.2. `pkg/batch/adapter/{resource_type}/interfaces.go` の役割
 
-`pkg/batch/adapter/` 配下の各サブパッケージ（例: `pkg/batch/adapter/database/`、`pkg/batch/adapter/storage/`）は、それぞれの**具体的なリソースタイプに特化した抽象（インターフェース）**を定義します。これらのインターフェースは、`pkg/batch/core/adapter/` で定義された汎用インターフェースを埋め込み、そのリソースタイプ固有のメソッドを追加します。
+`pkg/batch/adapter/` 配下の各サブパッケージ（例: `pkg/batch/adapter/database/`、`pkg/batch/adapter/storage/`）は、それぞれの **具体的なリソースタイプに特化した抽象（インターフェース）** を定義します。これらのインターフェースは、`pkg/batch/core/adapter/` で定義された汎用インターフェースを埋め込み、そのリソースタイプ固有のメソッドを追加します。
 
 *   **`pkg/batch/adapter/database/interfaces.go`**:
-    *   `DBConnection` インターフェース: `core/adapter.ResourceConnection` を埋め込み、データベース固有の操作（例: `ExecuteUpdate`, `ExecuteQuery`, `Count`, `Pluck` など）を追加で定義します。
+    *   `DBExecutor` インターフェース: データベースの書き込み・読み取り操作（`ExecuteUpdate`, `ExecuteUpsert`, `ExecuteQuery`, `Count`, `Pluck` など）を定義します。これは `DBConnection` に埋め込まれます。
+    *   `DBConnection` インターフェース: `core/adapter.ResourceConnection` を埋め込み、データベース固有の操作（例: `IsTableNotExistError`）を追加で定義します。また、`DBExecutor` を埋め込みます。
     *   `DBProvider` インターフェース: `core/adapter.ResourceProvider` を埋め込み、データベース固有の機能（例: `ForceReconnect`）を追加で定義します。
-    *   `DBConnectionResolver` インターフェース: `core/adapter.ResourceConnectionResolver` を埋め込み、データベース接続の解決に特化したコンテキスト（`JobExecution`, `StepExecution` など）を考慮したメソッドを定義します。
-*   **`pkg/batch/adapter/storage/interfaces.go` (新規)**:
-    *   `StorageConnection` インターフェース: `core/adapter.ResourceConnection` を埋め込み、ファイル操作やオブジェクト操作など、ストレージ固有のメソッドを定義します。
-    *   `StorageProvider` インターフェース: `core/adapter.ResourceProvider` を埋め込み、ストレージ固有の機能を追加で定義します。
-    *   `StorageConnectionResolver` インターフェース: `core/adapter.ResourceConnectionResolver` を埋め込み、ストレージ接続の解決に特化したメソッドを定義します。
+    *   `DBConnectionResolver` インターフェース: `core/adapter.ResourceConnectionResolver` を埋め込み、データベース接続の解決に特化したメソッド（例: `ResolveDBConnection`, `ResolveDBConnectionName`）を定義します。
+
+    *補足: `docs/strategy/database_config_strategy.md` で示されているように、データベース設定は `surfin.adapter.database` の下に定義され、`pkg/batch/adapter/database/` 配下の実装がこの設定を具体的に解釈します。*
 
 ### 3.3. DIコンテナ (Fx) の役割
 
@@ -57,11 +56,13 @@ DIコンテナは、この設計において以下の役割を担います。
 1.  **`pkg/batch/core/adapter/interfaces.go` の作成**:
     *   `pkg/batch/core/adapter/` ディレクトリ内に `interfaces.go` を新規作成します。
     *   このファイルに、`ResourceConnection`、`ResourceProvider`、`ResourceConnectionResolver` の各汎用インターフェースを定義します。
-    *   `DBProviderGroup` のような汎用的なタグもこのファイルに移動します。
+    *   `DBProviderGroup` のようなデータベース固有の定数は、このファイルからは削除されます。
 2.  **データベース固有インターフェースの移動と修正**:
-    *   既存の `pkg/batch/core/adapter/adapter.go` を削除します。
+    *   既存の `pkg/batch/core/adapter/adapter.go` を**削除**します。
     *   `pkg/batch/adapter/database/interfaces.go` を新規作成し、旧 `pkg/batch/core/adapter/adapter.go` にあった `DBExecutor`、`DBConnection`、`DBProvider`、`DBConnectionResolver` の定義をすべて移動します。
-    *   移動した `DBConnection`、`DBProvider`、`DBConnectionResolver` インターフェースが、それぞれ `core/adapter.ResourceConnection`、`core/adapter.ResourceProvider`、`core/adapter.ResourceConnectionResolver` を埋め込むように修正します。
+    *   移動した `DBConnection` インターフェースは、`core/adapter.ResourceConnection` と `DBExecutor` を埋め込むように修正します。
+    *   移動した `DBProvider` インターフェースは、`core/adapter.ResourceProvider` を埋め込むように修正します。
+    *   移動した `DBConnectionResolver` インターフェースは、`core/adapter.ResourceConnectionResolver` を埋め込むように修正します。
     *   `DBExecutor` は `DBConnection` に埋め込まれるため、直接汎用インターフェースを埋め込む必要はありません。
 3.  **既存コードのインポートパスと型名の修正**:
     *   プロジェクト全体で `pkg/batch/core/adapter` をインポートしている箇所を特定します。

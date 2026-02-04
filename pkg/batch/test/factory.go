@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"testing"
 
+	dbadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database"
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
-	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 
 	"gorm.io/gorm"
 )
@@ -27,7 +27,7 @@ type MockDBConnection struct {
 // Returns:
 //
 //	adapter.DBConnection: A new mock database connection.
-func NewMockDBConnection(db *gorm.DB) adapter.DBConnection {
+func NewMockDBConnection(db *gorm.DB) dbadapter.DBConnection {
 	return &MockDBConnection{DB: db}
 }
 
@@ -132,7 +132,7 @@ func (m *MockProviderFactory) GetProvider(dbType string) (interface{}, error) {
 // Returns:
 //
 //	adapter.DBConnection: A new mock database connection.
-func CreateTestDBConnection(t *testing.T, db *gorm.DB) adapter.DBConnection {
+func CreateTestDBConnection(t *testing.T, db *gorm.DB) dbadapter.DBConnection {
 	t.Helper()
 	return NewMockDBConnection(db)
 }

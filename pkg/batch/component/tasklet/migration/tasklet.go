@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -21,10 +21,10 @@ import (
 // After migration, it forces a re-connection to ensure the database connection is fresh and reflects any schema changes.
 type MigrationTasklet struct {
 	cfg            *config.Config
-	allDBProviders map[string]adapter.DBProvider
+	allDBProviders map[string]database.DBProvider
 	resolver       port.ExpressionResolver
 	// dbResolver is the database connection resolver.
-	dbResolver     adapter.DBConnectionResolver
+	dbResolver     database.DBConnectionResolver
 	allMigrationFS map[string]fs.FS
 	// properties are the raw properties passed from JSL.
 	properties       map[string]string
@@ -72,11 +72,11 @@ func NewMigrationTasklet(
 	cfg *config.Config,
 	resolver port.ExpressionResolver,
 	txFactory tx.TransactionManagerFactory, // This parameter is currently not used within the tasklet's logic.
-	dbResolver adapter.DBConnectionResolver,
+	dbResolver database.DBConnectionResolver,
 	migratorProvider MigratorProvider,
 	allMigrationFS map[string]fs.FS,
 	properties map[string]string,
-	allDBProviders map[string]adapter.DBProvider,
+	allDBProviders map[string]database.DBProvider,
 ) (*MigrationTasklet, error) {
 
 	taskletName := "migration_tasklet"
@@ -156,7 +156,15 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 
 	// 1. Get DB Configuration to determine DB Type
 	var dbConfig dbconfig.DatabaseConfig
-	rawConfig, ok := t.cfg.Surfin.AdapterConfigs[t.dbConnectionName]
+	rawAdapterConfig, ok := t.cfg.Surfin.AdapterConfigs.(map[string]interface{})
+	if !ok {
+		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "invalid 'adapter' configuration format: expected map[string]interface{}")
+	}
+	dbConfigsMap, ok := rawAdapterConfig["database"].(map[string]interface{})
+	if !ok {
+		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "no 'database' adapter configuration found in Surfin.AdapterConfigs")
+	}
+	rawConfig, ok := dbConfigsMap[t.dbConnectionName]
 	if !ok {
 		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "Database configuration '%s' not found in adapter.database configs", t.dbConnectionName)
 	}

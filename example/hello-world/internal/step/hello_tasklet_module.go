@@ -20,7 +20,7 @@ func NewHelloWorldTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver core.ExpressionResolver, // Keep this as core.ExpressionResolver
-		dbResolver adapter.DBConnectionResolver, // Change to adapter.DBConnectionResolver
+		dbResolver adapter.ResourceConnectionResolver, // Change to adapter.ResourceConnectionResolver
 		properties map[string]string,
 	) (interface{}, error) {
 		// Unused arguments are ignored for this component.

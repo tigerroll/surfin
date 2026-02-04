@@ -1,8 +1,10 @@
+// Package support provides supporting structures and factories for the batch framework,
+// including the central JobFactory for constructing batch components and jobs.
 package support
 
 import (
 	"fmt"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
@@ -15,10 +17,22 @@ import (
 	"go.uber.org/fx"
 )
 
-// JobBuilder is a function type for creating a specific Job. It takes necessary
-// dependencies and returns a port.Job interface and an error.
+// JobBuilder is a function type for creating a specific Job.
+// It takes necessary dependencies and returns a port.Job interface and an error.
+//
+// Parameters:
+//
+//	jobRepository: The job repository for persisting job metadata.
+//	cfg: The application configuration.
+//	listeners: A slice of JobExecutionListener instances.
+//	flow: The flow definition of the job.
+//	metricRecorder: The metric recorder for the job.
+//	tracer: The tracer for distributed tracing.
+//
+// Returns:
+//
+//	The constructed port.Job interface and an error.
 type JobBuilder func(
-	// jobRepository: The job repository for persisting job metadata.
 	jobRepository repository.JobRepository,
 	cfg *config.Config,
 	listeners []port.JobExecutionListener,
@@ -31,29 +45,29 @@ type JobBuilder func(
 // such as jobs, steps, components, and listeners, based on JSL (Job Specification Language) definitions.
 // This factory manages registered builder functions and resolves dependencies to generate executable batch objects.
 type JobFactory struct {
-	config                           *config.Config                                 // Global application configuration.
-	expressionResolver               port.ExpressionResolver                        // Resolver for dynamic expressions.
-	dbConnectionResolver             adapter.DBConnectionResolver                   // Resolver for database connections.
-	componentBuilders                map[string]jsl.ComponentBuilder                // Registered builders for batch components (readers, processors, writers, tasklets).
-	jobBuilders                      map[string]JobBuilder                          // Registered builders for jobs.
-	jobListenerBuilders              map[string]jsl.JobExecutionListenerBuilder     // Registered builders for job execution listeners.
-	stepListenerBuilders             map[string]jsl.StepExecutionListenerBuilder    // Registered builders for step execution listeners.
-	itemReadListenerBuilders         map[string]jsl.ItemReadListenerBuilder         // Registered builders for item read listeners.
-	itemProcessListenerBuilders      map[string]jsl.ItemProcessListenerBuilder      // Registered builders for item process listeners.
-	itemWriteListenerBuilders        map[string]jsl.ItemWriteListenerBuilder        // Registered builders for item write listeners.
-	skipListenerBuilders             map[string]jsl.SkipListenerBuilder             // Registered builders for skip listeners.
-	retryItemListenerBuilders        map[string]jsl.LoggingRetryItemListenerBuilder // Registered builders for retry item listeners.
-	chunkListenerBuilders            map[string]jsl.ChunkListenerBuilder            // Registered builders for chunk listeners.
-	decisionBuilders                 map[string]jsl.ConditionalDecisionBuilder      // Registered builders for conditional decisions.
-	splitBuilders                    map[string]jsl.SplitBuilder                    // Registered builders for split elements.
-	partitionerBuilders              map[string]port.PartitionerBuilder             // Registered builders for partitioners.
-	jobParametersIncrementerBuilders map[string]jsl.JobParametersIncrementerBuilder // Registered builders for job parameters pincrements.
-	notificationListenerBuilders     map[string]jsl.NotificationListenerBuilder     // Registered builders for notification listeners.
-	metadataTxManager                tx.TransactionManager                          // Transaction manager for metadata operations.
-	stepFactory                      step_factory.StepFactory                       // Factory for creating step instances.
-	metricRecorder                   metrics.MetricRecorder                         // Recorder for metrics.
-	tracer                           metrics.Tracer                                 // Tracer for distributed tracing.
-	jobRepository                    repository.JobRepository                       // Repository for job metadata.
+	config                           *config.Config
+	expressionResolver               port.ExpressionResolver
+	dbConnectionResolver             coreAdapter.ResourceConnectionResolver
+	componentBuilders                map[string]jsl.ComponentBuilder
+	jobBuilders                      map[string]JobBuilder
+	jobListenerBuilders              map[string]jsl.JobExecutionListenerBuilder
+	stepListenerBuilders             map[string]jsl.StepExecutionListenerBuilder
+	itemReadListenerBuilders         map[string]jsl.ItemReadListenerBuilder
+	itemProcessListenerBuilders      map[string]jsl.ItemProcessListenerBuilder
+	itemWriteListenerBuilders        map[string]jsl.ItemWriteListenerBuilder
+	skipListenerBuilders             map[string]jsl.SkipListenerBuilder
+	retryItemListenerBuilders        map[string]jsl.LoggingRetryItemListenerBuilder
+	chunkListenerBuilders            map[string]jsl.ChunkListenerBuilder
+	decisionBuilders                 map[string]jsl.ConditionalDecisionBuilder
+	splitBuilders                    map[string]jsl.SplitBuilder
+	partitionerBuilders              map[string]port.PartitionerBuilder
+	jobParametersIncrementerBuilders map[string]jsl.JobParametersIncrementerBuilder
+	notificationListenerBuilders     map[string]jsl.NotificationListenerBuilder
+	metadataTxManager                tx.TransactionManager
+	stepFactory                      step_factory.StepFactory
+	metricRecorder                   metrics.MetricRecorder
+	tracer                           metrics.Tracer
+	jobRepository                    repository.JobRepository
 }
 
 // JobFactoryParams defines the parameters that the NewJobFactory function
@@ -61,15 +75,15 @@ type JobFactory struct {
 // Each field represents a dependency required for the JobFactory to fulfill its responsibilities.
 type JobFactoryParams struct {
 	fx.In
-	Repo              repository.JobRepository     // JobRepository used for persisting job metadata.
-	Cfg               *config.Config               // Global configuration for the framework.
-	Resolver          port.ExpressionResolver      // ExpressionResolver for resolving dynamic expressions within JSL.
-	MetricRecorder    metrics.MetricRecorder       // MetricRecorder for recording metrics.
-	Tracer            metrics.Tracer               // Tracer for distributed tracing.
-	DBResolver        adapter.DBConnectionResolver // DBConnectionResolver for resolving database connection names.
-	MetadataTxManager tx.TransactionManager        `name:"metadata"` // Metadata Transaction Manager, used by JobRepository.
-	StepFactory       step_factory.StepFactory     // StepFactory for building steps.
-	TxFactory         tx.TransactionManagerFactory // Transaction Manager Factory.
+	Repo              repository.JobRepository               // JobRepository used for persisting job metadata.
+	Cfg               *config.Config                         // Global configuration for the framework.
+	Resolver          port.ExpressionResolver                // ExpressionResolver for resolving dynamic expressions within JSL.
+	MetricRecorder    metrics.MetricRecorder                 // MetricRecorder for recording metrics.
+	Tracer            metrics.Tracer                         // Tracer for distributed tracing.
+	DBResolver        coreAdapter.ResourceConnectionResolver // DBConnectionResolver for resolving database connection names.
+	MetadataTxManager tx.TransactionManager                  `name:"metadata"` // Metadata Transaction Manager, used by JobRepository.
+	StepFactory       step_factory.StepFactory               // StepFactory for building steps.
+	TxFactory         tx.TransactionManagerFactory           // Transaction Manager Factory.
 }
 
 // NewJobFactory creates a new instance of JobFactory.
@@ -102,8 +116,8 @@ func NewJobFactory(p JobFactoryParams) *JobFactory {
 		splitBuilders:                    make(map[string]jsl.SplitBuilder),
 		partitionerBuilders:              make(map[string]port.PartitionerBuilder),
 		jobParametersIncrementerBuilders: make(map[string]jsl.JobParametersIncrementerBuilder),
-		notificationListenerBuilders:     make(map[string]jsl.NotificationListenerBuilder), // Builders for notification listeners.
-		metadataTxManager:                p.MetadataTxManager,                              // Retained as JobRepository and others may use it.
+		notificationListenerBuilders:     make(map[string]jsl.NotificationListenerBuilder),
+		metadataTxManager:                p.MetadataTxManager,
 		stepFactory:                      p.StepFactory,
 		config:                           p.Cfg,
 		// TxFactory is passed to StepFactory, so JobFactory itself does not retain it.
@@ -111,6 +125,10 @@ func NewJobFactory(p JobFactoryParams) *JobFactory {
 }
 
 // GetConfig returns a reference to the Config held by the JobFactory.
+//
+// Returns:
+//
+//	A pointer to the Config instance.
 func (f *JobFactory) GetConfig() *config.Config {
 	return f.config
 }
@@ -345,8 +363,8 @@ func (f *JobFactory) CreateJob(jobName string) (port.Job, error) {
 	}
 
 	jobInstance, err := jobBuilder(
-		f.jobRepository, // Pass jobRepository
-		f.config,        // Pass config
+		f.jobRepository,
+		f.config,
 		jobListeners,
 		coreFlow,
 		f.metricRecorder,

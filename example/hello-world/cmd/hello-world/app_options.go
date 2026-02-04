@@ -1,4 +1,4 @@
-// main package provides the main application entry point and sets up the Fx dependency injection graph.
+// Package main provides the main application entry point and sets up the Fx dependency injection graph.
 // It defines the application's configuration, dummy database implementations for a DB-less environment,
 // and registers various batch components and listeners.
 package main
@@ -6,23 +6,21 @@ package main
 import (
 	// Standard library imports
 	"context"
-	"database/sql"
 	"io/fs"
 	"os"
 
 	helloTasklet "github.com/tigerroll/surfin/example/hello-world/internal/step"
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	database "github.com/tigerroll/surfin/pkg/batch/adapter/database"
 	dummy "github.com/tigerroll/surfin/pkg/batch/adapter/database/dummy"
 	// Batch framework imports
 	item "github.com/tigerroll/surfin/pkg/batch/component/item"
 	migration "github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
-	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	bootstrap "github.com/tigerroll/surfin/pkg/batch/core/config/bootstrap"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	supportConfig "github.com/tigerroll/surfin/pkg/batch/core/config/support"
-	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	decision "github.com/tigerroll/surfin/pkg/batch/core/job/decision"
 	split "github.com/tigerroll/surfin/pkg/batch/core/job/split"
 	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
@@ -48,11 +46,11 @@ func (d *dummyMigrator) Up(ctx context.Context, fsys fs.FS, dir, table string) e
 	return nil
 }
 func (d *dummyMigrator) Down(ctx context.Context, fsys fs.FS, dir, table string) error {
-	logger.Debugf("Dummy Migrator: Down called, doing nothing.")
+	logger.Debugf("Dummy Migrator: Down called, doing nothing.") // Logs that the dummy Down method was called.
 	return nil
 }
 func (d *dummyMigrator) Close() error {
-	logger.Debugf("Dummy Migrator: Close called, doing nothing.")
+	logger.Debugf("Dummy Migrator: Close called, doing nothing.") // Logs that the dummy Close method was called.
 	return nil
 }
 
@@ -61,116 +59,79 @@ func (d *dummyMigrator) Close() error {
 // for the hello-world application.
 type dummyMigratorProvider struct{}
 
-func (d *dummyMigratorProvider) NewMigrator(conn adapter.DBConnection) migration.Migrator {
+// NewMigrator returns a new dummy Migrator instance.
+//
+// Parameters:
+//   - conn: The database connection (ignored by this dummy implementation).
+//
+// Returns:
+//   - A dummy Migrator instance.
+func (d *dummyMigratorProvider) NewMigrator(conn database.DBConnection) migration.Migrator {
 	return &dummyMigrator{}
 }
 
-// dummyDBConnection is a dummy implementation of the adapter.DBConnection interface.
-// It performs no actual database operations, as the hello-world application
-// runs in a DB-less mode.
-type dummyDBConnection struct{}
-
-// ExecuteUpdate is a dummy implementation of the DBExecutor.ExecuteUpdate method.
-func (d *dummyDBConnection) ExecuteUpdate(ctx context.Context, model interface{}, operation string, tableName string, query map[string]interface{}) (int64, error) {
-	logger.Debugf("Dummy DBConnection: ExecuteUpdate called, doing nothing.")
-	return 0, nil
-}
-
-// ExecuteUpsert is a dummy implementation of the DBExecutor.ExecuteUpsert method.
-func (d *dummyDBConnection) ExecuteUpsert(ctx context.Context, model interface{}, tableName string, uniqueColumns []string, updateColumns []string) (int64, error) {
-	logger.Debugf("Dummy DBConnection: ExecuteUpsert called, doing nothing. Table: %s", tableName)
-	return 0, nil
-}
-
-// ExecuteQuery is a dummy implementation of the DBExecutor.ExecuteQuery method.
-func (d *dummyDBConnection) ExecuteQuery(ctx context.Context, model interface{}, query map[string]interface{}) error {
-	logger.Debugf("Dummy DBConnection: ExecuteQuery called, doing nothing. Query: %v", query)
-	return nil
-}
-
-// Count is a dummy implementation of the DBExecutor.Count method.
-func (d *dummyDBConnection) Count(ctx context.Context, model interface{}, query map[string]interface{}) (int64, error) {
-	logger.Debugf("Dummy DBConnection: Count called, doing nothing. Query: %v", query)
-	return 0, nil
-}
-
-// ExecuteQueryAdvanced is a dummy implementation of the DBExecutor.ExecuteQueryAdvanced method.
-func (d *dummyDBConnection) ExecuteQueryAdvanced(ctx context.Context, model interface{}, query map[string]interface{}, orderBy string, limit int) error {
-	logger.Debugf("Dummy DBConnection: ExecuteQueryAdvanced called, doing nothing. Query: %v, OrderBy: %s, Limit: %d", query, orderBy, limit)
-	return nil
-}
-
-// Pluck is a dummy implementation of the DBExecutor.Pluck method.
-func (d *dummyDBConnection) Pluck(ctx context.Context, dest interface{}, field string, value interface{}, query map[string]interface{}) error {
-	logger.Debugf("Dummy DBConnection: Pluck called, doing nothing. Field: %s, Value: %v, Query: %v", field, value, query)
-	return nil
-}
-
-// RefreshConnection is a dummy implementation of the DBConnection interface.
-func (d *dummyDBConnection) RefreshConnection(ctx context.Context) error {
-	logger.Debugf("Dummy DBConnection: RefreshConnection called, doing nothing.")
-	return nil
-}
-
-// Type returns the type of the dummy database connection.
-func (d *dummyDBConnection) Type() string { return "dummy" }
-
-// Name returns the name of the dummy database connection.
-func (d *dummyDBConnection) Name() string { return "dummy" }
-
-// Close closes the dummy database connection.
-func (d *dummyDBConnection) Close() error { return nil }
-
-// IsTableNotExistError checks if the given error indicates that a table does not exist (always false for dummy).
-func (d *dummyDBConnection) IsTableNotExistError(err error) bool { return false }
-
-// Config is a dummy implementation of the DBConnection interface.
-func (d *dummyDBConnection) Config() dbconfig.DatabaseConfig { return dbconfig.DatabaseConfig{} }
-
-// GetSQLDB is a dummy implementation of the DBConnection interface.
-func (d *dummyDBConnection) GetSQLDB() (*sql.DB, error) {
-	return nil, nil // Returns nil as there's no actual SQL DB.
-}
-
-// dummyDBProvider is a dummy implementation of the adapter.DBProvider interface.
-// It always returns dummy DBConnection instances.
-type dummyDBProvider struct{}
-
-// GetConnection returns a dummy DBConnection.
-func (d *dummyDBProvider) GetConnection(name string) (adapter.DBConnection, error) {
-	logger.Debugf("Dummy DBProvider: GetConnection called for '%s'.", name)
-	return &dummyDBConnection{}, nil
-}
-
-// ForceReconnect returns a new dummy DBConnection, simulating a re-establishment.
-func (d *dummyDBProvider) ForceReconnect(name string) (adapter.DBConnection, error) {
-	logger.Debugf("Dummy DBProvider: ForceReconnect called for '%s'.", name)
-	return &dummyDBConnection{}, nil
-}
-
-// CloseAll performs no operation for dummy connections.
-func (d *dummyDBProvider) CloseAll() error {
-	logger.Debugf("Dummy DBProvider: CloseAll called.")
-	return nil
-}
-
-// Type returns the type of the dummy database provider.
-func (d *dummyDBProvider) Type() string { return "dummy" }
-
-// dummyPortDBConnectionResolver is a dummy implementation of the port.DBConnectionResolver interface.
-// It's used to satisfy dependencies in a DB-less environment.
+// dummyPortDBConnectionResolver is a dummy implementation of the database.DBConnectionResolver interface.
+// It is used to satisfy dependencies in a DB-less environment.
 type dummyPortDBConnectionResolver struct{}
 
-// ResolveDBConnectionName returns the default connection name for dummy operations.
-func (d *dummyPortDBConnectionResolver) ResolveDBConnectionName(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution, defaultName string) (string, error) {
+// ResolveConnection is a method embedded from coreAdapter.ResourceConnectionResolver.
+// It returns a dummy ResourceConnection.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - name: The name of the connection to resolve.
+//
+// Returns:
+//   - A dummy ResourceConnection and nil error.
+func (d *dummyPortDBConnectionResolver) ResolveConnection(ctx context.Context, name string) (coreAdapter.ResourceConnection, error) {
+	logger.Debugf("Dummy Port DBConnectionResolver: ResolveConnection called for '%s'.", name)
+	// Since database.DBConnection embeds coreAdapter.ResourceConnection,
+	// dummy.NewDummyDBConnection() also functions as a ResourceConnection.
+	return dummy.NewDummyDBConnection(), nil
+}
+
+// ResolveConnectionName is a method embedded from coreAdapter.ResourceConnectionResolver.
+// It returns the default connection name.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - jobExecution: The current JobExecution (ignored by this dummy implementation).
+//   - stepExecution: The current StepExecution (ignored by this dummy implementation).
+//   - defaultName: The default name to return.
+//
+// Returns:
+//   - The default connection name and nil error.
+func (d *dummyPortDBConnectionResolver) ResolveConnectionName(ctx context.Context, jobExecution interface{}, stepExecution interface{}, defaultName string) (string, error) {
+	logger.Debugf("Dummy Port DBConnectionResolver: ResolveConnectionName called, returning default '%v'.", defaultName)
+	return defaultName, nil
+}
+
+// ResolveDBConnectionName returns the default connection name.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - jobExecution: The current JobExecution (ignored by this dummy implementation).
+//   - stepExecution: The current StepExecution (ignored by this dummy implementation).
+//   - defaultName: The default name to return.
+//
+// Returns:
+//   - The default connection name and nil error.
+func (d *dummyPortDBConnectionResolver) ResolveDBConnectionName(ctx context.Context, jobExecution interface{}, stepExecution interface{}, defaultName string) (string, error) {
 	logger.Debugf("Dummy Port DBConnectionResolver: ResolveDBConnectionName called, returning default '%s'.", defaultName)
 	return defaultName, nil
 }
 
 // ResolveDBConnection returns a dummy DBConnection instance.
-func (d *dummyPortDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adapter.DBConnection, error) {
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - name: The name of the connection to resolve (ignored by this dummy implementation).
+//
+// Returns:
+//   - A dummy DBConnection instance and nil error.
+func (d *dummyPortDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (database.DBConnection, error) {
 	logger.Debugf("Dummy Port DBConnectionResolver: ResolveDBConnection called for '%s'.", name)
-	return &dummyDBConnection{}, nil
+	return dummy.NewDummyDBConnection(), nil
 }
 
 // realEnvironmentExpander implements the config.EnvironmentExpander interface
@@ -180,17 +141,29 @@ type realEnvironmentExpander struct{}
 // Expand implements the Expand method of the config.EnvironmentExpander interface.
 func (r *realEnvironmentExpander) Expand(input []byte) ([]byte, error) {
 	expanded := os.ExpandEnv(string(input))
-	logger.Debugf("Real EnvironmentExpander: Expanded '%s' to '%s'", string(input), expanded)
+	logger.Debugf("Real EnvironmentExpander: Expanded '%s' to '%s'", string(input), expanded) // Logs the expansion process.
 	return []byte(expanded), nil
 }
 
 // provideRealEnvironmentExpander provides a real implementation of config.EnvironmentExpander.
+//
+// Returns:
+//   - A real implementation of the config.EnvironmentExpander interface.
 func provideRealEnvironmentExpander() config.EnvironmentExpander {
 	return &realEnvironmentExpander{}
 }
 
 // GetApplicationOptions constructs and returns a slice of uber-fx options.
 // This function must be defined before the fx.New call.
+//
+// Parameters:
+//   - appCtx: The application context.
+//   - envFilePath: The path to the environment configuration file.
+//   - embeddedConfig: Embedded configuration bytes.
+//   - embeddedJSL: Embedded JSL definition bytes.
+//
+// Returns:
+//   - A slice of fx.Option to configure the Fx application.
 func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedConfig config.EmbeddedConfig, embeddedJSL jsl.JSLDefinitionBytes) []fx.Option {
 	cfg, err := config.LoadConfig(envFilePath, embeddedConfig) // Load application configuration.
 	if err != nil {                                            // Fatal error if configuration loading fails.
@@ -209,27 +182,38 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 		fx.Annotate(appCtx, fx.As(new(context.Context)), fx.ResultTags(`name:"appCtx"`)),
 	))
 	// Dummy providers to satisfy framework migration dependencies.
+	// Provides a dummy implementation of migration.MigratorProvider.
 	options = append(options, fx.Provide(func() migration.MigratorProvider { return &dummyMigratorProvider{} }))
+	// Provides an empty map for all migration file systems, as no real migrations are performed.
 	options = append(options, fx.Provide(fx.Annotate(
 		func() map[string]fs.FS { return make(map[string]fs.FS) },
 		fx.ResultTags(`name:"allMigrationFS"`),
 	)))
-	// Add dummy provider for DBConnectionResolver. dummyPortDBConnectionResolver implements adapter.DBConnectionResolver.
-	options = append(options, fx.Provide(func() adapter.DBConnectionResolver { return &dummyPortDBConnectionResolver{} }))
-	options = append(options, fx.Provide(func() map[string]adapter.DBProvider {
-		return map[string]adapter.DBProvider{
-			"default":  &dummyDBProvider{}, // Provides at least one dummy provider.
-			"metadata": &dummyDBProvider{}, // Adds dummy provider for "metadata" database for framework migrations.
-			"dummy":    &dummyDBProvider{}, // Adds dummy provider for "dummy" database for JobRepositoryDBRef.
+	// Adds a dummy provider for DBConnectionResolver.
+	// dummyPortDBConnectionResolver implements both database.DBConnectionResolver and coreAdapter.ResourceConnectionResolver.
+	options = append(options, fx.Provide(fx.Annotate(
+		func() *dummyPortDBConnectionResolver { return &dummyPortDBConnectionResolver{} },
+		fx.As(new(database.DBConnectionResolver)),
+		fx.As(new(coreAdapter.ResourceConnectionResolver)),
+	)))
+	// Provides a map of dummy DBProvider instances for various connection names.
+	options = append(options, fx.Provide(func() map[string]database.DBProvider {
+		return map[string]database.DBProvider{
+			"default":  dummy.NewDummyDBProvider(),
+			"metadata": dummy.NewDummyDBProvider(),
+			"dummy":    dummy.NewDummyDBProvider(),
 		}
 	}))
 	// Add dummy providers for missing transaction manager-related dependencies.
+	// Provides a dummy TransactionManagerFactory.
 	options = append(options, fx.Provide(func() tx.TransactionManagerFactory {
 		return &dummy.DummyTxManagerFactory{}
 	}))
+	// Provides an empty map for TransactionManagers, as they are not used in this dummy setup.
 	options = append(options, fx.Provide(func() map[string]tx.TransactionManager {
 		return make(map[string]tx.TransactionManager) // Provides an empty map to satisfy NewMetadataTxManager's dependencies.
 	}))
+	// Provides a dummy MetadataTxManager.
 	options = append(options, fx.Provide(fx.Annotate(dummy.NewMetadataTxManager, fx.ResultTags(`name:"metadata"`))))
 
 	// Add real provider for config.EnvironmentExpander

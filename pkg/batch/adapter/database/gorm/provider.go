@@ -1,13 +1,15 @@
 package gorm
 
 import (
+	"context"
 	"fmt"
+	_ "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
 	"sync"
 	"time"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database" // Imports the database package.
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
@@ -48,7 +50,7 @@ type BaseProvider struct {
 	cfg    *config.Config
 	dbType string
 	// Map to hold connections managed by this provider (name -> DBConnection)
-	connections map[string]adapter.DBConnection
+	connections map[string]database.DBConnection
 	mu          sync.RWMutex
 }
 
@@ -57,7 +59,7 @@ func NewBaseProvider(cfg *config.Config, dbType string) *BaseProvider {
 	return &BaseProvider{
 		cfg:         cfg,
 		dbType:      dbType,
-		connections: make(map[string]adapter.DBConnection),
+		connections: make(map[string]database.DBConnection),
 	}
 }
 
@@ -67,7 +69,7 @@ func (p *BaseProvider) Type() string {
 }
 
 // GetConnection retrieves an existing connection or establishes a new one.
-func (p *BaseProvider) GetConnection(name string) (adapter.DBConnection, error) {
+func (p *BaseProvider) GetConnection(name string) (database.DBConnection, error) {
 	p.mu.RLock()
 	conn, ok := p.connections[name]
 	p.mu.RUnlock()
@@ -90,11 +92,23 @@ func (p *BaseProvider) GetConnection(name string) (adapter.DBConnection, error) 
 }
 
 // createAndStoreConnection establishes a new connection and stores it in the map.
-func (p *BaseProvider) createAndStoreConnection(name string) (adapter.DBConnection, error) {
+func (p *BaseProvider) createAndStoreConnection(name string) (database.DBConnection, error) {
 	var dbConfig dbconfig.DatabaseConfig
-	rawConfig, ok := p.cfg.Surfin.AdapterConfigs[name]
+	rawAdapterConfig, ok := p.cfg.Surfin.AdapterConfigs.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("database configuration '%s' not found in adapter.database configs", name)
+		return nil, fmt.Errorf("invalid 'adapter' configuration format: expected map[string]interface{}")
+	}
+	adapterConfig, ok := rawAdapterConfig["database"]
+	if !ok {
+		return nil, fmt.Errorf("no 'database' adapter configuration found in Surfin.AdapterConfigs")
+	}
+	dbConfigsMap, ok := adapterConfig.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid 'database' adapter configuration format: expected map[string]interface{}")
+	}
+	rawConfig, ok := dbConfigsMap[name]
+	if !ok {
+		return nil, fmt.Errorf("database configuration '%s' not found under 'adapter.database' configs", name)
 	}
 	if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
 		return nil, fmt.Errorf("failed to decode database config for '%s': %w", name, err)
@@ -105,7 +119,7 @@ func (p *BaseProvider) createAndStoreConnection(name string) (adapter.DBConnecti
 		return nil, fmt.Errorf("provider type mismatch: expected '%s', got '%s' for connection '%s'", p.dbType, dbConfig.Type, name)
 	}
 
-	gormDB, err := p.connect(dbConfig)
+	gormDB, err := p.connect(context.Background(), dbConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +132,7 @@ func (p *BaseProvider) createAndStoreConnection(name string) (adapter.DBConnecti
 }
 
 // ForceReconnect attempts to close and reopen a connection if it exists.
-func (p *BaseProvider) ForceReconnect(name string) (adapter.DBConnection, error) {
+func (p *BaseProvider) ForceReconnect(name string) (database.DBConnection, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -141,7 +155,7 @@ func (p *BaseProvider) ForceReconnect(name string) (adapter.DBConnection, error)
 }
 
 // connect establishes a GORM connection based on DatabaseConfig.
-func (p *BaseProvider) connect(dbConfig dbconfig.DatabaseConfig) (*gorm.DB, error) {
+func (p *BaseProvider) connect(ctx context.Context, dbConfig dbconfig.DatabaseConfig) (*gorm.DB, error) {
 
 	// Retrieves the DialectorFactory and uses it to create a Dialector.
 	dialectorFactory, err := GetDialectorFactory(dbConfig.Type)

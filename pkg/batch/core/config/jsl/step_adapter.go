@@ -3,7 +3,7 @@ package jsl
 import (
 	"context"
 	"fmt"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -78,7 +78,7 @@ func ConvertJSLToCoreFlow(
 	stepFactory step_factory.StepFactory,
 	partitionerBuilders map[string]core.PartitionerBuilder, // Builders for partitioners.
 	resolver core.ExpressionResolver,
-	dbResolver adapter.DBConnectionResolver,
+	dbResolver coreAdapter.ResourceConnectionResolver,
 	stepListenerBuilders map[string]StepExecutionListenerBuilder,
 	itemReadListenerBuilders map[string]ItemReadListenerBuilder,
 	itemProcessListenerBuilders map[string]ItemProcessListenerBuilder,
@@ -679,7 +679,7 @@ func buildReaderWriterProcessor(
 	componentBuilders map[string]ComponentBuilder,
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
-	dbResolver adapter.DBConnectionResolver,
+	dbResolver coreAdapter.ResourceConnectionResolver,
 	readerRef *ComponentRef,
 	processorRef *ComponentRef,
 	writerRef *ComponentRef,

@@ -4,9 +4,9 @@ package mysql
 import (
 	"fmt"
 
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database" // Imports the database package.
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -49,7 +49,7 @@ func (p *MySQLDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string {
 		authPart, c.Host, c.Port, c.Database)
 }
 
-// NewProvider creates a new `adapter.DBProvider` for MySQL.
+// NewProvider creates a new `database.DBProvider` for MySQL.
 //
 // This function is intended to be used with `fx.Provide` to register the MySQL DBProvider
 // in the application's dependency injection graph.
@@ -60,7 +60,7 @@ func (p *MySQLDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string {
 //
 // Returns:
 //
-//	An `adapter.DBProvider` instance configured for MySQL.
-func NewProvider(cfg *config.Config) adapter.DBProvider {
+//	A `database.DBProvider` instance configured for MySQL.
+func NewProvider(cfg *config.Config) database.DBProvider {
 	return &MySQLDBProvider{BaseProvider: gormadapter.NewBaseProvider(cfg, "mysql")}
 }

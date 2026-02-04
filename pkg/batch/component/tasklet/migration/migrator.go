@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	"io/fs"
 
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database"
+	migratedb "github.com/golang-migrate/migrate/v4/database"
 	"github.com/golang-migrate/migrate/v4/database/mysql"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/database/sqlite"
@@ -22,12 +22,12 @@ import (
 
 // migratorImpl implements Migrator
 type migratorImpl struct {
-	dbConn adapter.DBConnection
+	dbConn database.DBConnection
 	dbType string
 }
 
 // NewMigrator creates a new Migrator instance.
-func NewMigrator(dbConn adapter.DBConnection) Migrator {
+func NewMigrator(dbConn database.DBConnection) Migrator {
 	return &migratorImpl{
 		dbConn: dbConn,
 		dbType: dbConn.Type(),
@@ -35,7 +35,7 @@ func NewMigrator(dbConn adapter.DBConnection) Migrator {
 }
 
 // getDatabaseDriver retrieves a migrate/v4 Driver based on the database type.
-func (m *migratorImpl) getDatabaseDriver(sqlDB *sql.DB, tableName string) (database.Driver, error) {
+func (m *migratorImpl) getDatabaseDriver(sqlDB *sql.DB, tableName string) (migratedb.Driver, error) {
 	switch m.dbType {
 	case "postgres", "redshift":
 		// PostgreSQL/Redshift driver

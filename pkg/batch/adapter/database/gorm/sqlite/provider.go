@@ -4,9 +4,9 @@ package sqlite
 import (
 	"errors"
 
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database" // Imports the database package.
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -27,7 +27,7 @@ func init() {
 	})
 }
 
-// SQLiteDBProvider implements adapter.DBProvider for SQLite connections.
+// SQLiteDBProvider implements database.DBProvider for SQLite connections.
 type SQLiteDBProvider struct {
 	*gormadapter.BaseProvider
 }
@@ -42,7 +42,7 @@ func (p *SQLiteDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string {
 	return c.Database
 }
 
-// NewProvider creates a new `adapter.DBProvider` for SQLite.
+// NewProvider creates a new `database.DBProvider` for SQLite.
 //
 // This function is intended to be used with `fx.Provide` to register the SQLite DBProvider
 // in the application's dependency injection graph.
@@ -53,7 +53,7 @@ func (p *SQLiteDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string {
 //
 // Returns:
 //
-//	An `adapter.DBProvider` instance configured for SQLite.
-func NewProvider(cfg *config.Config) adapter.DBProvider {
+//	A `database.DBProvider` instance configured for SQLite.
+func NewProvider(cfg *config.Config) database.DBProvider {
 	return &SQLiteDBProvider{BaseProvider: gormadapter.NewBaseProvider(cfg, "sqlite")}
 }

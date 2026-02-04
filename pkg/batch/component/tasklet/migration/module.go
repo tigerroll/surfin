@@ -13,8 +13,11 @@ import (
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
+	"fmt"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
+
 	"github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration/drivers"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 )
 
@@ -24,13 +27,13 @@ type MigrationTaskletComponentBuilderParams struct {
 	// TxFactory is the TransactionManagerFactory for creating transaction managers.
 	TxFactory tx.TransactionManagerFactory
 	// DBResolver is the DBConnectionResolver for resolving database connections.
-	DBResolver adapter.DBConnectionResolver
+	DBResolver coreAdapter.ResourceConnectionResolver // The resource connection resolver for resolving database connections.
 	// MigratorProvider is the provider for obtaining Migrator instances.
 	MigratorProvider MigratorProvider
 	// AllMigrationFS is a map of all registered migration file systems, keyed by name.
 	AllMigrationFS map[string]fs.FS `name:"allMigrationFS"`
 	// AllDBProviders is a map of all registered DBProvider instances, keyed by database type.
-	AllDBProviders map[string]adapter.DBProvider
+	AllDBProviders map[string]database.DBProvider
 }
 
 // NewMigrationTaskletComponentBuilder creates a `jsl.ComponentBuilder` for `MigrationTasklet`.
@@ -48,14 +51,18 @@ func NewMigrationTaskletComponentBuilder(p MigrationTaskletComponentBuilderParam
 	return func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver adapter.DBConnectionResolver,
+		dbResolver coreAdapter.ResourceConnectionResolver, // The resource connection resolver.
 		properties map[string]string,
 	) (interface{}, error) {
+		dbConnResolver, ok := dbResolver.(database.DBConnectionResolver)
+		if !ok {
+			return nil, fmt.Errorf("dbResolver (type %T) is not of type database.DBConnectionResolver", dbResolver)
+		}
 		return NewMigrationTasklet(
 			cfg,
 			resolver,
 			p.TxFactory,
-			p.DBResolver, // Use the Fx-injected DBConnectionResolver.
+			dbConnResolver,
 			p.MigratorProvider,
 			p.AllMigrationFS,
 			properties,
@@ -93,5 +100,6 @@ var Module = fx.Options(
 		NewMigrationTaskletComponentBuilder,
 		fx.ResultTags(`name:"migrationTasklet"`),
 	)),
-	fx.Invoke(RegisterMigrationTaskletBuilder), drivers.Module, // Include the module that registers golang-migrate drivers
+	fx.Invoke(RegisterMigrationTaskletBuilder),
+	drivers.Module, // Include the module that registers golang-migrate drivers
 )

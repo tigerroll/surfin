@@ -6,7 +6,7 @@ import (
 
 	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
 	appRepo "github.com/tigerroll/surfin/example/weather/internal/repository"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	batch_config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -27,18 +27,18 @@ type WeatherWriterConfig struct {
 type WeatherItemWriter struct {
 	Repo appRepo.WeatherRepository // Repo is the repository instance, initialized in the [Open] method based on the database type.
 
-	AllDBConnections map[string]adapter.DBConnection // AllDBConnections is a map of all established database connections, keyed by their name.
-	DBResolver       adapter.DBConnectionResolver    // DBResolver is the database connection resolver, used to obtain DB connections.
-	Config           *batch_config.Config            // Config is the application's global configuration.
-	TargetDBName     string                          // TargetDBName is the name of the target database connection, resolved from JSL properties.
-	TableName        string                          // TableName is the name of the target table for this writer, derived from the entity.
+	AllDBConnections map[string]database.DBConnection // AllDBConnections is a map of all established database connections, keyed by their name.
+	DBResolver       database.DBConnectionResolver    // DBResolver is the database connection resolver, used to obtain DB connections.
+	Config           *batch_config.Config             // Config is the application's global configuration.
+	TargetDBName     string                           // TargetDBName is the name of the target database connection, resolved from JSL properties.
+	TableName        string                           // TableName is the name of the target table for this writer, derived from the entity.
 
 	// stepExecutionContext holds the reference to the Step's ExecutionContext.
 	stepExecutionContext model.ExecutionContext
 	// writerState holds the writer's internal state.
 	writerState model.ExecutionContext
 	resolver    port.ExpressionResolver
-	dbResolver  adapter.DBConnectionResolver // dbResolver is the database connection resolver.
+	dbResolver  database.DBConnectionResolver // dbResolver is the database connection resolver.
 }
 
 // Verify that WeatherItemWriter implements the [port.ItemWriter[any]] interface.
@@ -56,9 +56,9 @@ var _ port.ItemWriter[any] = (*WeatherItemWriter)(nil)
 // properties is a map of JSL properties for this writer.
 func NewWeatherWriter(
 	cfg *batch_config.Config,
-	allDBConnections map[string]adapter.DBConnection,
+	allDBConnections map[string]database.DBConnection,
 	resolver port.ExpressionResolver,
-	dbResolver adapter.DBConnectionResolver,
+	dbResolver database.DBConnectionResolver,
 	properties map[string]string,
 ) (*WeatherItemWriter, error) {
 

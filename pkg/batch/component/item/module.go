@@ -5,7 +5,7 @@ package item
 import (
 	"go.uber.org/fx"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
@@ -25,7 +25,7 @@ func NewNoOpItemReaderComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		_ *config.Config, // Not used by NoOpItemReader
 		_ port.ExpressionResolver, // Not used by NoOpItemReader
-		_ adapter.DBConnectionResolver, // Not used by NoOpItemReader
+		_ coreAdapter.ResourceConnectionResolver, // Not used by NoOpItemReader
 		_ map[string]string, // Not used by NoOpItemReader
 	) (interface{}, error) {
 		return NewNoOpItemReader[any](), nil
@@ -44,7 +44,7 @@ func NewPassThroughItemProcessorComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		_ *config.Config, // Not used by PassThroughItemProcessor
 		_ port.ExpressionResolver, // Not used by PassThroughItemProcessor
-		_ adapter.DBConnectionResolver, // Not used by PassThroughItemProcessor
+		_ coreAdapter.ResourceConnectionResolver, // Not used by PassThroughItemProcessor
 		_ map[string]string, // Not used by PassThroughItemProcessor
 	) (interface{}, error) {
 		return NewPassThroughItemProcessor[any](), nil
@@ -64,7 +64,7 @@ func NewNoOpItemWriterComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		_ *config.Config, // Not used by NoOpItemWriter
 		_ port.ExpressionResolver, // Not used by NoOpItemReader
-		_ adapter.DBConnectionResolver, // Not used by NoOpItemWriter
+		_ coreAdapter.ResourceConnectionResolver, // Not used by NoOpItemWriter
 		_ map[string]string, // Not used by NoOpItemWriter
 	) (interface{}, error) {
 		return NewNoOpItemWriter[any](), nil
@@ -83,7 +83,7 @@ func NewExecutionContextItemWriterComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver adapter.DBConnectionResolver,
+		dbResolver coreAdapter.ResourceConnectionResolver,
 		properties map[string]string,
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.

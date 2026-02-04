@@ -104,7 +104,7 @@ type SurfinConfig struct {
 	// Security contains security-related configurations.
 	Security SecurityConfig `yaml:"security"`
 	// AdapterConfigs holds configurations for various adapters, typically database connections.
-	AdapterConfigs map[string]interface{} `yaml:"database"`
+	AdapterConfigs interface{} `yaml:"adapter"`
 }
 
 // Config is the root structure for the entire application configuration.

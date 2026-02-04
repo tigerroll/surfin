@@ -1,63 +1,62 @@
 surfin:
-  # Data source settings (multiple databases)
-  #datasources:
-  database:
-    # Framework metadata database (Postgres)
-    metadata:
-      type: "postgres"
-      host: "postgres"
-      port: 5432
-      database: "main"
-      user: "weather"
-      password: "weather"
-      schema: "public"
-      sslmode: "disable"
-      # Connection pool settings
-      pool:
-        max_open_conns: 10
-        max_idle_conns: 5
-        conn_max_lifetime_minutes: 5
+  adapter:
+    database:
+      # Framework metadata database (Postgres)
+      metadata:
+        type: "postgres"
+        host: "postgres"
+        port: 5432
+        database: "main"
+        user: "weather"
+        password: "weather"
+        schema: "public"
+        sslmode: "disable"
+        # Connection pool settings
+        pool:
+          max_open_conns: 10
+          max_idle_conns: 5
+          conn_max_lifetime_minutes: 5
 
-    # Application workload database (Postgres)
-    workload:
-      type: "postgres"
-      host: "postgres"
-      port: 5432
-      database: "main"
-      user: "weather"
-      password: "weather"
-      schema: "public"
-      sslmode: "disable"
-      # Connection pool settings
-      pool:
-        max_open_conns: 10
-        max_idle_conns: 5
-        conn_max_lifetime_minutes: 5
+      # Application workload database (Postgres)
+      workload:
+        type: "postgres"
+        host: "postgres"
+        port: 5432
+        database: "main"
+        user: "weather"
+        password: "weather"
+        schema: "public"
+        sslmode: "disable"
+        # Connection pool settings
+        pool:
+          max_open_conns: 10
+          max_idle_conns: 5
+          conn_max_lifetime_minutes: 5
 
-    # Application workload database (MySQL)
-    mysql:
-      type: "mysql"
-      host: "mysql"
-      port: 3306
-      database: "main"
-      user: "weather"
-      password: "weather"
-      schema: "main"
-      sslmode: "disable"
-      # Connection pool settings
-      pool:
-        max_open_conns: 10
-        max_idle_conns: 5
-        conn_max_lifetime_minutes: 5
+      # Application workload database (MySQL)
+      mysql:
+        type: "mysql"
+        host: "mysql"
+        port: 3306
+        database: "main"
+        user: "weather"
+        password: "weather"
+        schema: "main"
+        sslmode: "disable"
+        # Connection pool settings
+        pool:
+          max_open_conns: 10
+          max_idle_conns: 5
+          conn_max_lifetime_minutes: 5
 
-    # SQLite database for local development/testing
-    sqlite:
-      type: "sqlite"
-      database: "surfin.db" # File path
-      pool:
-        max_open_conns: 1
-        max_idle_conns: 1
-        conn_max_lifetime_minutes: 0
+      # SQLite database for local development/testing
+      sqlite:
+        type: "sqlite"
+        database: "surfin.db" # File path
+        pool:
+          max_open_conns: 1
+          max_idle_conns: 1
+          conn_max_lifetime_minutes: 0
 
   # Batch framework settings
   batch:
