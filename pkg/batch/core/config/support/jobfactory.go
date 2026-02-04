@@ -2,6 +2,7 @@ package support
 
 import (
 	"fmt"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
@@ -32,7 +33,7 @@ type JobBuilder func(
 type JobFactory struct {
 	config                           *config.Config                                 // Global application configuration.
 	expressionResolver               port.ExpressionResolver                        // Resolver for dynamic expressions.
-	dbConnectionResolver             port.DBConnectionResolver                      // Resolver for database connections.
+	dbConnectionResolver             adapter.DBConnectionResolver                   // Resolver for database connections.
 	componentBuilders                map[string]jsl.ComponentBuilder                // Registered builders for batch components (readers, processors, writers, tasklets).
 	jobBuilders                      map[string]JobBuilder                          // Registered builders for jobs.
 	jobListenerBuilders              map[string]jsl.JobExecutionListenerBuilder     // Registered builders for job execution listeners.
@@ -65,7 +66,7 @@ type JobFactoryParams struct {
 	Resolver          port.ExpressionResolver      // ExpressionResolver for resolving dynamic expressions within JSL.
 	MetricRecorder    metrics.MetricRecorder       // MetricRecorder for recording metrics.
 	Tracer            metrics.Tracer               // Tracer for distributed tracing.
-	DBResolver        port.DBConnectionResolver    // DBConnectionResolver for resolving database connection names.
+	DBResolver        adapter.DBConnectionResolver // DBConnectionResolver for resolving database connection names.
 	MetadataTxManager tx.TransactionManager        `name:"metadata"` // Metadata Transaction Manager, used by JobRepository.
 	StepFactory       step_factory.StepFactory     // StepFactory for building steps.
 	TxFactory         tx.TransactionManagerFactory // Transaction Manager Factory.

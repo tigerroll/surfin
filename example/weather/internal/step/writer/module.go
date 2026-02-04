@@ -14,20 +14,19 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/core/adapter" // Database adapter interfaces
 )
 
-// WeatherWriterComponentBuilderParams defines the dependencies for NewWeatherWriterComponentBuilder.
+// WeatherWriterComponentBuilderParams defines the dependencies for [NewWeatherWriterComponentBuilder].
 //
 // Parameters:
 //
 //	fx.In: Fx-injected parameters.
-//	AllDBConnections: A map of all established database connections, keyed by their name.
+//	AllDBConnections: A map of all established database connections, keyed by their name. This is provided by the main application module.
 type WeatherWriterComponentBuilderParams struct {
 	fx.In
-	// AllDBConnections is a map of all established database connections,
-	// provided by the main application module.
 	AllDBConnections map[string]adapter.DBConnection
 }
 
-// NewWeatherWriterComponentBuilder creates a jsl.ComponentBuilder for the weatherItemWriter.
+// NewWeatherWriterComponentBuilder creates a [jsl.ComponentBuilder] for the weatherItemWriter.
+//
 // It now receives its core dependencies (AllDBConnections) via Fx.
 //
 // Returns:
@@ -37,11 +36,10 @@ func NewWeatherWriterComponentBuilder(p WeatherWriterComponentBuilderParams) jsl
 	// Returns the builder function with a standard signature that JobFactory calls to construct the component.
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
-		resolver core.ExpressionResolver,
-		dbResolver core.DBConnectionResolver,
+		resolver core.ExpressionResolver, // The expression resolver for dynamic property resolution.
+		dbResolver adapter.DBConnectionResolver,
 		properties map[string]string,
 	) (interface{}, error) {
-
 		// Pass allDBConnections injected from Fx to NewWeatherWriter.
 		// The p.AllTxManagers dependency was removed as TxManager is now created on demand.
 		writer, err := NewWeatherWriter(cfg, p.AllDBConnections, resolver, dbResolver, properties)
@@ -52,9 +50,7 @@ func NewWeatherWriterComponentBuilder(p WeatherWriterComponentBuilderParams) jsl
 	})
 }
 
-// RegisterWeatherWriterBuilder registers the created ComponentBuilder with the JobFactory.
-// This makes the "weatherItemWriter" component available for use in JSL definitions.
-//
+// RegisterWeatherWriterBuilder registers the created [jsl.ComponentBuilder] with the [support.JobFactory]. This makes the "weatherItemWriter" component available for use in JSL definitions.
 // Parameters:
 //
 //	jf: The JobFactory instance to register the builder with.
@@ -67,8 +63,7 @@ func RegisterWeatherWriterBuilder(
 	logger.Debugf("ComponentBuilder for WeatherWriter registered with JobFactory. JSL ref: 'weatherItemWriter'")
 }
 
-// Module defines the Fx options for the weather writer component.
-// It provides the component builder and registers it with the JobFactory.
+// Module defines the Fx options for the weather writer component. It provides the component builder and registers it with the [support.JobFactory].
 var Module = fx.Options(
 	fx.Provide(fx.Annotate(
 		NewWeatherWriterComponentBuilder,

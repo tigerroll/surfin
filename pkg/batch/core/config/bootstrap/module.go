@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"strings"
 
 	"github.com/mitchellh/mapstructure"
@@ -11,8 +13,6 @@ import (
 
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
-	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/support/expression"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/factory"
@@ -43,7 +43,7 @@ type RunFrameworkMigrationsHookParams struct {
 	Lifecycle        fx.Lifecycle                  // The Fx lifecycle to append hooks.
 	Cfg              *config.Config                // The application configuration.
 	MigratorProvider migration.MigratorProvider    // Provider for database migrators.
-	DBResolver       port.DBConnectionResolver     // Resolver for database connections.
+	DBResolver       adapter.DBConnectionResolver  // Resolver for database connections.
 	AllMigrationFS   map[string]fs.FS              `name:"allMigrationFS"` // A map of file systems containing migration scripts, including "frameworkMigrationsFS".
 	AllDBProviders   map[string]adapter.DBProvider // All registered DB providers, mapped by their database type.
 }

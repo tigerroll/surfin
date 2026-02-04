@@ -7,7 +7,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
@@ -192,35 +191,6 @@ type ExpressionResolver interface {
 	//   string: The resolved string.
 	//   error: An error if resolution fails.
 	Resolve(ctx context.Context, expression string, jobExecution *model.JobExecution, stepExecution *model.StepExecution) (string, error)
-}
-
-// DBConnectionResolver resolves the required database connection name (data source name) based on the execution context.
-type DBConnectionResolver interface {
-	// ResolveDBConnectionName resolves the database connection name (e.g., "metadata", "workload") based on the execution context.
-	//
-	// Parameters:
-	//   ctx: The context for the operation.
-	//   jobExecution: The current JobExecution.
-	//   stepExecution: The current StepExecution (may be nil for TaskletStep).
-	//   defaultName: The default connection name if resolution fails.
-	//
-	// Returns:
-	//   string: The resolved database connection name.
-	//   error: An error if resolution fails.
-	ResolveDBConnectionName(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution, defaultName string) (string, error)
-
-	// ResolveDBConnection resolves a database connection instance by name.
-	// This method is responsible for ensuring that the returned connection is valid and re-establishes
-	// the connection if necessary.
-	//
-	// Parameters:
-	//   ctx: The context for the operation.
-	//   name: The name of the database connection to resolve (e.g., "metadata", "workload").
-	//
-	// Returns:
-	//   adapter.DBConnection: The resolved database connection instance.
-	//   error: An error that occurred during connection resolution or re-establishment.
-	ResolveDBConnection(ctx context.Context, name string) (adapter.DBConnection, error)
 }
 
 // ItemReader is the interface for a data reading step.

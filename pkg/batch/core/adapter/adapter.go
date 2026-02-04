@@ -7,6 +7,7 @@ import (
 	"database/sql"
 
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
 // DBExecutor is an interface that defines common write operations for a database.
@@ -132,6 +133,20 @@ type DBConnectionResolver interface {
 	//   - error: An error that occurred during connection resolution or re-establishment.
 	//
 	ResolveDBConnection(ctx context.Context, name string) (DBConnection, error)
+
+	// ResolveDBConnectionName resolves the name of the database connection based on the execution context.
+	// This method allows dynamic selection of database connections (e.g., based on job parameters or step context).
+	//
+	// ctx: The context for the operation.
+	// jobExecution: The current JobExecution instance, providing job-level context.
+	// stepExecution: The current StepExecution instance, providing step-level context.
+	// defaultName: The default connection name to use if no dynamic resolution occurs or if the resolved name is empty.
+	//
+	// Returns:
+	//   - string: The resolved database connection name.
+	//   - error: An error if resolution fails.
+	//
+	ResolveDBConnectionName(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution, defaultName string) (string, error)
 }
 
 // DBProvider is an interface responsible for providing database connections based on configuration.

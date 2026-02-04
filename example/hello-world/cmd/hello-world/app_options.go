@@ -17,7 +17,6 @@ import (
 	item "github.com/tigerroll/surfin/pkg/batch/component/item"
 	migration "github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
 	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
-	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	usecase "github.com/tigerroll/surfin/pkg/batch/core/application/usecase"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	bootstrap "github.com/tigerroll/surfin/pkg/batch/core/config/bootstrap"
@@ -174,16 +173,6 @@ func (d *dummyPortDBConnectionResolver) ResolveDBConnection(ctx context.Context,
 	return &dummyDBConnection{}, nil
 }
 
-// dummyAdapterDBConnectionResolver is a dummy implementation of the adapter.DBConnectionResolver interface.
-// It's used to satisfy dependencies in a DB-less environment.
-type dummyAdapterDBConnectionResolver struct{}
-
-// ResolveDBConnection returns a dummy DBConnection instance.
-func (d *dummyAdapterDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (adapter.DBConnection, error) {
-	logger.Debugf("Dummy Adapter DBConnectionResolver: ResolveDBConnection called for '%s'.", name)
-	return &dummyDBConnection{}, nil
-}
-
 // realEnvironmentExpander implements the config.EnvironmentExpander interface
 // by expanding environment variables using os.ExpandEnv.
 type realEnvironmentExpander struct{}
@@ -225,9 +214,8 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 		func() map[string]fs.FS { return make(map[string]fs.FS) },
 		fx.ResultTags(`name:"allMigrationFS"`),
 	)))
-	// Add dummy providers for missing DB-related dependencies.
-	options = append(options, fx.Provide(func() port.DBConnectionResolver { return &dummyPortDBConnectionResolver{} }))       // Provides port.DBConnectionResolver.
-	options = append(options, fx.Provide(func() adapter.DBConnectionResolver { return &dummyAdapterDBConnectionResolver{} })) // Provides adapter.DBConnectionResolver.
+	// Add dummy provider for DBConnectionResolver. dummyPortDBConnectionResolver implements adapter.DBConnectionResolver.
+	options = append(options, fx.Provide(func() adapter.DBConnectionResolver { return &dummyPortDBConnectionResolver{} }))
 	options = append(options, fx.Provide(func() map[string]adapter.DBProvider {
 		return map[string]adapter.DBProvider{
 			"default":  &dummyDBProvider{}, // Provides at least one dummy provider.

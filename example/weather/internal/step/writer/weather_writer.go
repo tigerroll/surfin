@@ -19,43 +19,46 @@ import (
 
 // WeatherWriterConfig holds configuration specific to the WeatherItemWriter, typically for JSL property binding.
 type WeatherWriterConfig struct {
-	TargetDBName string `yaml:"targetDBName,omitempty"`
-	Database     string `yaml:"database,omitempty"` // For backward compatibility
+	TargetDBName string `yaml:"targetDBName,omitempty"` // TargetDBName is the name of the database connection to use.
+	Database     string `yaml:"database,omitempty"`     // Database is an alias for TargetDBName, for backward compatibility.
 }
 
-// WeatherItemWriter implements core.ItemWriter for writing weather data to a database.
+// WeatherItemWriter implements [port.ItemWriter] for writing weather data to a database.
 type WeatherItemWriter struct {
-	Repo appRepo.WeatherRepository // Repo is the repository resolved at runtime based on the database type.
+	Repo appRepo.WeatherRepository // Repo is the repository instance, initialized in the [Open] method based on the database type.
 
-	AllDBConnections map[string]adapter.DBConnection
-	DBResolver       port.DBConnectionResolver
-	Config           *batch_config.Config
-	TargetDBName     string // Target database name resolved from JSL properties.
-	TableName        string // TableName is the name of the target table for this writer.
+	AllDBConnections map[string]adapter.DBConnection // AllDBConnections is a map of all established database connections, keyed by their name.
+	DBResolver       adapter.DBConnectionResolver    // DBResolver is the database connection resolver, used to obtain DB connections.
+	Config           *batch_config.Config            // Config is the application's global configuration.
+	TargetDBName     string                          // TargetDBName is the name of the target database connection, resolved from JSL properties.
+	TableName        string                          // TableName is the name of the target table for this writer, derived from the entity.
 
 	// stepExecutionContext holds the reference to the Step's ExecutionContext.
 	stepExecutionContext model.ExecutionContext
 	// writerState holds the writer's internal state.
 	writerState model.ExecutionContext
 	resolver    port.ExpressionResolver
-	dbResolver  port.DBConnectionResolver
+	dbResolver  adapter.DBConnectionResolver // dbResolver is the database connection resolver.
 }
 
-// Verify that WeatherItemWriter implements the core.ItemWriter[any] interface.
+// Verify that WeatherItemWriter implements the [port.ItemWriter[any]] interface.
 var _ port.ItemWriter[any] = (*WeatherItemWriter)(nil)
 
-// NewWeatherWriter creates a new WeatherItemWriter instance.
+// NewWeatherWriter creates a new [WeatherItemWriter] instance.
 //
-// cfg provides the application configuration.
-// allDBConnections is a map of all established database connections.
-// resolver is an ExpressionResolver for dynamic property resolution.
-// dbResolver is a DBConnectionResolver for resolving database connections.
+// Parameters:
+//
+//	cfg: The application's global configuration.
+//	allDBConnections: A map of all established database connections.
+//	resolver: An [port.ExpressionResolver] for dynamic property resolution.
+//	dbResolver: A [adapter.DBConnectionResolver] for resolving database connections.
+//
 // properties is a map of JSL properties for this writer.
 func NewWeatherWriter(
 	cfg *batch_config.Config,
 	allDBConnections map[string]adapter.DBConnection,
 	resolver port.ExpressionResolver,
-	dbResolver port.DBConnectionResolver,
+	dbResolver adapter.DBConnectionResolver,
 	properties map[string]string,
 ) (*WeatherItemWriter, error) {
 
@@ -96,9 +99,12 @@ func NewWeatherWriter(
 	}, nil
 }
 
-// Open initializes the writer and restores its state from the provided ExecutionContext.
+// Open initializes the writer and restores its state from the provided [model.ExecutionContext].
 //
-// ctx is the context for the operation.
+// Parameters:
+//
+//	ctx: The context for the operation.
+//
 // ec is the ExecutionContext to initialize the writer with.
 func (w *WeatherItemWriter) Open(ctx context.Context, ec model.ExecutionContext) error {
 	select {
@@ -134,7 +140,10 @@ func (w *WeatherItemWriter) Open(ctx context.Context, ec model.ExecutionContext)
 
 // Write persists a chunk of items to the database within the provided transaction.
 //
-// ctx is the context for the operation.
+// Parameters:
+//
+//	ctx: The context for the operation.
+//
 // tx is the current transaction.
 // items is the list of items to be written.
 func (w *WeatherItemWriter) Write(ctx context.Context, tx tx.Tx, items []any) error {
