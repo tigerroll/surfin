@@ -3,6 +3,7 @@ package jsl
 import (
 	"context"
 	"fmt"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -23,18 +24,16 @@ import (
 func resolveComponentRefProperties(resolver core.ExpressionResolver, ref *ComponentRef) (map[string]string, error) {
 	module := "jsl_converter"
 	if ref == nil || len(ref.Properties) == 0 {
-		return ref.Properties, nil // Return as is if no properties
+		return ref.Properties, nil
 	}
-
 	resolvedProps := make(map[string]string, len(ref.Properties))
 	for key, value := range ref.Properties {
-		// Use context.Background() as JobExecution/StepExecution are nil during JSL conversion.
 		resolvedValue, err := resolver.Resolve(context.Background(), value, nil, nil)
-		if err != nil {
-			// Return error if resolution fails
+		if err == nil {
+			resolvedProps[key] = resolvedValue
+		} else {
 			return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to resolve property '%s' for ComponentRef '%s'", key, ref.Ref), err, false, false)
 		}
-		resolvedProps[key] = resolvedValue
 	}
 	return resolvedProps, nil
 }
@@ -79,7 +78,7 @@ func ConvertJSLToCoreFlow(
 	stepFactory step_factory.StepFactory,
 	partitionerBuilders map[string]core.PartitionerBuilder, // Builders for partitioners.
 	resolver core.ExpressionResolver,
-	dbResolver core.DBConnectionResolver,
+	dbResolver adapter.DBConnectionResolver,
 	stepListenerBuilders map[string]StepExecutionListenerBuilder,
 	itemReadListenerBuilders map[string]ItemReadListenerBuilder,
 	itemProcessListenerBuilders map[string]ItemProcessListenerBuilder,
@@ -302,7 +301,7 @@ func ConvertJSLToCoreFlow(
 					return nil, err
 				}
 
-				taskletInstance, err := taskletBuilder(cfg, resolver, dbResolver, resolvedTaskletProps) // Remove 'nil' argument
+				taskletInstance, err := taskletBuilder(cfg, resolver, dbResolver, resolvedTaskletProps)
 				if err != nil {
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Tasklet '%s'", jslStep.Tasklet.Ref), err, false, false)
 				}
@@ -324,7 +323,6 @@ func ConvertJSLToCoreFlow(
 				}
 				logger.Debugf("Tasklet Step '%s' built.", id)
 
-				// --- Partition Step (Controller) Construction ---
 			} else if jslStep.Partition != nil {
 				if jslStep.Chunk != nil || jslStep.Tasklet.Ref != "" {
 					return nil, exception.NewBatchErrorf(module, "Step '%s' can only define one of chunk, tasklet, or partition", id)
@@ -356,7 +354,6 @@ func ConvertJSLToCoreFlow(
 				}
 
 				// Temporarily save information needed for PartitionStep construction
-				// Hold the JSL definition ID of the Worker Step, as it needs to be built in the second pass
 				builtElements[id] = struct {
 					IsPartition       bool
 					JSLStep           Step
@@ -375,12 +372,9 @@ func ConvertJSLToCoreFlow(
 			} else {
 				return nil, exception.NewBatchErrorf(module, "Step '%s' must define either chunk, tasklet, or partition", id)
 			}
-			// Store coreStep here for non-Partition Steps
 			if jslStep.Partition == nil {
 				builtElements[id] = coreStep
 			}
-			logger.Debugf("Flow element '%s' (Step) temporarily built.", id)
-
 			// Attempt to unmarshal as Decision (Requires ID and Ref)
 		} else if err := yaml.Unmarshal(elementBytes, &jslDecision); err == nil && jslDecision.ID != "" && jslDecision.Ref != "" {
 			if jslDecision.ID == "" {
@@ -410,8 +404,6 @@ func ConvertJSLToCoreFlow(
 				return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Decision '%s'", jslDecision.ID), err, false, false)
 			}
 			builtElements[id] = coreDecision
-			logger.Debugf("Flow element '%s' (ConditionalDecision) temporarily built.", id)
-
 		} else if err := yaml.Unmarshal(elementBytes, &jslSplit); err == nil && jslSplit.ID != "" && len(jslSplit.Steps) > 0 {
 			if jslSplit.ID == "" {
 				return nil, exception.NewBatchError(module, fmt.Sprintf("Split element '%s' requires an ID", id), nil, false, false)
@@ -455,8 +447,7 @@ func ConvertJSLToCoreFlow(
 			}
 
 			builtElements[id] = coreSplit
-			logger.Debugf("Flow element '%s' (Split) temporarily built.", id)
-		} else {
+		} else { // Fallback for unknown element types
 			return nil, exception.NewBatchErrorf(module, "Unknown flow element type or missing required fields: ID '%s', Data: %s", id, string(elementBytes))
 		}
 	}
@@ -493,7 +484,6 @@ func ConvertJSLToCoreFlow(
 					return nil, exception.NewBatchErrorf(module, "Temporary construction information for Partition Step '%s' not found", id)
 				}
 
-				// 2. Build Worker Step (Worker Step references another JSL Step definition)
 				workerJSLVal, ok := jslFlow.Elements[jslStep.Partition.Step]
 				if !ok {
 					return nil, exception.NewBatchErrorf(module, "Worker Step '%s' referenced by Partition Step '%s' not found in flow definition", jslStep.Partition.Step, id)
@@ -513,9 +503,6 @@ func ConvertJSLToCoreFlow(
 				if workerStepJSL.Chunk == nil && workerStepJSL.Tasklet.Ref == "" {
 					return nil, exception.NewBatchErrorf(module, "Worker Step '%s' must define either Chunk or Tasklet", jslStep.Partition.Step)
 				}
-
-				// Worker Step listeners should be held by the Worker itself, but here we build the core instance of the Worker Step.
-				// Worker Step EC Promotion is also unnecessary (Worker EC is not merged into Controller EC).
 
 				var workerCoreStep core.Step
 				if workerStepJSL.Chunk != nil {
@@ -545,7 +532,6 @@ func ConvertJSLToCoreFlow(
 						return nil, err
 					}
 
-					// Identify the TxManager used by the Worker Chunk Step
 					workerDBName, ok := resolvedWorkerWriterProps["targetDBName"]
 					if !ok || workerDBName == "" {
 						workerDBName, ok = resolvedWorkerWriterProps["database"]
@@ -555,7 +541,6 @@ func ConvertJSLToCoreFlow(
 					}
 					workerIsolationLevel := workerStepJSL.Chunk.IsolationLevel
 
-					// Worker Step does not inherit retry/skip/listener settings from the Controller, so pass empty lists/default settings
 					workerCoreStep, err = stepFactory.CreateChunkStep(
 						workerStepJSL.ID,
 						r, p, w,
@@ -564,14 +549,14 @@ func ConvertJSLToCoreFlow(
 						&cfg.Surfin.Batch.Retry,
 						cfg.Surfin.Batch.ItemRetry,
 						cfg.Surfin.Batch.ItemSkip,
-						[]core.StepExecutionListener{}, // Worker Step does not have listeners.
+						[]core.StepExecutionListener{},
 						[]core.ItemReadListener{},
 						[]core.ItemProcessListener{},
 						[]core.ItemWriteListener{},
 						[]core.SkipListener{},
 						[]core.RetryItemListener{},
 						[]core.ChunkListener{},
-						nil, // EC Promotion is unnecessary (nil).
+						nil,
 						workerIsolationLevel,
 						workerStepJSL.Propagation,
 					)
@@ -598,8 +583,8 @@ func ConvertJSLToCoreFlow(
 					workerCoreStep, err = stepFactory.CreateTaskletStep(
 						workerStepJSL.ID,
 						t,
-						[]core.StepExecutionListener{}, // Worker Step does not have listeners
-						nil,                            // EC Promotion is unnecessary
+						[]core.StepExecutionListener{},
+						nil,
 						workerStepJSL.IsolationLevel,
 						workerStepJSL.Propagation,
 					)
@@ -609,7 +594,6 @@ func ConvertJSLToCoreFlow(
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Worker Step '%s'", jslStep.Partition.Step), err, false, false)
 				}
 
-				// 3. Final construction of Partition Step (Controller)
 				coreElement, err = stepFactory.CreatePartitionStep(
 					jslStep.ID,
 					tempInfo.Partitioner,
@@ -641,7 +625,6 @@ func ConvertJSLToCoreFlow(
 			}
 			logger.Debugf("Step '%s' added to flow.", id)
 
-			// Try to unmarshal as Decision
 		} else if err := yaml.Unmarshal(elementBytes, &jslDecision); err == nil && jslDecision.ID != "" && jslDecision.Ref != "" {
 			coreElement := builtElements[id].(core.FlowElement)
 			if err := flowDef.AddElement(id, coreElement); err != nil {
@@ -655,7 +638,6 @@ func ConvertJSLToCoreFlow(
 			}
 			logger.Debugf("Decision '%s' added to flow.", id)
 
-			// Try to unmarshal as Split
 		} else if err := yaml.Unmarshal(elementBytes, &jslSplit); err == nil && jslSplit.ID != "" && len(jslSplit.Steps) > 0 {
 			coreSplit := builtElements[id].(core.FlowElement)
 			if err := flowDef.AddElement(id, coreSplit); err != nil {
@@ -668,7 +650,7 @@ func ConvertJSLToCoreFlow(
 				flowDef.AddTransitionRule(id, transition.On, transition.To, transition.End, transition.Fail, transition.Stop)
 			}
 			logger.Debugf("Split '%s' added to flow.", id)
-		} else {
+		} else { // Fallback for unknown element types
 			return nil, exception.NewBatchErrorf(module, "Unknown flow element type or missing required fields: ID '%s', Data: %s", id, string(elementBytes))
 		}
 	}
@@ -697,7 +679,7 @@ func buildReaderWriterProcessor(
 	componentBuilders map[string]ComponentBuilder,
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
-	dbResolver core.DBConnectionResolver,
+	dbResolver adapter.DBConnectionResolver,
 	readerRef *ComponentRef,
 	processorRef *ComponentRef,
 	writerRef *ComponentRef,
@@ -752,7 +734,6 @@ func buildReaderWriterProcessor(
 // It checks for:
 // - Presence of 'on' attribute.
 // - Mutual exclusivity of 'to', 'end', 'fail', and 'stop' attributes.
-// - Existence of the target element if 'to' is specified.
 //
 // Parameters:
 //
@@ -763,7 +744,6 @@ func validateTransition(fromElementID string, t Transition, allElements map[stri
 	if t.On == "" {
 		return exception.NewBatchError("jsl_converter", fmt.Sprintf("Transition rule for flow element '%s' is missing 'on'", fromElementID), nil, false, false)
 	}
-
 	// Check mutual exclusivity of End, Fail, Stop, To
 	exclusiveCount := 0
 	if t.End {
@@ -778,7 +758,6 @@ func validateTransition(fromElementID string, t Transition, allElements map[stri
 	if t.To != "" {
 		exclusiveCount++
 	}
-
 	if exclusiveCount == 0 {
 		return exception.NewBatchError("jsl_converter", fmt.Sprintf("Transition rule for flow element '%s' (on: '%s') must define one of 'to', 'end', 'fail', or 'stop'", fromElementID, t.On), nil, false, false)
 	}

@@ -336,8 +336,14 @@ func TestPartitionStep_Aggregation(t *testing.T) {
 	// 4.3. Verify aggregation of ExecutionContext (assuming merge order: Worker 0 -> Worker 1 -> Worker 2)
 	// NOTE: Since execution order is not guaranteed, the order of EC keys is not guaranteed, but compare with DeepEqual.
 
+	// The 'start' key is non-deterministic due to map iteration order.
+	// We will check its presence and that it's one of the expected values,
+	// but remove it from the main DeepEqual comparison.
+	actualEC := controllerExecution.ExecutionContext
+	startVal, startOk := actualEC["start"]
+	delete(actualEC, "start") // Remove 'start' for deterministic comparison of other keys
+
 	expectedEC := model.ExecutionContext{
-		"start":     200,     // Overwritten by Worker 2's value
 		"p0.status": "OK",    // Worker 0's value
 		"p0.count":  10,      // Worker 0's value
 		"p1.count":  5,       // Worker 1's value
@@ -346,8 +352,12 @@ func TestPartitionStep_Aggregation(t *testing.T) {
 		"extra":     "data",
 	}
 
-	// Verify Controller ExecutionContext
-	assert.Equal(t, expectedEC, controllerExecution.ExecutionContext, "Controller EC should contain merged worker ECs")
+	// Verify Controller ExecutionContext for other keys
+	assert.Equal(t, expectedEC, actualEC, "Controller EC should contain merged worker ECs (excluding 'start')")
+
+	// Verify 'start' key separately
+	assert.True(t, startOk, "'start' key should be present in ExecutionContext")
+	assert.Contains(t, []interface{}{0, 100, 200}, startVal, "'start' value should be one of the partition start values")
 
 	// 4.4. Verify promotion to Job ExecutionContext
 

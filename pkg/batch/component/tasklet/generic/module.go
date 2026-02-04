@@ -2,6 +2,8 @@
 package generic
 
 import (
+	// Import for adapter.DBConnectionResolver
+	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
@@ -15,23 +17,38 @@ type NewExecutionContextWriterTaskletComponentBuilderParams struct {
 	fx.In
 }
 
-// NewExecutionContextWriterTaskletComponentBuilder creates a jsl.ComponentBuilder for ExecutionContextWriterTasklet.
+// NewExecutionContextWriterTaskletComponentBuilder creates a `jsl.ComponentBuilder` for `ExecutionContextWriterTasklet`.
+//
+// This builder function is responsible for instantiating `ExecutionContextWriterTasklet`
+// with its required properties.
+//
+// Returns:
+//
+//	A `jsl.ComponentBuilder` function that can create `ExecutionContextWriterTasklet` instances.
 func NewExecutionContextWriterTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver port.DBConnectionResolver,
+		dbResolver adapter.DBConnectionResolver, // The database connection resolver.
 		properties map[string]string,
 	) (interface{}, error) {
-		// Arguments unnecessary for this component are ignored.
+		// Unused arguments are ignored for this component.
 		_ = cfg
 		_ = resolver
-		_ = dbResolver
+		_ = dbResolver // This tasklet does not interact with a database directly.
 		return NewExecutionContextWriterTasklet("executionContextWriterTasklet", properties), nil
 	})
 }
 
-// RegisterExecutionContextWriterTaskletBuilder registers the builder with the JobFactory.
+// RegisterExecutionContextWriterTaskletBuilder registers the `ExecutionContextWriterTasklet` component builder with the `JobFactory`.
+//
+// This allows the framework to locate and use the `ExecutionContextWriterTasklet` when it's referenced in JSL (Job Specification Language) files.
+// The component is registered under the name "executionContextWriterTasklet".
+//
+// Parameters:
+//
+//	jf: The JobFactory instance.
+//	builder: The `ExecutionContextWriterTasklet` component builder.
 func RegisterExecutionContextWriterTaskletBuilder(jf *support.JobFactory, builder jsl.ComponentBuilder) {
 	jf.RegisterComponentBuilder("executionContextWriterTasklet", builder)
 	logger.Debugf("Component 'executionContextWriterTasklet' was registered with JobFactory.")
@@ -42,29 +59,44 @@ type NewRandomFailTaskletComponentBuilderParams struct {
 	fx.In
 }
 
-// NewRandomFailTaskletComponentBuilder creates a jsl.ComponentBuilder for RandomFailTasklet.
+// NewRandomFailTaskletComponentBuilder creates a `jsl.ComponentBuilder` for `RandomFailTasklet`.
+//
+// This builder function is responsible for instantiating `RandomFailTasklet`
+// with its required properties.
+//
+// Returns:
+//
+//	A `jsl.ComponentBuilder` function that can create `RandomFailTasklet` instances.
 func NewRandomFailTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver port.DBConnectionResolver,
+		dbResolver adapter.DBConnectionResolver, // The database connection resolver.
 		properties map[string]string,
 	) (interface{}, error) {
-		// Arguments unnecessary for this component are ignored.
+		// Unused arguments are ignored for this component.
 		_ = cfg
 		_ = resolver
-		_ = dbResolver
+		_ = dbResolver // This tasklet does not interact with a database directly.
 		return NewRandomFailTasklet("randomFailTasklet", properties), nil
 	})
 }
 
-// RegisterRandomFailTaskletBuilder registers the builder with the JobFactory.
+// RegisterRandomFailTaskletBuilder registers the `RandomFailTasklet` component builder with the `JobFactory`.
+//
+// This allows the framework to locate and use the `RandomFailTasklet` when it's referenced in JSL (Job Specification Language) files.
+// The component is registered under the name "randomFailTasklet".
+//
+// Parameters:
+//
+//	jf: The JobFactory instance.
+//	builder: The `RandomFailTasklet` component builder.
 func RegisterRandomFailTaskletBuilder(jf *support.JobFactory, builder jsl.ComponentBuilder) {
 	jf.RegisterComponentBuilder("randomFailTasklet", builder)
 	logger.Debugf("Component 'randomFailTasklet' was registered with JobFactory.")
 }
 
-// Module provides ComponentBuilders for generic Tasklets.
+// Module provides `ComponentBuilders` for generic Tasklets and registers them with the `JobFactory`.
 var Module = fx.Options(
 	fx.Provide(fx.Annotate(
 		NewExecutionContextWriterTaskletComponentBuilder,

@@ -2,14 +2,15 @@ package sql_test
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"      // Add this import
-	sqlrepo "github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/sql" // Add this import
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	sqlrepo "github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/sql"
 
 	// Explicitly import GORM's SQLite driver so its init() function is executed.
 	// This allows GORM to recognize the SQLite database type.
@@ -21,7 +22,6 @@ import (
 
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
 	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
-	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	"github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
@@ -30,6 +30,8 @@ import (
 	testmock "github.com/tigerroll/surfin/pkg/batch/test"
 
 	"github.com/stretchr/testify/assert"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -41,8 +43,34 @@ var (
 	globalDBConn    adapter.DBConnection // The single database connection to be returned.
 	globalTxManager tx.TransactionManager
 	once            sync.Once
-	testDBResolver  port.DBConnectionResolver // The test-specific DB connection resolver.
+	testDBResolver  adapter.DBConnectionResolver // The test-specific DB connection resolver.
 )
+
+// GetConnectionStringForTest generates a database connection string for testing purposes.
+// This function is a test helper and is not part of the main application logic.
+func GetConnectionStringForTest(cfg dbconfig.DatabaseConfig) (string, error) {
+	switch cfg.Type {
+	case "postgres":
+		// Example: "host=pg_host port=5432 user=pg_user password=pg_password dbname=pg_db sslmode=require"
+		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, cfg.Sslmode), nil
+	case "mysql":
+		// Example: "mysql_user:mysql_password@tcp(mysql_host:3306)/mysql_db?charset=utf8mb4&parseTime=True&loc=Local"
+		// Handle cases with and without password
+		dsn := fmt.Sprintf("%s", cfg.User)
+		if cfg.Password != "" {
+			dsn += fmt.Sprintf(":%s", cfg.Password)
+		}
+		dsn += fmt.Sprintf("@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+			cfg.Host, cfg.Port, cfg.Database)
+		return dsn, nil
+	case "sqlite":
+		// Example: "/path/to/sqlite.db" or ":memory:"
+		return cfg.Database, nil
+	default:
+		return "", fmt.Errorf("unsupported database type for connection string generation: %s", cfg.Type)
+	}
+}
 
 // setupSQLiteTestDB sets up the SQLite test environment.
 // It shares a single in-memory DB connection across the entire test suite.
@@ -65,7 +93,7 @@ func setupSQLiteTestDB(t *testing.T) (repository.JobRepository, adapter.DBConnec
 		}
 
 		// 1. Establish DBConnection
-		dialector, err := gormadapter.GetDialectorForTest(cfg) // Use gormadapter
+		dialector, err := GetDialectorForTest(cfg)
 		assert.NoError(t, err)
 
 		// Set GORM Logger to Silent
@@ -102,6 +130,33 @@ func setupSQLiteTestDB(t *testing.T) (repository.JobRepository, adapter.DBConnec
 	repo := sqlrepo.NewSQLJobRepository(testDBResolver, globalTxManager, "test_sqlite") // Use sqlrepo.NewSQLJobRepository
 
 	return repo, globalDBConn, globalTxManager
+}
+
+// GetDialectorForTest generates a GORM dialector for testing purposes.
+// This function is a test helper and is not part of the main application logic.
+func GetDialectorForTest(cfg dbconfig.DatabaseConfig) (gorm.Dialector, error) {
+	switch cfg.Type {
+	case "postgres":
+		connStr, err := GetConnectionStringForTest(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return postgres.Open(connStr), nil
+	case "mysql":
+		connStr, err := GetConnectionStringForTest(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return mysql.Open(connStr), nil
+	case "sqlite":
+		connStr, err := GetConnectionStringForTest(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return sqlite_driver.Open(connStr), nil
+	default:
+		return nil, fmt.Errorf("unsupported database type for dialector: %s", cfg.Type)
+	}
 }
 
 // teardownSQLiteTestDB should be executed once at the end of the test suite,

@@ -17,10 +17,12 @@ type JobCompletionSignaler struct {
 // NewJobCompletionSignaler creates a new instance of JobCompletionSignaler.
 //
 // Parameters:
-//   jobDoneChan: The channel to be closed when the job completes.
+//
+//	jobDoneChan: The channel to be closed when the job completes.
 //
 // Returns:
-//   A pointer to a new `JobCompletionSignaler` instance.
+//
+//	A pointer to a new `JobCompletionSignaler` instance.
 func NewJobCompletionSignaler(jobDoneChan chan struct{}) *JobCompletionSignaler {
 	return &JobCompletionSignaler{
 		JobDoneChan: jobDoneChan,
@@ -30,8 +32,9 @@ func NewJobCompletionSignaler(jobDoneChan chan struct{}) *JobCompletionSignaler 
 // BeforeJob is part of the JobExecutionListener interface but does nothing in this implementation.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   jobExecution: The `JobExecution` instance before the job starts.
+//
+//	ctx: The context for the operation.
+//	jobExecution: The `JobExecution` instance before the job starts.
 func (l *JobCompletionSignaler) BeforeJob(ctx context.Context, jobExecution *model.JobExecution) {
 	// No-op
 }
@@ -40,8 +43,9 @@ func (l *JobCompletionSignaler) BeforeJob(ctx context.Context, jobExecution *mod
 // It ensures the channel is not already closed before attempting to close it.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   jobExecution: The `JobExecution` instance after the job completes.
+//
+//	ctx: The context for the operation.
+//	jobExecution: The `JobExecution` instance after the job completes.
 func (l *JobCompletionSignaler) AfterJob(ctx context.Context, jobExecution *model.JobExecution) {
 	logger.Infof("JobCompletionSignaler: Job '%s' (ID: %s) completed. Closing JobDoneChan.", jobExecution.JobName, jobExecution.ID)
 	// Check if the channel is already closed or receivable before closing.

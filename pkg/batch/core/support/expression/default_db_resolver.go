@@ -2,12 +2,12 @@
 // This file specifically contains the default implementation for resolving database connection names.
 package expression
 
+import "fmt"
 import (
 	"context"
-	"fmt"
 	"strings"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	"github.com/tigerroll/surfin/pkg/batch/core/adapter" // Import for adapter.DBConnectionResolver
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -27,8 +27,8 @@ type DefaultDBConnectionResolver struct {
 //
 // Returns:
 //
-//	A new instance of port.DBConnectionResolver.
-func NewDefaultDBConnectionResolver(resolver port.ExpressionResolver) port.DBConnectionResolver {
+//	A new instance of adapter.DBConnectionResolver.
+func NewDefaultDBConnectionResolver(resolver port.ExpressionResolver) adapter.DBConnectionResolver {
 	return &DefaultDBConnectionResolver{resolver: resolver}
 }
 
@@ -47,21 +47,17 @@ func NewDefaultDBConnectionResolver(resolver port.ExpressionResolver) port.DBCon
 //	The resolved database connection name and an error if resolution fails.
 func (r *DefaultDBConnectionResolver) ResolveDBConnectionName(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution, defaultName string) (string, error) {
 
-	// 1. If defaultName is an expression (e.g., #{jobParameters['db_name']}), attempt to resolve it.
+	// If defaultName is an expression (e.g., #{jobParameters['db_name']}), attempt to resolve it.
 	if strings.Contains(defaultName, "#{") {
 		resolvedName, err := r.resolver.Resolve(ctx, defaultName, jobExecution, stepExecution)
 		if err == nil {
-			// Update even if the resolution result is an empty string.
 			defaultName = resolvedName
 		} else {
 			logger.Warnf("DBConnectionResolver: Failed to resolve dynamic expression '%s'. Using original default value: %v", defaultName, err)
 		}
 	}
 
-	// The actual dynamic routing logic will be implemented upon completion of J.1/J.2.
-
 	if defaultName == "" {
-		// If no default name is provided, use the framework's default "workload".
 		defaultName = "workload"
 	}
 
@@ -86,5 +82,5 @@ func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, n
 	return nil, fmt.Errorf("DefaultDBConnectionResolver in 'expression' package does not support resolving actual DB connections; it only resolves connection names. Attempted to resolve: %s", name)
 }
 
-// Verify that DefaultDBConnectionResolver implements the core.DBConnectionResolver interface.
-var _ port.DBConnectionResolver = (*DefaultDBConnectionResolver)(nil)
+// Verify that DefaultDBConnectionResolver implements the adapter.DBConnectionResolver interface.
+var _ adapter.DBConnectionResolver = (*DefaultDBConnectionResolver)(nil)

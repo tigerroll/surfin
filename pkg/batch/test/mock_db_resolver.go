@@ -3,8 +3,7 @@ package test
 import (
 	"context"
 	"github.com/stretchr/testify/mock"
-	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"          // Alias for clarity
-	appport "github.com/tigerroll/surfin/pkg/batch/core/application/port" // Alias for clarity
+	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Alias for clarity
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
@@ -56,12 +55,11 @@ func (r *testSingleConnectionResolver) ResolveDBConnectionName(ctx context.Conte
 //
 // Returns:
 //
-//	appport.DBConnectionResolver: A new test-specific DB connection resolver.
-func NewTestSingleConnectionResolver(conn adapter.DBConnection) appport.DBConnectionResolver {
+//	adapter.DBConnectionResolver: A new test-specific DB connection resolver.
+func NewTestSingleConnectionResolver(conn adapter.DBConnection) adapter.DBConnectionResolver {
 	return &testSingleConnectionResolver{conn: conn}
 }
 
 // Ensure that testSingleConnectionResolver implements both appport.DBConnectionResolver
 // and adapter.DBConnectionResolver interfaces.
-var _ appport.DBConnectionResolver = (*testSingleConnectionResolver)(nil)
 var _ adapter.DBConnectionResolver = (*testSingleConnectionResolver)(nil)

@@ -5,6 +5,7 @@ package step
 import (
 	"go.uber.org/fx"
 
+	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Add this import
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config" // Import config package
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
@@ -18,8 +19,8 @@ import (
 func NewHelloWorldTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
-		resolver core.ExpressionResolver,
-		dbResolver core.DBConnectionResolver,
+		resolver core.ExpressionResolver, // Keep this as core.ExpressionResolver
+		dbResolver adapter.DBConnectionResolver, // Change to adapter.DBConnectionResolver
 		properties map[string]string,
 	) (interface{}, error) {
 		// Unused arguments are ignored for this component.

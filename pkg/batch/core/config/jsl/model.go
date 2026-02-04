@@ -1,6 +1,7 @@
 // Package jsl defines the models for the Job Specification Language (JSL) in the Surfin Batch Framework. It is used to declaratively describe the structure, flow, and components of batch jobs in YAML format.
 package jsl
 
+import "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 import (
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
@@ -136,7 +137,7 @@ type Partition struct {
 type ComponentBuilder func(
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
-	dbResolver core.DBConnectionResolver,
+	dbResolver adapter.DBConnectionResolver,
 	properties map[string]string,
 ) (interface{}, error)
 
