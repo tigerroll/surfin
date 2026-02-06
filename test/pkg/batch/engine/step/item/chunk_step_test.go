@@ -1,28 +1,27 @@
+// Package item_test provides unit tests for the item processing steps,
+// specifically the ChunkStep.
 package item_test
 
 import (
 	"context"
 	"database/sql"
 	"errors"
-	"testing"
-	"time"
-
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	coreadapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/item"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
-	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
-	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	testutil "github.com/tigerroll/surfin/pkg/batch/test"
+	"testing"
+	"time"
 )
 
-// Dummy usage to prevent "imported and not used" error for 'port' package
+// Dummy usage to prevent "imported and not used" error for the 'port' package.
 var _ = port.ErrNoMoreItems
 
 // --- Mocks ---
@@ -52,7 +51,7 @@ func (m *MockItemReader) GetExecutionContext(ctx context.Context) (model.Executi
 	return args.Get(0).(model.ExecutionContext), args.Error(1)
 }
 
-// MockItemProcessor is a mock implementation of port.ItemProcessor.
+// MockItemProcessor is a mock implementation of the port.ItemProcessor interface.
 type MockItemProcessor struct {
 	mock.Mock
 }
@@ -72,7 +71,7 @@ func (m *MockItemProcessor) GetExecutionContext(ctx context.Context) (model.Exec
 	return args.Get(0).(model.ExecutionContext), args.Error(1)
 }
 
-// MockItemWriter is a mock implementation of port.ItemWriter.
+// MockItemWriter is a mock implementation of the port.ItemWriter interface.
 type MockItemWriter struct {
 	mock.Mock
 }
@@ -96,24 +95,24 @@ func (m *MockItemWriter) GetExecutionContext(ctx context.Context) (model.Executi
 	return args.Get(0).(model.ExecutionContext), args.Error(1)
 }
 
-// Added: GetTableName() implementation because it was added to the port.ItemWriter interface.
+// GetTableName is a mock implementation of the GetTableName method from the port.ItemWriter interface.
 func (m *MockItemWriter) GetTableName() string {
 	args := m.Called()
 	return args.String(0)
 }
 
-// Added: GetTargetDBName() implementation because it was added to the port.ItemWriter interface.
+// GetTargetDBName is a mock implementation of the GetTargetDBName method from the port.ItemWriter interface.
 func (m *MockItemWriter) GetTargetDBName() string {
 	args := m.Called()
 	return args.String(0)
 }
 
-// MockJobRepository is a mock implementation of repository.JobRepository.
+// MockJobRepository is a mock implementation of the repository.JobRepository interface.
 type MockJobRepository struct {
 	mock.Mock
 }
 
-// JobInstance methods
+// JobInstance methods.
 func (m *MockJobRepository) SaveJobInstance(ctx context.Context, instance *model.JobInstance) error {
 	return m.Called(ctx, instance).Error(0)
 }
@@ -153,7 +152,7 @@ func (m *MockJobRepository) GetJobNames(ctx context.Context) ([]string, error) {
 	return nil, args.Error(1)
 }
 
-// JobExecution methods
+// JobExecution methods.
 func (m *MockJobRepository) SaveJobExecution(ctx context.Context, execution *model.JobExecution) error {
 	return m.Called(ctx, execution).Error(0)
 }
@@ -182,7 +181,7 @@ func (m *MockJobRepository) FindJobExecutionsByJobInstance(ctx context.Context, 
 	return nil, args.Error(1)
 }
 
-// StepExecution methods
+// StepExecution methods.
 func (m *MockJobRepository) SaveStepExecution(ctx context.Context, stepExec *model.StepExecution) error {
 	return m.Called(ctx, stepExec).Error(0)
 }
@@ -197,7 +196,7 @@ func (m *MockJobRepository) FindStepExecutionByID(ctx context.Context, id string
 	return args.Get(0).(*model.StepExecution), args.Error(1)
 }
 
-// CheckpointDataRepository methods
+// CheckpointDataRepository methods.
 func (m *MockJobRepository) FindCheckpointData(ctx context.Context, stepExecutionID string) (*model.CheckpointData, error) {
 	args := m.Called(ctx, stepExecutionID)
 	if args.Get(0) == nil {
@@ -209,12 +208,12 @@ func (m *MockJobRepository) SaveCheckpointData(ctx context.Context, cd *model.Ch
 	return m.Called(ctx, cd).Error(0)
 }
 
-// Close method
+// Close method.
 func (m *MockJobRepository) Close() error {
 	return m.Called().Error(0)
 }
 
-// MockTransactionManager is a mock implementation of tx.TransactionManager.
+// MockTransactionManager is a mock implementation of the tx.TransactionManager interface.
 type MockTransactionManager struct {
 	mock.Mock
 }
@@ -233,7 +232,7 @@ func (m *MockTransactionManager) Rollback(adapter tx.Tx) error {
 	return m.Called(adapter).Error(0)
 }
 
-// MockMetricRecorder is a mock implementation of metrics.MetricRecorder.
+// MockMetricRecorder is a mock implementation of the metrics.MetricRecorder interface.
 type MockMetricRecorder struct {
 	mock.Mock
 }
@@ -304,9 +303,9 @@ type MockTransactionManagerFactory struct {
 	TxManager *MockTransactionManager
 }
 
-func (m *MockTransactionManagerFactory) NewTransactionManager(conn adapter.DBConnection) tx.TransactionManager {
+func (m *MockTransactionManagerFactory) NewTransactionManager(conn coreadapter.ResourceConnection) tx.TransactionManager {
 	m.Called(conn)
-	return m.TxManager
+	return m.TxManager // MockTxManager implements the tx.TransactionManager interface, so it can be returned directly.
 }
 
 // MockDBConnection is a mock implementation of adapter.DBConnection.
@@ -366,6 +365,7 @@ func setupChunkStep(t *testing.T) (*item.ChunkStep, *MockItemReader, *MockItemPr
 
 	// Create MockDBConnectionResolver instance and mock ResolveDBConnectionName and ResolveDBConnection
 	dbConnResolver := new(testutil.MockDBConnectionResolver)
+	// Use mock.Anything for arguments of ResolveDBConnectionName as they are now interface{}.
 	dbConnResolver.On("ResolveDBConnectionName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("mock_db", nil)
 	dbConnResolver.On("ResolveDBConnection", mock.Anything, "mock_db").Return(dbConn, nil)
 

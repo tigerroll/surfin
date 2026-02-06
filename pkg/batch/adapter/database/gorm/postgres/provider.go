@@ -4,9 +4,9 @@ package postgres
 import (
 	"fmt"
 
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database" // Imports the database package.
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -24,7 +24,7 @@ func init() {
 	})
 }
 
-// PostgresDBProvider implements adapter.DBProvider for PostgreSQL and Redshift connections.
+// PostgresDBProvider implements database.DBProvider for PostgreSQL and Redshift connections.
 type PostgresDBProvider struct {
 	*gormadapter.BaseProvider
 }
@@ -40,7 +40,7 @@ func (p *PostgresDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string 
 		c.Host, c.Port, c.User, c.Password, c.Database, c.Sslmode)
 }
 
-// NewProvider creates a new `adapter.DBProvider` for PostgreSQL.
+// NewProvider creates a new `database.DBProvider` for PostgreSQL.
 //
 // This function is intended to be used with `fx.Provide` to register the PostgreSQL DBProvider
 // in the application's dependency injection graph.
@@ -51,7 +51,7 @@ func (p *PostgresDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string 
 //
 // Returns:
 //
-//	An `adapter.DBProvider` instance configured for PostgreSQL.
-func NewProvider(cfg *config.Config) adapter.DBProvider {
+//	A `database.DBProvider` instance configured for PostgreSQL.
+func NewProvider(cfg *config.Config) database.DBProvider {
 	return &PostgresDBProvider{BaseProvider: gormadapter.NewBaseProvider(cfg, "postgres")}
 }

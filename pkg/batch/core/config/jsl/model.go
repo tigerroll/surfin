@@ -1,8 +1,9 @@
-// Package jsl defines the models for the Job Specification Language (JSL) in the Surfin Batch Framework. It is used to declaratively describe the structure, flow, and components of batch jobs in YAML format.
+// Package jsl defines the models for the Job Specification Language (JSL) in the Surfin Batch Framework.
+// It is used to declaratively describe the structure, flow, and components of batch jobs in YAML format.
 package jsl
 
-import "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 import (
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the generic adapter interface.
 	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 )
@@ -31,11 +32,13 @@ type Job struct {
 type Flow struct {
 	// StartElement is the ID of the starting element in the flow.
 	StartElement string `yaml:"start-element"`
-	// Elements is a map of all elements (Step, Decision, Split) within the flow. The key is the element's ID, and the value is the corresponding element definition.
+	// Elements is a map of all elements (Step, Decision, Split) within the flow.
+	// The key is the element's ID, and the value is the corresponding element definition.
 	Elements map[string]interface{} `yaml:"elements"`
 }
 
-// Step represents a single processing unit within a job. In JSR352, a step is either chunk-oriented or tasklet-oriented, but cannot be both simultaneously.
+// Step represents a single processing unit within a job.
+// In JSR352, a step is either chunk-oriented or tasklet-oriented, but cannot be both simultaneously.
 type Step struct {
 	// ID is the unique identifier for the step.
 	ID string `yaml:"id"`
@@ -133,33 +136,61 @@ type Partition struct {
 	GridSize int `yaml:"grid-size"`
 }
 
-// ComponentBuilder is a generic function type for building core components such as ItemReader, ItemProcessor, ItemWriter, and Tasklet. This builder provides access to framework configuration, repositories, database connections, transaction managers, expression resolvers, database connection resolvers, migration file systems, and database providers, allowing components to access dynamic property resolution logic.
+// ComponentBuilder is a generic function type for building core components such as ItemReader, ItemProcessor, and ItemWriter.
+// This builder provides access to framework configuration, expression resolvers, and resource connection resolvers,
+// allowing components to access dynamic property resolution logic.
+//
+// Parameters:
+//
+//	cfg: The global framework configuration.
+//	resolver: The expression resolver for dynamic property resolution.
+//	dbResolver: The resource connection resolver for resolving database connections.
+//	properties: A map of properties injected from JSL.
+//
+// Returns:
+//
+//	The constructed component instance and an error if construction fails.
 type ComponentBuilder func(
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
-	dbResolver adapter.DBConnectionResolver,
+	dbResolver coreAdapter.ResourceConnectionResolver, // Type changed to coreAdapter.ResourceConnectionResolver.
 	properties map[string]string,
 ) (interface{}, error)
 
 // JobExecutionListenerBuilder is a function type for building JobExecutionListeners.
 //
-// cfg: The global framework configuration.
-// properties: Listener-specific properties injected from JSL.
-// Returns: The constructed JobExecutionListener instance and an error.
+// Parameters:
+//
+//	cfg: The global framework configuration.
+//	properties: Listener-specific properties injected from JSL.
+//
+// Returns:
+//
+//	The constructed JobExecutionListener instance and an error.
 type JobExecutionListenerBuilder func(cfg *config.Config, properties map[string]string) (core.JobExecutionListener, error)
 
 // NotificationListenerBuilder is a function type for building notification listeners.
 //
-// cfg: The global framework configuration.
-// properties: Listener-specific properties injected from JSL.
-// Returns: The constructed NotificationListener instance (which satisfies the JobExecutionListener interface) and an error.
+// Parameters:
+//
+//	cfg: The global framework configuration.
+//	properties: Listener-specific properties injected from JSL.
+//
+// Returns:
+//
+//	The constructed NotificationListener instance (which satisfies the JobExecutionListener interface) and an error.
 type NotificationListenerBuilder func(cfg *config.Config, properties map[string]string) (core.JobExecutionListener, error)
 
 // JobParametersIncrementerBuilder is a function type for building JobParametersIncrementers.
 //
-// cfg: The global framework configuration.
-// properties: Incrementer-specific properties injected from JSL.
-// Returns: The constructed JobParametersIncrementer instance and an error.
+// Parameters:
+//
+//	cfg: The global framework configuration.
+//	properties: Incrementer-specific properties injected from JSL.
+//
+// Returns:
+//
+//	The constructed JobParametersIncrementer instance and an error.
 type JobParametersIncrementerBuilder func(cfg *config.Config, properties map[string]string) (core.JobParametersIncrementer, error)
 
 // Transition defines the next element to execute based on the exit status.
@@ -186,64 +217,109 @@ type ExecutionContextPromotion struct {
 
 // StepExecutionListenerBuilder is a function type for building StepExecutionListeners.
 //
-// cfg: The global framework configuration.
-// properties: Listener-specific properties injected from JSL.
-// Returns: The constructed StepExecutionListener instance and an error.
+// Parameters:
+//
+//	cfg: The global framework configuration.
+//	properties: Listener-specific properties injected from JSL.
+//
+// Returns:
+//
+//	The constructed StepExecutionListener instance and an error.
 type StepExecutionListenerBuilder func(cfg *config.Config, properties map[string]string) (core.StepExecutionListener, error)
 
 // ItemReadListenerBuilder is a function type for building ItemReadListeners.
 //
-// cfg: The global framework configuration.
-// properties: Listener-specific properties injected from JSL.
-// Returns: The constructed ItemReadListener instance and an error.
+// Parameters:
+//
+//	cfg: The global framework configuration.
+//	properties: Listener-specific properties injected from JSL.
+//
+// Returns:
+//
+//	The constructed ItemReadListener instance and an error.
 type ItemReadListenerBuilder func(cfg *config.Config, properties map[string]string) (core.ItemReadListener, error)
 
 // ItemProcessListenerBuilder is a function type for building ItemProcessListeners.
 //
-// cfg: The global framework configuration.
-// properties: Listener-specific properties injected from JSL.
-// Returns: The constructed ItemProcessListener instance and an error.
+// Parameters:
+//
+//	cfg: The global framework configuration.
+//	properties: Listener-specific properties injected from JSL.
+//
+// Returns:
+//
+//	The constructed ItemProcessListener instance and an error.
 type ItemProcessListenerBuilder func(cfg *config.Config, properties map[string]string) (core.ItemProcessListener, error)
 
 // ItemWriteListenerBuilder is a function type for building ItemWriteListeners.
 //
-// cfg: The global framework configuration.
-// properties: Listener-specific properties injected from JSL.
-// Returns: The constructed ItemWriteListener instance and an error.
+// Parameters:
+//
+//	cfg: The global framework configuration.
+//	properties: Listener-specific properties injected from JSL.
+//
+// Returns:
+//
+//	The constructed ItemWriteListener instance and an error.
 type ItemWriteListenerBuilder func(cfg *config.Config, properties map[string]string) (core.ItemWriteListener, error)
 
 // SkipListenerBuilder is a function type for building SkipListeners.
 //
-// cfg: The global framework configuration.
-// properties: Listener-specific properties injected from JSL.
-// Returns: The constructed SkipListener instance and an error.
+// Parameters:
+//
+//	cfg: The global framework configuration.
+//	properties: Listener-specific properties injected from JSL.
+//
+// Returns:
+//
+//	The constructed SkipListener instance and an error.
 type SkipListenerBuilder func(cfg *config.Config, properties map[string]string) (core.SkipListener, error)
 
 // LoggingRetryItemListenerBuilder is a function type for building RetryItemListeners.
 //
-// cfg: The global framework configuration.
-// properties: Listener-specific properties injected from JSL.
-// Returns: The constructed RetryItemListener instance and an error.
+// Parameters:
+//
+//	cfg: The global framework configuration.
+//	properties: Listener-specific properties injected from JSL.
+//
+// Returns:
+//
+//	The constructed RetryItemListener instance and an error.
 type LoggingRetryItemListenerBuilder func(cfg *config.Config, properties map[string]string) (core.RetryItemListener, error)
 
 // ChunkListenerBuilder is a function type for building ChunkListeners.
 //
-// cfg: The global framework configuration.
-// properties: Listener-specific properties injected from JSL.
-// Returns: The constructed ChunkListener instance and an error.
+// Parameters:
+//
+//	cfg: The global framework configuration.
+//	properties: Listener-specific properties injected from JSL.
+//
+// Returns:
+//
+//	The constructed ChunkListener instance and an error.
 type ChunkListenerBuilder func(cfg *config.Config, properties map[string]string) (core.ChunkListener, error)
 
 // ConditionalDecisionBuilder is a function type for building core.Decision.
 //
-// id: The unique identifier for the Decision.
-// properties: Decision-specific properties injected from JSL.
-// resolver: The expression resolver.
-// Returns: The constructed Decision instance and an error.
+// Parameters:
+//
+//	id: The unique identifier for the Decision.
+//	properties: Decision-specific properties injected from JSL.
+//	resolver: The expression resolver.
+//
+// Returns:
+//
+//	The constructed Decision instance and an error.
 type ConditionalDecisionBuilder func(id string, properties map[string]string, resolver core.ExpressionResolver) (core.Decision, error)
 
 // SplitBuilder is a function type for building core.Split.
 //
-// id: The unique identifier for the Split.
-// steps: A list of Steps included in this Split.
-// Returns: The constructed Split instance and an error.
+// Parameters:
+//
+//	id: The unique identifier for the Split.
+//	steps: A list of Steps included in this Split.
+//
+// Returns:
+//
+//	The constructed Split instance and an error.
 type SplitBuilder func(id string, steps []core.Step) (core.Split, error)

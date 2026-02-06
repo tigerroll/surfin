@@ -96,10 +96,10 @@ graph LR
 
         | メソッド名 | 説明 |
         |---|---|
-        | `Upload` | GCS Go SDKの`Writer`オブジェクトを利用して、データストリームをGCSオブジェクトに書き込みます。**HIVEパーティショニングが有効な場合、`objectName`の生成ロジックにHIVEパーティションのパスを含めることを考慮します。** |
-        | `Download` | GCS Go SDKの`Reader`オブジェクトを利用して、GCSオブジェクトからデータストリームを読み込みます。**HIVEパーティショニングが有効な場合、`objectName`の解決ロジックにHIVEパーティションのパスを含めることを考慮します。** |
-        | `ListObjects` | GCS Go SDKの`Objects`メソッドとイテレータ機能を利用して、指定されたバケットとプレフィックスに一致するオブジェクト名を列挙します。**HIVEパーティショニングが有効な場合、`prefix`の解釈ロジックにHIVEパーティションのパスを含めることを考慮します。** |
-        | `DeleteObject` | GCS Go SDKの`Delete`メソッドを利用して、GCSオブジェクトを削除します。**HIVEパーティショニングが有効な場合、`objectName`の解決ロジックにHIVEパーティションのパスを含めることを考慮します。** |
+        | `Upload` | GCS Go SDKの`Writer`オブジェクトを利用して、データストリームをGCSオブジェクトに書き込みます。 |
+        | `Download` | GCS Go SDKの`Reader`オブジェクトを利用して、GCSオブジェクトからデータストリームを読み込みます。 |
+        | `ListObjects` | GCS Go SDKの`Objects`メソッドとイテレータ機能を利用して、指定されたバケットとプレフィックスに一致するオブジェクト名を列挙します。 |
+        | `DeleteObject` | GCS Go SDKの`Delete`メソッドを利用して、GCSオブジェクトを削除します。 |
         | `Close` | 内部のGCSクライアントをクローズし、関連するリソースを解放します。 |
         | `Config` | アダプターが使用している `pkg/batch/adapter/storage/config.StorageConfig` を返します。 |
 
@@ -117,68 +117,47 @@ GCSアダプターは、Google Cloud Storageへの認証に以下の方法をサ
     *   **シークレットマネージャーからのキー利用**: 
         *   シークレットマネージャー（例: Google Secret Manager）にサービスアカウントキーが格納されている場合、アプリケーション起動時にそのキーを取得し、一時ファイルとして保存した後、その一時ファイルのパスを `credentials_file` に渡すことで対応可能です。
 
-## 7. 設定管理とHIVEパーティショニング
+## 7. 設定管理
 
 オブジェクトストレージの設定は、`pkg/batch/core/config/config.go` の `surfin.adapter_configs.storage.datasources` 以下に定義されます。各ストレージ接続は名前で識別され、`pkg/batch/adapter/storage/config.StorageConfig` 構造体としてアダプター側で解釈されます。
-
-`pkg/batch/adapter/storage/config/config.go` で定義される `StorageConfig` および `HivePartitionConfig` は以下の通りです。
 
 ```go
 // pkg/batch/adapter/storage/config/config.go
 
 package config
 
-// HivePartitionConfig holds configuration for Hive partitioning.
-type HivePartitionConfig struct {
-	EnableHivePartitioning    bool   `yaml:"enable_hive_partitioning"`     // Whether to enable Hive partitioning.
-	HivePartitionPrefixFormat string `yaml:"hive_partition_prefix_format"` // Format string for Hive partition prefixes (e.g., "year=%Y/month=%m/day=%d").
-}
-
 // StorageConfig holds configuration for a single object storage connection.
 type StorageConfig struct {
-	Type            string              `yaml:"type"`             // Type of storage (e.g., "gcs", "s3").
-	BucketName      string              `yaml:"bucket_name"`      // Default bucket name for operations.
-	CredentialsFile string              `yaml:"credentials_file"` // Path to credentials file (e.g., service account key for GCS).
-	HivePartition   HivePartitionConfig `yaml:"hive_partition"`   // Hive partitioning settings.
+	Type            string `yaml:"type"`             // Type of storage (e.g., "gcs", "s3").
+	BucketName      string `yaml:"bucket_name"`      // Default bucket name for operations.
+	CredentialsFile string `yaml:"credentials_file"` // Path to credentials file (e.g., service account key for GCS).
 }
 
 // DatasourcesConfig holds a map of named storage configurations.
 type DatasourcesConfig map[string]StorageConfig
 ```
 
-HIVEパーティショニングに関する設定も `StorageConfig` 内に含められ、`enable_hive_partitioning` (bool) と `hive_partition_prefix_format` (string) で制御されます。これにより、アダプターは設定に基づいてHIVEパーティションのパスを動的に生成・解釈できるようになります。
-
 **YAML設定例:**
 ```yaml
 surfin:
   # ... その他のフレームワーク共通設定
-  adapter_configs:
-    storage: # ストレージアダプターの設定
-      datasources:
-        default_gcs:
-          type: gcs
-          bucket_name: your-default-gcs-bucket
-          credentials_file: "" # 空文字列の場合はデフォルト認証を使用
-          hive_partition:
-            enable_hive_partitioning: true
-            hive_partition_prefix_format: "year=%Y/month=%m/day=%d" # 例: year=2023/month=10/day=26
-        another_s3_connection:
-          type: s3
-          bucket_name: your-s3-bucket
-          region: ap-northeast-1
-          credentials_file: "/path/to/s3_credentials.json"
-          hive_partition:
-            enable_hive_partitioning: false # S3ではHIVEパーティションを無効にする例
-            hive_partition_prefix_format: ""
+  storage: # ストレージアダプターの設定
+    gcs: # database と同じで、任意の名称を指定できる
+      type: gcs
+      bucket_name: your-default-gcs-bucket
+      credentials_file: "" # 空文字列の場合はデフォルト認証を使用
+    s3:
+      type: s3
+      bucket_name: your-s3-bucket
+      region: ap-northeast-1
+      credentials_file: "/path/to/s3_credentials.json"
 ```
 
 ## 8. 考慮事項
 
-*   **リソース管理**: 
+*   **リソース管理**:
     *   `ObjectStorageAdapter` インターフェースの `Close()` メソッドを適切に実装し、GCSクライアントのリソースを確実に解放する必要があります。
     *   Fxライフサイクルと連携させることを検討します。
-*   **HIVEパーティションパスの生成/解釈**:
-    *   `Upload`、`Download`、`ListObjects`、`DeleteObject` メソッド内で、`HivePartitionConfig` の設定に基づいて、オブジェクト名やプレフィックスを動的に構築または解釈するロジックを実装する必要があります。`hive_partition_prefix_format` は `time.Format` のような形式文字列を想定しています。
 *   **エラーハンドリング**:
     *   設定のデコード失敗や、GCSクライアントの初期化失敗など、アダプターの初期化段階でのエラーハンドリングを適切に行う必要があります。
 
@@ -186,15 +165,7 @@ surfin:
 
 本セクションでは、GCSアダプターの設計における具体的な課題と、それに対する修正指針を詳述します。
 
-### 1. HIVEパーティションパスの決定権
-
-| 項目 | 説明 |
-|---|---|
-| **課題** | 現状の設計ではアダプター内部でパスを生成するため、「昨日のデータを再処理する」際に、<br/>実行当日（今日）の日付パスが作られてしまうリスクがある。 |
-| **対策** | **■ インターフェースの変更** <br/>・ `Upload` メソッドに `partitionPath` を直接渡すか、パス生成ユーティリティをアダプターから切り離す。|
-| **対策** | **■ 責任の所在** <br/> ・ビジネスロジックを持つ「バッチコア側」が書き込み先を決定し、<br/>アダプターは指定された場所に忠実に書き込む役割に徹する。|
-
-### 2. Parquet採用に伴うアップロードフロー
+### 1. Parquet採用に伴うアップロードフロー
 
 | 項目 | 説明 |
 |---|---|
@@ -202,7 +173,7 @@ surfin:
 | **対策** | **■ バッファリング戦略** <br/> ・`ItemWriter` が `bytes.Buffer` や一時ファイルに一旦書き込むバッファリング戦略をとる。|
 | **対策** | **■ アダプターへの受け渡し** <br/> ・完成したデータの `io.Reader` をアダプターの `Upload` に渡すフローを基本設計とする。|
 
-### 3. リソース解放とエラーハンドリングの強化
+### 2. リソース解放とエラーハンドリングの強化
 
 | 項目 | 説明 |
 |---|---|

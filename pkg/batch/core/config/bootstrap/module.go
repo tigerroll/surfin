@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"strings"
 
 	"github.com/mitchellh/mapstructure"
 	"go.uber.org/fx"
 
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database" // Imports the database package.
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
@@ -40,12 +39,12 @@ var Module = fx.Options(
 // runFrameworkMigrationsHook function, injected by Fx.
 type RunFrameworkMigrationsHookParams struct {
 	fx.In
-	Lifecycle        fx.Lifecycle                  // The Fx lifecycle to append hooks.
-	Cfg              *config.Config                // The application configuration.
-	MigratorProvider migration.MigratorProvider    // Provider for database migrators.
-	DBResolver       adapter.DBConnectionResolver  // Resolver for database connections.
-	AllMigrationFS   map[string]fs.FS              `name:"allMigrationFS"` // A map of file systems containing migration scripts, including "frameworkMigrationsFS".
-	AllDBProviders   map[string]adapter.DBProvider // All registered DB providers, mapped by their database type.
+	Lifecycle        fx.Lifecycle                   // The Fx lifecycle to append hooks.
+	Cfg              *config.Config                 // The application configuration.
+	MigratorProvider migration.MigratorProvider     // Provider for database migrators.
+	DBResolver       database.DBConnectionResolver  // Resolver for database connections.
+	AllMigrationFS   map[string]fs.FS               `name:"allMigrationFS"` // A map of file systems containing migration scripts, including "frameworkMigrationsFS".
+	AllDBProviders   map[string]database.DBProvider // All registered DB providers, mapped by their database type.
 }
 
 // runFrameworkMigrationsHook registers an Fx lifecycle hook to execute necessary
@@ -65,9 +64,21 @@ func runFrameworkMigrationsHook(
 
 			// Get DB Configuration to determine DB Type
 			var dbConfig dbconfig.DatabaseConfig
-			rawConfig, ok := p.Cfg.Surfin.AdapterConfigs[p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef]
+			rawAdapterConfig, ok := p.Cfg.Surfin.AdapterConfigs.(map[string]interface{})
 			if !ok {
-				return fmt.Errorf("database configuration '%s' not found in adapter.database configs for JobRepositoryDBRef", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
+				return fmt.Errorf("invalid 'adapter' configuration format: expected map[string]interface{}")
+			}
+			adapterConfig, ok := rawAdapterConfig["database"]
+			if !ok {
+				return fmt.Errorf("no 'database' adapter configuration found in Surfin.AdapterConfigs")
+			}
+			dbConfigsMap, ok := adapterConfig.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("invalid 'database' adapter configuration format: expected map[string]interface{}")
+			}
+			rawConfig, ok := dbConfigsMap[p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef]
+			if !ok {
+				return fmt.Errorf("database configuration '%s' not found under 'adapter.database' configs for JobRepositoryDBRef", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
 			}
 			if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
 				return fmt.Errorf("failed to decode database config for '%s': %w", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef, err)
@@ -100,42 +111,6 @@ func runFrameworkMigrationsHook(
 			// Regardless of migration success or failure, force re-establishment of the JobRepositoryDBRef's DB connection.
 			// This ensures that the connection used by JobRepository is always fresh and valid.
 			// Re-decode the config to ensure we have the latest, correct structure.
-			rawConfig, ok = p.Cfg.Surfin.AdapterConfigs[p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef]
-			if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
-				return fmt.Errorf("failed to decode database config for '%s' during reconnect: %w", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef, err)
-			}
-			provider, ok := p.AllDBProviders[dbConfig.Type]
-			if !ok {
-				// Handle special cases like Redshift
-				if dbConfig.Type == "redshift" {
-					provider, ok = p.AllDBProviders["postgres"]
-				}
-				if !ok {
-					return fmt.Errorf("DBProvider for type '%s' not found for JobRepositoryDBRef", dbConfig.Type)
-				}
-			}
-
-			// Before calling ForceReconnect, verify that the target connection actually exists.
-			// Connections should already be established by NewDBConnectionsAndTxManagers, but this is a safeguard.
-			_, connExists := p.AllDBProviders[dbConfig.Type]
-			if !connExists {
-				// If the connection does not exist, treat it as an error.
-				return fmt.Errorf("DBProvider for type '%s' does not manage connection '%s'", dbConfig.Type, p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
-			}
-
-			// This closes any old connections (if open) and establishes a new one.
-			// The returned DBConnection is ignored, as the DBConnectionResolver is expected to
-			// retrieve the refreshed connection from the provider's internal state.
-			_, forceReconnectErr := provider.ForceReconnect(p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
-			// Note: The returned DBConnection is not directly used here, as the DBConnectionResolver
-			// is expected to retrieve the refreshed connection from the provider's internal state
-			// when JobRepository requests it.
-			if forceReconnectErr != nil {
-				logger.Errorf("Failed to reconnect DB connection '%s' after migration: %v", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef, forceReconnectErr)
-				// If reconnection fails, return it as a fatal error.
-				return fmt.Errorf("failed to reconnect DB connection after migration: %w", forceReconnectErr)
-			}
-			logger.Infof("Forced reconnection of DB '%s' after migration.", p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
 
 			if migrationErr != nil {
 				// Handle "no change" error specially as it's not an actual error.

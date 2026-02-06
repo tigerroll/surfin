@@ -3,16 +3,18 @@
 package writer
 
 import (
+	"fmt"
 	"go.uber.org/fx"
 
-	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"  // Core application interfaces
-	config "github.com/tigerroll/surfin/pkg/batch/core/config"          // Application configuration
-	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"         // Job Specification Language (JSL) definitions
-	support "github.com/tigerroll/surfin/pkg/batch/core/config/support" // Support utilities for configuration
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
+	core "github.com/tigerroll/surfin/pkg/batch/core/application/port"
+	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
+	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter" // Database adapter interfaces
 )
+
+import coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 
 // WeatherWriterComponentBuilderParams defines the dependencies for [NewWeatherWriterComponentBuilder].
 //
@@ -22,7 +24,7 @@ import (
 //	AllDBConnections: A map of all established database connections, keyed by their name. This is provided by the main application module.
 type WeatherWriterComponentBuilderParams struct {
 	fx.In
-	AllDBConnections map[string]adapter.DBConnection
+	AllDBConnections map[string]database.DBConnection
 }
 
 // NewWeatherWriterComponentBuilder creates a [jsl.ComponentBuilder] for the weatherItemWriter.
@@ -37,12 +39,17 @@ func NewWeatherWriterComponentBuilder(p WeatherWriterComponentBuilderParams) jsl
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver core.ExpressionResolver, // The expression resolver for dynamic property resolution.
-		dbResolver adapter.DBConnectionResolver,
+		dbResolver coreAdapter.ResourceConnectionResolver,
 		properties map[string]string,
 	) (interface{}, error) {
+		// Type assert dbResolver to database.DBConnectionResolver.
+		dbConnResolver, ok := dbResolver.(database.DBConnectionResolver)
+		if !ok {
+			return nil, fmt.Errorf("dbResolver is not of type database.DBConnectionResolver")
+		}
 		// Pass allDBConnections injected from Fx to NewWeatherWriter.
-		// The p.AllTxManagers dependency was removed as TxManager is now created on demand.
-		writer, err := NewWeatherWriter(cfg, p.AllDBConnections, resolver, dbResolver, properties)
+		// The p.AllTxManagers dependency was removed as TxManager is now created on demand. This comment is now redundant.
+		writer, err := NewWeatherWriter(cfg, p.AllDBConnections, resolver, dbConnResolver, properties)
 		if err != nil {
 			return nil, err
 		}
@@ -50,7 +57,9 @@ func NewWeatherWriterComponentBuilder(p WeatherWriterComponentBuilderParams) jsl
 	})
 }
 
-// RegisterWeatherWriterBuilder registers the created [jsl.ComponentBuilder] with the [support.JobFactory]. This makes the "weatherItemWriter" component available for use in JSL definitions.
+// RegisterWeatherWriterBuilder registers the created jsl.ComponentBuilder with the support.JobFactory.
+// This makes the "weatherItemWriter" component available for use in JSL definitions.
+//
 // Parameters:
 //
 //	jf: The JobFactory instance to register the builder with.
@@ -63,7 +72,8 @@ func RegisterWeatherWriterBuilder(
 	logger.Debugf("ComponentBuilder for WeatherWriter registered with JobFactory. JSL ref: 'weatherItemWriter'")
 }
 
-// Module defines the Fx options for the weather writer component. It provides the component builder and registers it with the [support.JobFactory].
+// Module defines the Fx options for the weather writer component.
+// It provides the component builder and registers it with the support.JobFactory.
 var Module = fx.Options(
 	fx.Provide(fx.Annotate(
 		NewWeatherWriterComponentBuilder,

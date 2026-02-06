@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -18,6 +18,8 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/skip"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
+
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database" // Required for type assertion.
 )
 
 // ChunkStep is an implementation of the core.Step interface designed for chunk-oriented processing.
@@ -52,7 +54,8 @@ type ChunkStep struct {
 	metricRecorder metrics.MetricRecorder
 	tracer         metrics.Tracer
 
-	dbResolver       adapter.DBConnectionResolver // Database connection resolver for dynamic database access.
+	// dbResolver is used to resolve database connections dynamically.
+	dbResolver       coreAdapter.ResourceConnectionResolver
 	txManagerFactory tx.TransactionManagerFactory // Transaction manager factory for creating transaction managers.
 }
 
@@ -115,7 +118,7 @@ func NewJSLAdaptedStep(
 	txManagerFactory tx.TransactionManagerFactory,
 	metricRecorder metrics.MetricRecorder,
 	tracer metrics.Tracer,
-	dbResolver adapter.DBConnectionResolver,
+	dbResolver coreAdapter.ResourceConnectionResolver,
 ) *ChunkStep {
 	// Note: RetryPolicy and SkipPolicy creation should ideally be delegated to factories,
 	// but for simplicity, we use default implementations here.
@@ -434,40 +437,40 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 	var processAttempts int // Declared outside the loop
 
 	// Main chunk processing loop
+RetryChunk: // Jump here on write retry
 	for {
-		// --- START: MODIFIED CODE FOR DYNAMIC TX MANAGER ---
 		var currentTxManager tx.TransactionManager
 		var targetDBName string // Target DB name for ItemWriter
 		var tableName string    // Target table name for ItemWriter
 
-		// If ItemWriter is configured, get its target DB name and table name
 		if s.writer != nil {
 			targetDBName = s.writer.GetTargetDBName()
 			tableName = s.writer.GetTableName()
 		}
 
-		// If target DB name is empty and writer is not nil, it's an error
 		if targetDBName == "" && s.writer != nil {
 			chunkError = exception.NewBatchError(s.id, "ItemWriter must provide a target DB name for transaction management.", nil, false, false)
 			break
 		}
 
-		// Get DBConnection based on target DB name and create TxManager
-		dbConn, err := s.dbResolver.ResolveDBConnection(ctx, targetDBName)
+		dbConnAsResource, err := s.dbResolver.ResolveConnection(ctx, targetDBName)
 		if err != nil {
 			chunkError = exception.NewBatchError(s.id, fmt.Sprintf("Failed to resolve DB connection '%s' for chunk transaction", targetDBName), err, false, false)
 			break
 		}
+		dbConn, ok := dbConnAsResource.(database.DBConnection)
+		if !ok {
+			chunkError = exception.NewBatchError(s.id, fmt.Sprintf("Internal error: Resolved connection '%s' is not a database.DBConnection", targetDBName), nil, false, false)
+			break
+		}
 		currentTxManager = s.txManagerFactory.NewTransactionManager(dbConn)
 
-		// 3.1. Begin transaction
 		txAdapter, err := currentTxManager.Begin(ctx, s.GetTransactionOptions())
 		if err != nil {
 			chunkError = exception.NewBatchError(s.id, "Failed to begin transaction for chunk", err, false, false)
 			break
 		}
-		txCtx := context.WithValue(ctx, "tx", txAdapter) // Store transaction in context
-		// --- END: MODIFIED CODE FOR DYNAMIC TX MANAGER ---
+		txCtx := context.WithValue(ctx, "tx", txAdapter)
 
 		// Listener notification (BeforeChunk)
 		for _, l := range s.chunkListeners {
@@ -664,21 +667,14 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 			writeCount += len(itemsToWrite)
 		}
 
-		// --- START: MODIFIED CODE FOR POST-COMMIT VERIFICATION ---
-		// If ItemWriter provides target DB name and table name, perform post-commit verification.
 		if s.writer != nil && targetDBName != "" && tableName != "" {
-			// dbConn is not used here, so discard it with _
-			_, err := s.dbResolver.ResolveDBConnection(ctx, targetDBName)
+			_, err := s.dbResolver.ResolveConnection(ctx, targetDBName)
 			if err != nil {
 				logger.Errorf("ChunkStep '%s': Failed to resolve DB connection for post-commit verification for '%s': %v", s.id, targetDBName, err)
-				// Log the error but continue processing as it's not fatal.
 			} else {
-				// Additional verification logic can be added here using dbConn, e.g., checking table row count.
-				// Currently, only logging is performed.
 				logger.Debugf("ChunkStep '%s': Successfully resolved DB connection '%s' for table '%s' for post-commit verification.", s.id, targetDBName, tableName)
 			}
 		}
-		// --- END: MODIFIED CODE FOR POST-COMMIT VERIFICATION ---
 
 		// 3.4. Commit transaction
 		if commitErr := currentTxManager.Commit(txAdapter); commitErr != nil {
@@ -710,9 +706,8 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 			logger.Debugf("ChunkStep '%s': Reached EOF. Exiting chunk loop.", s.id)
 			break
 		}
-	RetryChunk: // Jump here on write retry
-	EndChunkTransaction: // Jump target on successful chunk splitting or EOF
-		// Empty statement to allow label definition
+	EndChunkTransaction:
+		continue
 	} // End of chunk loop
 EndChunkLoop:
 

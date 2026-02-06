@@ -1,18 +1,17 @@
-// Package expression_test provides tests for the database connection expression resolver.
+// Package expression_test provides unit tests for the database connection expression resolver.
 package expression_test
 
 import (
 	"context"
 	"errors"
-	"testing"
-
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	coreadapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	expression "github.com/tigerroll/surfin/pkg/batch/core/support/expression"
 	testutil "github.com/tigerroll/surfin/pkg/batch/test"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	"testing"
 )
 
 // MockExpressionResolver is a mock implementation of the port.ExpressionResolver interface.
@@ -20,17 +19,8 @@ type MockExpressionResolver struct {
 	mock.Mock
 }
 
-// Resolve mocks the resolution of an expression string.
-// Parameters:
-//
-//	ctx: The context for the operation.
-//	expression: The expression string to resolve.
-//	jobExecution: The current JobExecution.
-//	stepExecution: The current StepExecution.
-//
-// Returns:
-//
-//	The resolved string and an error if resolution fails.
+// Resolve mocks the resolution of an expression string. It takes a context, an expression string,
+// and JobExecution and StepExecution models, returning the resolved string and an error.
 func (m *MockExpressionResolver) Resolve(ctx context.Context, expression string, jobExecution *model.JobExecution, stepExecution *model.StepExecution) (string, error) {
 	args := m.Called(ctx, expression, jobExecution, stepExecution)
 	return args.String(0), args.Error(1)
@@ -43,7 +33,8 @@ func (m *MockExpressionResolver) Resolve(ctx context.Context, expression string,
 func TestDefaultDBConnectionResolver_ResolveDBConnectionName(t *testing.T) {
 	ctx := context.Background()
 	mockResolver := new(MockExpressionResolver)
-	resolver := expression.NewDefaultDBConnectionResolver(mockResolver)
+	// Explicitly assert the resolver's type to coreadapter.ResourceConnectionResolver.
+	resolver := expression.NewDefaultDBConnectionResolver(mockResolver).(coreadapter.ResourceConnectionResolver)
 
 	jobExecution := testutil.NewTestJobExecution("inst1", "testJob", testutil.NewTestJobParameters(map[string]interface{}{
 		"target_db": "dynamic_workload",
@@ -52,7 +43,7 @@ func TestDefaultDBConnectionResolver_ResolveDBConnectionName(t *testing.T) {
 
 	// Case 1: Default name is static (no expression)
 	t.Run("StaticName", func(t *testing.T) {
-		dbName, err := resolver.ResolveDBConnectionName(ctx, jobExecution, nil, "static_db")
+		dbName, err := resolver.ResolveConnectionName(ctx, jobExecution, nil, "static_db")
 		assert.NoError(t, err)
 		assert.Equal(t, "static_db", dbName)
 		mockResolver.AssertNotCalled(t, "Resolve")
@@ -60,10 +51,10 @@ func TestDefaultDBConnectionResolver_ResolveDBConnectionName(t *testing.T) {
 
 	// Case 2: Default name is empty (should fall back to "workload")
 	t.Run("EmptyNameFallback", func(t *testing.T) {
-		// Reset mock calls for this run
+		// Reset mock expectations for this run.
 		mockResolver.ExpectedCalls = nil
 
-		dbName, err := resolver.ResolveDBConnectionName(ctx, jobExecution, nil, "")
+		dbName, err := resolver.ResolveConnectionName(ctx, jobExecution, nil, "")
 		assert.NoError(t, err)
 		assert.Equal(t, "workload", dbName)
 		mockResolver.AssertNotCalled(t, "Resolve")
@@ -73,10 +64,10 @@ func TestDefaultDBConnectionResolver_ResolveDBConnectionName(t *testing.T) {
 	t.Run("ResolvableExpression", func(t *testing.T) {
 		expr := "#{jobParameters['target_db']}"
 
-		// Simulate Mock Resolver resolving the value from JobParameters
+		// Simulate the mock resolver resolving the value from JobParameters.
 		mockResolver.On("Resolve", ctx, expr, jobExecution, mock.Anything).Return("dynamic_workload", nil).Once()
 
-		dbName, err := resolver.ResolveDBConnectionName(ctx, jobExecution, nil, expr)
+		dbName, err := resolver.ResolveConnectionName(ctx, jobExecution, nil, expr)
 		assert.NoError(t, err)
 		assert.Equal(t, "dynamic_workload", dbName)
 		mockResolver.AssertCalled(t, "Resolve", ctx, expr, jobExecution, mock.Anything)
@@ -86,10 +77,10 @@ func TestDefaultDBConnectionResolver_ResolveDBConnectionName(t *testing.T) {
 	t.Run("FailedResolutionFallback", func(t *testing.T) {
 		expr := "#{jobParameters['missing_key']}"
 
-		// Simulate Mock Resolver returning an error
+		// Simulate the mock resolver returning an error.
 		mockResolver.On("Resolve", ctx, expr, jobExecution, mock.Anything).Return("", errors.New("key not found")).Once()
 
-		dbName, err := resolver.ResolveDBConnectionName(ctx, jobExecution, nil, expr)
+		dbName, err := resolver.ResolveConnectionName(ctx, jobExecution, nil, expr)
 		assert.NoError(t, err)
 		// If resolution fails but the original defaultName (expr) is not empty, it should be returned as is.
 		assert.Equal(t, expr, dbName)
@@ -100,10 +91,10 @@ func TestDefaultDBConnectionResolver_ResolveDBConnectionName(t *testing.T) {
 	t.Run("ResolvedToEmptyStringFallback", func(t *testing.T) {
 		expr := "#{jobParameters['empty_key']}"
 
-		// Simulate Mock Resolver returning an empty string
+		// Simulate the mock resolver returning an empty string.
 		mockResolver.On("Resolve", ctx, expr, jobExecution, mock.Anything).Return("", nil).Once()
 
-		dbName, err := resolver.ResolveDBConnectionName(ctx, jobExecution, nil, expr)
+		dbName, err := resolver.ResolveConnectionName(ctx, jobExecution, nil, expr)
 		assert.NoError(t, err)
 		// If the resolved result is an empty string, it should fall back to "workload".
 		assert.Equal(t, "workload", dbName)
@@ -111,5 +102,5 @@ func TestDefaultDBConnectionResolver_ResolveDBConnectionName(t *testing.T) {
 	})
 }
 
-// Verify interfaces
+// Verify that MockExpressionResolver implements port.ExpressionResolver.
 var _ port.ExpressionResolver = (*MockExpressionResolver)(nil)

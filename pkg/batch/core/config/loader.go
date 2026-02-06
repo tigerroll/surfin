@@ -227,12 +227,25 @@ func mergeSurfinConfig(dest, source *SurfinConfig) {
 
 	// Merge AdapterConfigs (this is the critical part for database configs)
 	if source.AdapterConfigs != nil {
-		if dest.AdapterConfigs == nil {
-			dest.AdapterConfigs = make(map[string]interface{})
+		// Type assert source.AdapterConfigs to map[string]interface{}.
+		sourceAdapterConfigs, ok := source.AdapterConfigs.(map[string]interface{})
+		if !ok {
+			logger.Warnf("Failed to assert source.Surfin.AdapterConfigs to map[string]interface{}. Actual type: %T. Skipping merge for AdapterConfigs.", source.AdapterConfigs)
+			return // Skip merge for this field if type assertion fails.
 		}
-		// Since source.AdapterConfigs is a map[string]interface{}, iterate directly and merge.
-		for key, value := range source.AdapterConfigs {
-			dest.AdapterConfigs[key] = value
+
+		// dest.Surfin.AdapterConfigs should be initialized as map[string]interface{} by NewConfig,
+		// but perform type assertion as a precaution.
+		destAdapterConfigs, ok := dest.AdapterConfigs.(map[string]interface{})
+		if !ok {
+			// This case should not normally occur, but if it does, re-initialize with a new map.
+			logger.Warnf("Failed to assert dest.Surfin.AdapterConfigs to map[string]interface{}. Actual type: %T. Re-initializing.", dest.AdapterConfigs)
+			destAdapterConfigs = make(map[string]interface{})
+			dest.AdapterConfigs = destAdapterConfigs
+		}
+
+		for key, value := range sourceAdapterConfigs {
+			destAdapterConfigs[key] = value
 		}
 	}
 }

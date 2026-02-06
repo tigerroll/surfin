@@ -1,9 +1,8 @@
 // Package generic provides Fx modules for generic tasklet components.
 package generic
 
-import (
-	// Import for adapter.DBConnectionResolver
-	adapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
+import ( // Import for adapter.DBConnectionResolver
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
@@ -29,7 +28,7 @@ func NewExecutionContextWriterTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver adapter.DBConnectionResolver, // The database connection resolver.
+		dbResolver coreAdapter.ResourceConnectionResolver, // The database connection resolver.
 		properties map[string]string,
 	) (interface{}, error) {
 		// Unused arguments are ignored for this component.
@@ -71,7 +70,7 @@ func NewRandomFailTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver adapter.DBConnectionResolver, // The database connection resolver.
+		dbResolver coreAdapter.ResourceConnectionResolver, // The database connection resolver.
 		properties map[string]string,
 	) (interface{}, error) {
 		// Unused arguments are ignored for this component.

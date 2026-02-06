@@ -7,7 +7,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
 )
 
 // TxExecutor is an interface that defines common write operations executable within a transaction.
@@ -83,9 +83,9 @@ type TransactionManager interface {
 // This allows for the generation of TransactionManagers that are independent of specific database connection types.
 type TransactionManagerFactory interface {
 	// NewTransactionManager creates a new TransactionManager based on the specified database connection.
-	// conn: The database connection that the TransactionManager will manage.
+	// dbConn: The database connection that the TransactionManager will manage.
 	// Returns: A new TransactionManager instance.
-	NewTransactionManager(conn adapter.DBConnection) TransactionManager
+	NewTransactionManager(dbConn coreAdapter.ResourceConnection) TransactionManager
 }
 
 // TransactionAdapter is an alias for the Tx interface.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"io/fs"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
 )
 
 // Fixed table names for migration tracking
@@ -26,5 +26,5 @@ type Migrator interface {
 // MigratorProvider is a factory for creating Migrator instances.
 // This interface breaks the import cycle between 'adapter/database' and 'component/tasklet/migration'.
 type MigratorProvider interface {
-	NewMigrator(dbConn adapter.DBConnection) Migrator
+	NewMigrator(dbConn database.DBConnection) Migrator
 }

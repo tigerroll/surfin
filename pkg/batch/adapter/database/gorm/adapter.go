@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database"                 // Imports the database package.
+	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config" // Existing import.
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -123,7 +124,7 @@ func (w *GormWriter) Printf(format string, v ...interface{}) {
 	}
 }
 
-// GormDBAdapter implements adapter.DBConnection
+// GormDBAdapter implements database.DBConnection
 type GormDBAdapter struct {
 	db     *gorm.DB
 	sqlDB  *sql.DB                 // Underlying *sql.DB connection.
@@ -133,7 +134,7 @@ type GormDBAdapter struct {
 }
 
 // NewGormDBAdapter creates a new GormDBAdapter.
-func NewGormDBAdapter(db *gorm.DB, cfg dbconfig.DatabaseConfig, name string) adapter.DBConnection {
+func NewGormDBAdapter(db *gorm.DB, cfg dbconfig.DatabaseConfig, name string) database.DBConnection {
 	sqlDB, err := db.DB()
 	if err != nil {
 		logger.Fatalf("Failed to get underlying *sql.DB: %v", err)
@@ -380,20 +381,24 @@ func (a *GormDBAdapter) ExecuteUpsert(ctx context.Context, model interface{}, ta
 }
 
 // GormTransactionManagerFactory is the GORM implementation of tx.TransactionManagerFactory.
-type GormTransactionManagerFactory struct {
-	dbResolver adapter.DBConnectionResolver
+type GormTransactionManagerFactory struct { // Line 388
+	dbResolver database.DBConnectionResolver
 }
 
 // NewGormTransactionManagerFactory creates an instance of GormTransactionManagerFactory.
-func NewGormTransactionManagerFactory(dbResolver adapter.DBConnectionResolver) tx.TransactionManagerFactory {
+func NewGormTransactionManagerFactory(dbResolver database.DBConnectionResolver) tx.TransactionManagerFactory {
 	return &GormTransactionManagerFactory{dbResolver: dbResolver}
 }
 
 // NewTransactionManager creates a GormTransactionManager from GormDBAdapter.
-func (f *GormTransactionManagerFactory) NewTransactionManager(dbConn adapter.DBConnection) tx.TransactionManager {
-	// TxManager is changed to depend on DBConnectionResolver and DBName.
-	return &GormTransactionManager{
-		dbResolver: f.dbResolver,
-		dbName:     dbConn.Name(),
+func (f *GormTransactionManagerFactory) NewTransactionManager(dbConn coreAdapter.ResourceConnection) tx.TransactionManager {
+	// This assertion is expected to be safe because GormTransactionManagerFactory is designed
+	// to work exclusively with GORM-based DBConnection instances.
+	logger.Debugf("GormTransactionManagerFactory.NewTransactionManager: Initializing")
+	dbConnTyped, ok := dbConn.(database.DBConnection)
+	if !ok {
+		// This error indicates a misconfiguration of the framework.
+		logger.Fatalf("NewTransactionManager received a ResourceConnection that is not a DBConnection: %T", dbConn)
 	}
+	return NewGormTransactionManager(f.dbResolver, dbConnTyped.Name())
 }

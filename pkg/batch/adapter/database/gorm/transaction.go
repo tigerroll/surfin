@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 )
 
@@ -124,17 +124,16 @@ func (t *GormTxAdapter) IsTableNotExistError(err error) bool {
 }
 
 // GormTransactionManager implements tx.TransactionManager
+// Moved from adapter.go to resolve redeclaration.
 type GormTransactionManager struct {
-	dbResolver adapter.DBConnectionResolver
+	dbResolver database.DBConnectionResolver // Use database.DBConnectionResolver
 	dbName     string
 }
 
-// NewGormTransactionManager creates a new GormTransactionManager.
-// func NewGormTransactionManager(dbConn adapter.DBConnection) tx.TransactionManager {
-// 	return &GormTransactionManager{
-// 		dbConn: dbConn,
-// 	} // This is commented out because it's replaced by the factory pattern.
-// }
+// NewGormTransactionManager is the constructor for GormTransactionManager.
+func NewGormTransactionManager(dbResolver database.DBConnectionResolver, dbName string) tx.TransactionManager {
+	return &GormTransactionManager{dbResolver: dbResolver, dbName: dbName}
+}
 
 func (m *GormTransactionManager) Begin(ctx context.Context, opts ...*sql.TxOptions) (tx.Tx, error) {
 	// 1. Retrieve the latest DBConnection using DBConnectionResolver.

@@ -17,9 +17,10 @@ surfin:
       skippable_exceptions: # Skippable exceptions for item processing
         - "BatchError" # No need for datasources and infrastructure sections for in-memory DB
     job_repository_db_ref: dummy
-  database: # Renamed from adapter_configs to database
-    metadata: # Dummy configuration for 'metadata' database, referenced by framework migrations
-      type: dummy
+  adapter:
+    database:
+      metadata: # Dummy configuration for 'metadata' database, referenced by framework migrations
+        type: dummy
   security:
     masked_parameter_keys:
       - "password"
