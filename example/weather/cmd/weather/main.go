@@ -20,25 +20,28 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx"
+	"gopkg.in/yaml.v3" // yaml package
 )
 
-// embeddedConfig embeds the content of the application's YAML configuration file (application.yaml). It is used for loading configuration at application startup.
+// embeddedConfig embeds the content of the application's YAML configuration file (application.yaml).
 //
 //go:embed resources/application.yaml
 var embeddedConfig []byte
 
-// applicationMigrationsFS is an embedded file system containing database migration files. This bundles migration scripts into the application binary, allowing them to be applied at runtime without external file dependencies.
+// applicationMigrationsFS is an embedded file system containing database migration files.
 //
 //go:embed all:resources/migrations
 var applicationMigrationsFS embed.FS
 
-// embeddedJSL embeds the content of the Job Specification Language (JSL) file (job.yaml). This file defines the flow and components of the batch job.
+// embeddedJSL embeds the content of the Job Specification Language (JSL) file (job.yaml).
 //
 //go:embed resources/job.yaml
 var embeddedJSL []byte
 
-// main is the entry point of the application. It manages the startup of the batch application, signal handling, and execution of the Fx container.
-// This function sets up a channel (`jobDoneChan`) for signaling job completion, initializes the application context and configuration, and starts the batch process.
+// main is the entry point of the weather batch application.
+// It manages the startup, signal handling, and Fx container execution.
+// This function sets up a channel (`jobDoneChan`) for signaling job completion,
+// initializes the application context and configuration, and starts the batch process.
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -61,6 +64,16 @@ func main() {
 	envFilePath := os.Getenv("ENV_FILE_PATH")
 	if envFilePath == "" {
 		envFilePath = ".env"
+	}
+
+	// To ensure Fx's internal logs reflect the desired settings,
+	// the logging configuration is loaded early from application.yaml and applied to the logger before Fx initialization.
+	cfg := config.NewConfig()
+	if err := yaml.Unmarshal(embeddedConfig, cfg); err != nil {
+		logger.Errorf("Failed to unmarshal embedded application config for early logger setup: %v", err)
+	} else {
+		logger.SetLogFormat(cfg.Surfin.System.Logging.Format)
+		logger.SetLogLevel(cfg.Surfin.System.Logging.Level)
 	}
 
 	// Define Fx options for database providers. All GORM-based providers are included here.

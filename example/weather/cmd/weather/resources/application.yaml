@@ -80,13 +80,14 @@ surfin:
     item_skip:
       skip_limit: 5
       skippable_exceptions: ["json.UnmarshalTypeError"]
-    chunk_size: 50
+    chunk_size: 50 # Default chunk size.
 
   # System-wide settings
   system:
     timezone: "Asia/Tokyo"
     logging:
       level: "DEBUG"
+      format: "json" # Default log format is JSON.
       
   # Infrastructure settings
   infrastructure:

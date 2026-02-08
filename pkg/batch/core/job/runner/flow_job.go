@@ -126,7 +126,7 @@ func (j *FlowJob) Run(ctx context.Context, jobExecution *model.JobExecution, job
 
 		// Log StepExecution details without sensitive EC data
 		for _, se := range jobExecution.StepExecutions {
-			logger.Debugf("  StepExecution Details (Step: %s): %s", se.StepName, se.DebugString())
+			logger.Debugf("StepExecution Details (Step: %s): %s", se.StepName, se.DebugString())
 		}
 	}()
 
