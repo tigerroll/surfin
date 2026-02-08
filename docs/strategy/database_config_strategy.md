@@ -41,12 +41,13 @@ surfin:
 
 `pkg/batch/core/config/loader.go` は、YAML設定ファイルを読み込み、Goの `Config` 構造体にデコードする責務を負います。
 
-*   **YAML読み込み時のキー変換**:
-    *   `yaml.Unmarshal` はデフォルトで `map[interface{}]interface{}` を生成するため、`convertMapKeysToStrings` 関数を使用して、すべてのマップのキーを再帰的に `string` 型に変換します。
-    *   これにより、`Config` 構造体（特に `AdapterConfigs`）にデコードされるデータは、確実に `map[string]interface{}` の形式になります。
-*   **`mapstructure` によるデコード**:
-    *   `mapstructure.NewDecoder` を使用し、`TagName: "yaml"` を指定することで、YAMLタグに基づいて構造体フィールドへのマッピングを正確に行います。
-    *   `WeaklyTypedInput: true` を設定することで、数値型などの柔軟な型変換を許可し、YAMLの `float64` がGoの `int` フィールドにデコードされるようなケースに対応します。
+*   **YAML読み込み**:
+    *   `yaml.Unmarshal` を使用して、展開されたYAML設定を直接 `Config` 構造体（`yamlConfig`）にデコードします。
+    *   `Config` 構造体内の `AdapterConfigs` フィールドは `map[string]interface{}` として定義されており、`yaml.Unmarshal` はこの型に適切にマッピングします。
+*   **設定のマージ**:
+    *   `NewConfig()` で初期化されたデフォルト設定に、YAMLファイルから読み込んだ設定を `mergeConfig` 関数でマージします。これにより、YAMLで指定された値がデフォルト値を上書きします。
+*   **環境変数による上書き**:
+    *   `loadStructFromEnv` 関数を使用して、環境変数（例: `SURFIN_BATCH_POLLINGINTERVALSECONDS` や `SURFIN_ADAPTER_DATABASE_METADATA_HOST`）から設定値を読み込み、既存の設定を上書きします。これにより、環境変数による柔軟な設定変更が可能になります。特に、`loadMapOfStructsFromEnv` は `map[string]struct{}` 型のフィールド（例: `AdapterConfigs` 内のデータベース設定）を環境変数から動的にロードする役割を担います。
 
 ### 3.3. `pkg/batch/adapter/database/` 配下の役割
 
@@ -54,15 +55,13 @@ surfin:
 
 *   **具体的な値の解釈**:
     *   `DBProvider` の実装（例: `gorm/provider.go` の `BaseProvider.createAndStoreConnection`）は、`cfg.Surfin.AdapterConfigs` から `database` キーを介してデータベース設定マップを取得します。
-    *   `dbConfigsMap, ok := p.cfg.Surfin.AdapterConfigs["database"].(map[string]interface{})` のように、`adapter` の下の `database` キーにアクセスし、その中の個別のデータベース設定（例: `metadata`）を `dbconfig.DatabaseConfig` 構造体にデコードします。
-    *   ここでも `mapstructure.NewDecoder` と `TagName: "yaml"`, `WeaklyTypedInput: true` を使用し、正確なデコードを保証します。
+    *   `dbConfigsMap, ok := adapterConfig.(map[string]interface{})` のように、`adapter` の下の `database` キーにアクセスし、その中の個別のデータベース設定（例: `metadata`）を `dbconfig.DatabaseConfig` 構造体にデコードします。
+    *   このデコードには `github.com/mitchellh/mapstructure` ライブラリの `mapstructure.Decode` が使用され、YAMLタグに基づいて構造体フィールドへのマッピングを正確に行います。
 
 ### 3.4. その他の設定アクセス箇所
 
-*   **`pkg/batch/core/application/usecase/module.go`**:
-    *   `provideAllDBConnections` 関数内で、`cfg.Surfin.AdapterConfigs["database"].(map[string]interface{})` を使用してデータベース設定マップを取得し、各データベース接続を初期化します。
-*   **`pkg/batch/core/config/bootstrap.go`**:
-    *   `runFrameworkMigrationsHook` 関数内で、同様に `cfg.Surfin.AdapterConfigs["database"].(map[string]interface{})` を使用してデータベース設定マップを取得し、マイグレーション処理に利用します。
+*   フレームワーク内の他のコンポーネント（例: マイグレーション処理、ジョブ実行管理）も、依存性注入を通じて提供される `*config.Config` オブジェクトを介してデータベース設定にアクセスします。
+*   例えば、`pkg/batch/core/config/bootstrap.go` 内の `runFrameworkMigrationsHook` 関数（提供されたファイルには含まれていませんが、ドキュメントで言及されています）は、同様に `cfg.Surfin.AdapterConfigs["database"].(map[string]interface{})` を使用してデータベース設定マップを取得し、マイグレーション処理に利用すると考えられます。
 
 ## 4. 利点
 
@@ -75,6 +74,6 @@ surfin:
     *   `surfin.adapter` の下に `database` 以外の新しいアダプタータイプを容易に追加できます。
     *   各アダプターは、`map[string]interface{}` として抽象的に渡された設定を、自身の責務範囲で具体的に解釈できます。
 *   **堅牢性**:
-    *   `loader.go` でのキーの `string` 変換と `mapstructure` の適切な使用により、YAMLの柔軟な入力形式に対応しつつ、Goのコードで安全に設定にアクセスできます。
+    *   `loader.go` での環境変数展開と、`mapstructure` の適切な使用により、YAMLの柔軟な入力形式や環境変数からの設定に対応しつつ、Goのコードで安全に設定にアクセスできます。
 *   **一貫性**:
     *   設定ファイルとGoコード間のマッピングルールが明確になり、開発者が設定を理解しやすくなります。
