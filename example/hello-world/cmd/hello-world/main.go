@@ -18,15 +18,16 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx"
+	"gopkg.in/yaml.v3" // yaml package
 )
 
 // embeddedConfig embeds the content of the application's YAML configuration file (application.yaml).
+// This configuration is loaded at application startup.
 //
 //go:embed resources/application.yaml
 var embeddedConfig []byte
 
-// embeddedJSL embeds the content of the Job Specification Language (JSL) file (job.yaml).
-// This file defines the batch job's structure and components.
+// embeddedJSL embeds the Job Specification Language (JSL) file (job.yaml), defining the batch job's structure and components.
 //
 //go:embed resources/job.yaml
 var embeddedJSL []byte
@@ -182,6 +183,16 @@ func main() {
 	envFilePath := os.Getenv("ENV_FILE_PATH")
 	if envFilePath == "" {
 		envFilePath = ".env"
+	}
+
+	// To ensure Fx's internal logs reflect the desired settings,
+	// the logging configuration is loaded early from application.yaml and applied to the logger before Fx initialization.
+	cfg := config.NewConfig()
+	if err := yaml.Unmarshal(embeddedConfig, cfg); err != nil {
+		logger.Errorf("Failed to unmarshal embedded application config for early logger setup: %v", err)
+	} else {
+		logger.SetLogFormat(cfg.Surfin.System.Logging.Format)
+		logger.SetLogLevel(cfg.Surfin.System.Logging.Level)
 	}
 
 	// Aggregate all Fx options into a temporary slice.

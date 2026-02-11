@@ -3,6 +3,8 @@ surfin:
     timezone: Asia/Tokyo
     logging: # Set log level to DEBUG
       level: DEBUG
+      format: "json" # Default log format is JSON.
+
   batch:
     job_name: helloWorldJob
     polling_interval_seconds: 5
@@ -21,6 +23,7 @@ surfin:
     database:
       metadata: # Dummy configuration for 'metadata' database, referenced by framework migrations
         type: dummy
+
   security:
     masked_parameter_keys:
       - "password"

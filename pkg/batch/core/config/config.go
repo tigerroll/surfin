@@ -77,6 +77,8 @@ type BatchConfig struct {
 type LoggingConfig struct {
 	// Level is the logging level (e.g., "INFO", "DEBUG", "TRACE").
 	Level string `yaml:"level"`
+	// Format is the format for structured logging (e.g., "json", "text").
+	Format string `yaml:"format"`
 }
 
 // SystemConfig holds system-wide settings.
@@ -141,10 +143,13 @@ func NewConfig() *Config {
 		Surfin: SurfinConfig{
 			System: SystemConfig{
 				Timezone: "UTC", // Default value set to UTC
-				Logging:  LoggingConfig{Level: "INFO"},
+				Logging: LoggingConfig{
+					Level:  "INFO",
+					Format: "json", // Default log format is JSON.
+				},
 			},
 			Batch: BatchConfig{
-				JobName:                "",                   // Default Job name is empty. Expected to be set by the application or loaded from JSL.
+				JobName:                "",                   // Default job name is empty. Expected to be set by the application or loaded from JSL.
 				ChunkSize:              10,                   // Default chunk size.
 				StepExecutorRef:        "simpleStepExecutor", // Default is local execution.
 				MetricsAsyncBufferSize: 100,                  // Default buffer size for asynchronous metrics.
