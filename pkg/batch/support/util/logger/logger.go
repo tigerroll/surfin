@@ -126,8 +126,9 @@ func SetLogFormat(format string) {
 // It is only output if the current log level is DEBUG or lower.
 //
 // Parameters:
-//   format: A format string in the same format as `fmt.Printf`.
-//   v: Arguments to pass to the format string.
+//
+//	format: A format string in the same format as `fmt.Printf`.
+//	v: Arguments to pass to the format string.
 func Debugf(format string, v ...interface{}) {
 	slogLogger.Debug(fmt.Sprintf(format, v...))
 }
@@ -136,8 +137,9 @@ func Debugf(format string, v ...interface{}) {
 // It is only output if the current log level is INFO or lower.
 //
 // Parameters:
-//   format: A format string in the same format as `fmt.Printf`.
-//   v: Arguments to pass to the format string.
+//
+//	format: A format string in the same format as `fmt.Printf`.
+//	v: Arguments to pass to the format string.
 func Infof(format string, v ...interface{}) {
 	slogLogger.Info(fmt.Sprintf(format, v...))
 }
@@ -146,8 +148,9 @@ func Infof(format string, v ...interface{}) {
 // It is only output if the current log level is WARN or lower.
 //
 // Parameters:
-//   format: A format string in the same format as `fmt.Printf`.
-//   v: Arguments to pass to the format string.
+//
+//	format: A format string in the same format as `fmt.Printf`.
+//	v: Arguments to pass to the format string.
 func Warnf(format string, v ...interface{}) {
 	slogLogger.Warn(fmt.Sprintf(format, v...))
 }
@@ -156,8 +159,9 @@ func Warnf(format string, v ...interface{}) {
 // It is only output if the current log level is ERROR or lower.
 //
 // Parameters:
-//   format: A format string in the same format as `fmt.Printf`.
-//   v: Arguments to pass to the format string.
+//
+//	format: A format string in the same format as `fmt.Printf`.
+//	v: Arguments to pass to the format string.
 func Errorf(format string, v ...interface{}) {
 	slogLogger.Error(fmt.Sprintf(format, v...))
 }
@@ -166,8 +170,9 @@ func Errorf(format string, v ...interface{}) {
 // then terminates the program by calling os.Exit(1).
 //
 // Parameters:
-//   format: A format string in the same format as `fmt.Printf`.
-//   v: Arguments to pass to the format string.
+//
+//	format: A format string in the same format as `fmt.Printf`.
+//	v: Arguments to pass to the format string.
 func Fatalf(format string, v ...interface{}) {
 	// Logs at ERROR level and then terminates the program.
 	slogLogger.Error(fmt.Sprintf(format, v...), slog.String("level", "FATAL")) // Add "level": "FATAL" attribute for JSON logs
