@@ -21,21 +21,21 @@ import (
 	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 )
 
-// WeatherReaderConfig is a configuration struct specific to the Reader (for JSL property binding).
-type WeatherReaderConfig struct {
+// HourlyForecastAPIReaderConfig is a configuration struct specific to the Reader (for JSL property binding).
+type HourlyForecastAPIReaderConfig struct {
 	APIEndpoint string `yaml:"apiEndpoint"`
 	APIKey      string `yaml:"apiKey"`
 }
 
 const (
-	ModuleWeatherReader = "WeatherReader"
-	ReaderContextKey    = "reader_context"
-	ForecastDataKey     = "forecastData"
-	CurrentIndexKey     = "currentIndex"
+	ModuleHourlyForecastAPIReader = "HourlyForecastAPIReader"
+	ReaderContextKey              = "reader_context"
+	ForecastDataKey               = "forecastData"
+	CurrentIndexKey               = "currentIndex"
 )
 
-type WeatherReader struct {
-	config       *WeatherReaderConfig
+type HourlyForecastAPIReader struct {
+	config       *HourlyForecastAPIReaderConfig
 	client       *http.Client
 	forecastData *weather_entity.OpenMeteoForecast
 	currentIndex int
@@ -47,29 +47,29 @@ type WeatherReader struct {
 	resolver    core.ExpressionResolver
 }
 
-func NewWeatherReader(
+func NewHourlyForecastAPIReader(
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
 	properties map[string]string,
-) (*WeatherReader, error) {
+) (*HourlyForecastAPIReader, error) {
 	// 1. Define configuration struct and set default values.
-	weatherReaderCfg := &WeatherReaderConfig{
+	hourlyForecastAPIReaderCfg := &HourlyForecastAPIReaderConfig{
 		APIEndpoint: cfg.Surfin.Batch.APIEndpoint,
 		APIKey:      cfg.Surfin.Batch.APIKey,
 	}
 
 	// 2. Automatic binding of JSL properties.
-	if err := configbinder.BindProperties(properties, weatherReaderCfg); err != nil {
-		return nil, exception.NewBatchError(ModuleWeatherReader, "Failed to bind properties", err, false, false)
+	if err := configbinder.BindProperties(properties, hourlyForecastAPIReaderCfg); err != nil {
+		return nil, exception.NewBatchError(ModuleHourlyForecastAPIReader, "Failed to bind properties", err, false, false)
 	}
 
 	// 3. Validation
-	if weatherReaderCfg.APIEndpoint == "" {
-		return nil, fmt.Errorf("WeatherReaderConfig.APIEndpoint is not configured")
+	if hourlyForecastAPIReaderCfg.APIEndpoint == "" {
+		return nil, fmt.Errorf("HourlyForecastAPIReaderConfig.APIEndpoint is not configured")
 	}
 
-	return &WeatherReader{
-		config:   weatherReaderCfg,
+	return &HourlyForecastAPIReader{
+		config:   hourlyForecastAPIReaderCfg,
 		client:   &http.Client{Timeout: 10 * time.Second},
 		resolver: resolver,
 		// stepExecutionContext is set during Open.
@@ -79,13 +79,13 @@ func NewWeatherReader(
 }
 
 // Open opens resources and restores state from ExecutionContext.
-func (r *WeatherReader) Open(ctx context.Context, ec model.ExecutionContext) error {
+func (r *HourlyForecastAPIReader) Open(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
-	logger.Debugf("WeatherReader.Open is called.")
+	logger.Debugf("HourlyForecastAPIReader.Open is called.")
 	// Set stepExecutionContext and restore internal state from EC.
 	r.stepExecutionContext = ec
 	if err := r.restoreReaderStateFromExecutionContext(ctx); err != nil {
@@ -100,7 +100,7 @@ func (r *WeatherReader) Open(ctx context.Context, ec model.ExecutionContext) err
 }
 
 // Read reads the next item from the data source.
-func (r *WeatherReader) Read(ctx context.Context) (any, error) {
+func (r *HourlyForecastAPIReader) Read(ctx context.Context) (any, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -110,7 +110,7 @@ func (r *WeatherReader) Read(ctx context.Context) (any, error) {
 	// If forecastData is nil or empty (e.g., initial state or after reading all data), return EOF.
 	// Expect new data to be fetched in Open or the next step cycle.
 	if r.forecastData == nil || r.currentIndex >= len(r.forecastData.Hourly.Time) {
-		logger.Debugf("WeatherReader: Finished reading all weather data. Returning EOF.")
+		logger.Debugf("HourlyForecastAPIReader: Finished reading all weather data. Returning EOF.")
 		// Reset state after reading all data.
 		r.forecastData = nil
 		r.currentIndex = 0
@@ -134,23 +134,23 @@ func (r *WeatherReader) Read(ctx context.Context) (any, error) {
 }
 
 // Close releases resources.
-func (r *WeatherReader) Close(ctx context.Context) error {
+func (r *HourlyForecastAPIReader) Close(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
-	logger.Debugf("WeatherReader.Close is called.")
+	logger.Debugf("HourlyForecastAPIReader.Close is called.")
 	// Save internal state to the Step's ExecutionContext.
 	if err := r.saveReaderStateToExecutionContext(ctx); err != nil {
-		logger.Errorf("WeatherReader.Close: Failed to save internal state: %v", err)
+		logger.Errorf("HourlyForecastAPIReader.Close: Failed to save internal state: %v", err)
 	}
 	// Retaining error return value to match ItemReader interface signature.
 	return nil
 }
 
 // SetExecutionContext sets the ExecutionContext and restores the reader's state.
-func (r *WeatherReader) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
+func (r *HourlyForecastAPIReader) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -161,13 +161,13 @@ func (r *WeatherReader) SetExecutionContext(ctx context.Context, ec model.Execut
 }
 
 // GetExecutionContext retrieves the reader's ExecutionContext state.
-func (r *WeatherReader) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
+func (r *HourlyForecastAPIReader) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
-	logger.Debugf("WeatherReader.GetExecutionContext is called.")
+	logger.Debugf("HourlyForecastAPIReader.GetExecutionContext is called.")
 
 	// Save internal state to "reader_context" in the Step ExecutionContext.
 	if err := r.saveReaderStateToExecutionContext(ctx); err != nil {
@@ -177,7 +177,7 @@ func (r *WeatherReader) GetExecutionContext(ctx context.Context) (model.Executio
 	return r.readerState, nil // Return the reader's own state.
 }
 
-func (r *WeatherReader) fetchWeatherData(ctx context.Context) error {
+func (r *HourlyForecastAPIReader) fetchWeatherData(ctx context.Context) error {
 	logger.Infof("Fetching weather data from Open-Meteo API...")
 
 	latitude := 35.6586
@@ -191,12 +191,12 @@ func (r *WeatherReader) fetchWeatherData(ctx context.Context) error {
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return exception.NewBatchError(ModuleWeatherReader, "Failed to create API request", err, false, false)
+		return exception.NewBatchError(ModuleHourlyForecastAPIReader, "Failed to create API request", err, false, false)
 	}
 
 	resp, err := r.client.Do(req)
 	if err != nil {
-		return exception.NewBatchError(ModuleWeatherReader, "API call failed", err, true, false)
+		return exception.NewBatchError(ModuleHourlyForecastAPIReader, "API call failed", err, true, false)
 	}
 	defer resp.Body.Close()
 
@@ -205,12 +205,12 @@ func (r *WeatherReader) fetchWeatherData(ctx context.Context) error {
 		bodyString := strings.TrimSpace(string(bodyBytes))
 		errMsg := fmt.Sprintf("Error response from API: Status code %d, Body: %s", resp.StatusCode, bodyString)
 		isRetryable := resp.StatusCode >= 500
-		return exception.NewBatchError(ModuleWeatherReader, errMsg, errors.New(bodyString), isRetryable, false)
+		return exception.NewBatchError(ModuleHourlyForecastAPIReader, errMsg, errors.New(bodyString), isRetryable, false)
 	}
 
 	var forecast weather_entity.OpenMeteoForecast
 	if err := json.NewDecoder(resp.Body).Decode(&forecast); err != nil {
-		return exception.NewBatchError(ModuleWeatherReader, "Failed to decode API response", err, false, false)
+		return exception.NewBatchError(ModuleHourlyForecastAPIReader, "Failed to decode API response", err, false, false)
 	}
 
 	r.forecastData = &forecast
@@ -220,7 +220,7 @@ func (r *WeatherReader) fetchWeatherData(ctx context.Context) error {
 	return nil
 }
 
-func (r *WeatherReader) restoreReaderStateFromExecutionContext(ctx context.Context) error {
+func (r *HourlyForecastAPIReader) restoreReaderStateFromExecutionContext(ctx context.Context) error {
 	// Extract reader-specific context from stepExecutionContext
 	readerCtxVal, ok := r.stepExecutionContext.Get(ReaderContextKey)
 	var readerCtx model.ExecutionContext
@@ -228,11 +228,11 @@ func (r *WeatherReader) restoreReaderStateFromExecutionContext(ctx context.Conte
 		readerCtx = model.NewExecutionContext()
 		// New readerCtx is set in the Step EC.
 		r.stepExecutionContext.Put(ReaderContextKey, readerCtx)
-		logger.Debugf("WeatherReader: Initialized new ReaderExecutionContext.")
+		logger.Debugf("HourlyForecastAPIReader: Initialized new ReaderExecutionContext.")
 	} else if rcv, isEC := readerCtxVal.(model.ExecutionContext); isEC {
 		readerCtx = rcv
 	} else {
-		logger.Warnf("WeatherReader: ExecutionContext ReaderContextKey has unexpected type (%T). Initializing new ExecutionContext.", readerCtxVal)
+		logger.Warnf("HourlyForecastAPIReader: ExecutionContext ReaderContextKey has unexpected type (%T). Initializing new ExecutionContext.", readerCtxVal)
 		readerCtx = model.NewExecutionContext()
 		r.stepExecutionContext.Put(ReaderContextKey, readerCtx)
 	}
@@ -240,30 +240,30 @@ func (r *WeatherReader) restoreReaderStateFromExecutionContext(ctx context.Conte
 	r.readerState = readerCtx.Copy()
 	if idx, ok := r.readerState.GetInt(CurrentIndexKey); ok {
 		r.currentIndex = idx
-		logger.Debugf("WeatherReader: Restored currentIndex %d from ExecutionContext.", r.currentIndex)
+		logger.Debugf("HourlyForecastAPIReader: Restored currentIndex %d from ExecutionContext.", r.currentIndex)
 	} else if val, found := r.readerState.Get(CurrentIndexKey); found {
 		// If GetInt failed but the key exists (type is not int/float64)
-		logger.Warnf("WeatherReader: ExecutionContext currentIndex has unexpected type (%T). Initializing to 0.", val)
+		logger.Warnf("HourlyForecastAPIReader: ExecutionContext currentIndex has unexpected type (%T). Initializing to 0.", val)
 		r.currentIndex = 0
 	} else {
 		r.currentIndex = 0
-		logger.Debugf("WeatherReader: Initialized currentIndex to 0.")
+		logger.Debugf("HourlyForecastAPIReader: Initialized currentIndex to 0.")
 	}
 
 	if val, found := r.readerState.GetString(ForecastDataKey); found && val != "" {
 		r.forecastData = &weather_entity.OpenMeteoForecast{}
 		if err := json.Unmarshal([]byte(val), r.forecastData); err != nil {
-			return exception.NewBatchError(ModuleWeatherReader, "Failed to deserialize forecastData JSON", err, false, false)
+			return exception.NewBatchError(ModuleHourlyForecastAPIReader, "Failed to deserialize forecastData JSON", err, false, false)
 		}
-		logger.Debugf("WeatherReader: Restored forecastData from ExecutionContext. Data count: %d", len(r.forecastData.Hourly.Time))
+		logger.Debugf("HourlyForecastAPIReader: Restored forecastData from ExecutionContext. Data count: %d", len(r.forecastData.Hourly.Time))
 	} else {
 		r.forecastData = nil
-		logger.Debugf("WeatherReader: forecastData initialized to nil.")
+		logger.Debugf("HourlyForecastAPIReader: forecastData initialized to nil.")
 	}
 	return nil
 }
 
-func (r *WeatherReader) saveReaderStateToExecutionContext(ctx context.Context) error {
+func (r *HourlyForecastAPIReader) saveReaderStateToExecutionContext(ctx context.Context) error {
 	// Extract reader-specific context from stepExecutionContext (created if not present)
 	readerCtxVal, ok := r.stepExecutionContext.Get(ReaderContextKey)
 	var readerCtx model.ExecutionContext
@@ -273,7 +273,7 @@ func (r *WeatherReader) saveReaderStateToExecutionContext(ctx context.Context) e
 	} else if rcv, isEC := readerCtxVal.(model.ExecutionContext); isEC {
 		readerCtx = rcv
 	} else {
-		logger.Warnf("WeatherReader: ExecutionContext ReaderContextKey has unexpected type (%T). Initializing new ExecutionContext.", readerCtxVal)
+		logger.Warnf("HourlyForecastAPIReader: ExecutionContext ReaderContextKey has unexpected type (%T). Initializing new ExecutionContext.", readerCtxVal)
 		readerCtx = model.NewExecutionContext()
 		r.stepExecutionContext.Put(ReaderContextKey, readerCtx)
 	}
@@ -285,8 +285,8 @@ func (r *WeatherReader) saveReaderStateToExecutionContext(ctx context.Context) e
 	if r.forecastData != nil {
 		forecastJSON, err := json.Marshal(r.forecastData)
 		if err != nil {
-			logger.Errorf("%s: Failed to encode forecastData: %v", ModuleWeatherReader, err)
-			return exception.NewBatchError(ModuleWeatherReader, "Failed to encode forecastData", err, false, false)
+			logger.Errorf("%s: Failed to encode forecastData: %v", ModuleHourlyForecastAPIReader, err)
+			return exception.NewBatchError(ModuleHourlyForecastAPIReader, "Failed to encode forecastData", err, false, false)
 		}
 		readerCtx.Put(ForecastDataKey, string(forecastJSON))
 		r.readerState.Put(ForecastDataKey, string(forecastJSON))
@@ -294,8 +294,8 @@ func (r *WeatherReader) saveReaderStateToExecutionContext(ctx context.Context) e
 		readerCtx.Remove(ForecastDataKey)
 		r.readerState.Remove(ForecastDataKey)
 	}
-	logger.Debugf("WeatherReader: Saved currentIndex (%d) and forecastData state to ExecutionContext.", r.currentIndex)
+	logger.Debugf("HourlyForecastAPIReader: Saved currentIndex (%d) and forecastData state to ExecutionContext.", r.currentIndex)
 	return nil
 }
 
-var _ core.ItemReader[any] = (*WeatherReader)(nil)
+var _ core.ItemReader[any] = (*HourlyForecastAPIReader)(nil)

@@ -26,35 +26,35 @@ func init() {
 	}
 }
 
-// WeatherProcessorConfig is a configuration struct specific to the Processor (for JSL property binding).
+// HourlyForecastTransformProcessorConfig is a configuration struct specific to the Processor (for JSL property binding).
 // It is currently empty but may be extended in the future.
-type WeatherProcessorConfig struct {
+type HourlyForecastTransformProcessorConfig struct {
 	DummySetting string `yaml:"dummySetting,omitempty"`
 }
 
-type WeatherProcessor struct {
+type HourlyForecastTransformProcessor struct {
 	config           *config.Config
 	resolver         core.ExpressionResolver
 	executionContext model.ExecutionContext
 	properties       map[string]string
-	processorConfig  *WeatherProcessorConfig
+	processorConfig  *HourlyForecastTransformProcessorConfig
 }
 
-// NewWeatherProcessor simplifies the signature by removing DB-related dependencies.
-func NewWeatherProcessor(
+// NewHourlyForecastTransformProcessor simplifies the signature by removing DB-related dependencies.
+func NewHourlyForecastTransformProcessor(
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
 	properties map[string]string,
-) (*WeatherProcessor, error) {
+) (*HourlyForecastTransformProcessor, error) {
 
-	processorCfg := &WeatherProcessorConfig{}
+	processorCfg := &HourlyForecastTransformProcessorConfig{}
 
 	// Automatic binding of JSL properties
 	if err := configbinder.BindProperties(properties, processorCfg); err != nil {
-		return nil, exception.NewBatchError("weather_processor", "Failed to bind properties", err, false, false)
+		return nil, exception.NewBatchError("hourly_forecast_transform_processor", "Failed to bind properties", err, false, false)
 	}
 
-	return &WeatherProcessor{
+	return &HourlyForecastTransformProcessor{
 		config:           cfg,
 		resolver:         resolver,
 		executionContext: model.NewExecutionContext(),
@@ -63,7 +63,7 @@ func NewWeatherProcessor(
 	}, nil
 }
 
-func (p *WeatherProcessor) Process(ctx context.Context, item any) (any, error) {
+func (p *HourlyForecastTransformProcessor) Process(ctx context.Context, item any) (any, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -72,21 +72,21 @@ func (p *WeatherProcessor) Process(ctx context.Context, item any) (any, error) {
 
 	forecast, ok := item.(*weather_entity.OpenMeteoForecast)
 	if !ok {
-		return nil, exception.NewBatchError("weather_processor", fmt.Sprintf("unexpected input item type: %T", item), nil, false, true)
+		return nil, exception.NewBatchError("hourly_forecast_transform_processor", fmt.Sprintf("unexpected input item type: %T", item), nil, false, true)
 	}
 
 	collectedAt := time.Now().In(tokyoLocation)
 
 	// The Reader returns OpenMeteoForecast containing only 1 hour of data, so only index 0 is processed.
 	if len(forecast.Hourly.Time) == 0 {
-		logger.Warnf("WeatherProcessor: No hourly data found to process. Filtering item.")
+		logger.Warnf("HourlyForecastTransformProcessor: No hourly data found to process. Filtering item.")
 		return nil, nil // Filtering (returning nil means the item is filtered out)
 	}
 
 	parsedTime, err := time.ParseInLocation("2006-01-02T15:04", forecast.Hourly.Time[0], tokyoLocation) // Custom layout matching API response format
 	if err != nil {
-		logger.Warnf("WeatherProcessor: Failed to parse time string '%s': %v", forecast.Hourly.Time[0], err)
-		return nil, exception.NewBatchError("weather_processor", fmt.Sprintf("failed to parse time: %s", forecast.Hourly.Time[0]), err, false, true)
+		logger.Warnf("HourlyForecastTransformProcessor: Failed to parse time string '%s': %v", forecast.Hourly.Time[0], err)
+		return nil, exception.NewBatchError("hourly_forecast_transform_processor", fmt.Sprintf("failed to parse time: %s", forecast.Hourly.Time[0]), err, false, true)
 	}
 
 	dataToStore := &weather_entity.WeatherDataToStore{
@@ -101,25 +101,25 @@ func (p *WeatherProcessor) Process(ctx context.Context, item any) (any, error) {
 	return dataToStore, nil // Returns a single *WeatherDataToStore
 }
 
-func (p *WeatherProcessor) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
+func (p *HourlyForecastTransformProcessor) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
 	p.executionContext = ec
-	logger.Debugf("WeatherProcessor.SetExecutionContext is called.")
+	logger.Debugf("HourlyForecastTransformProcessor.SetExecutionContext is called.")
 	return nil
 }
 
-func (p *WeatherProcessor) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
+func (p *HourlyForecastTransformProcessor) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
-	logger.Debugf("WeatherProcessor.GetExecutionContext is called.")
+	logger.Debugf("HourlyForecastTransformProcessor.GetExecutionContext is called.")
 	return p.executionContext, nil
 }
 
-var _ core.ItemProcessor[any, any] = (*WeatherProcessor)(nil)
+var _ core.ItemProcessor[any, any] = (*HourlyForecastTransformProcessor)(nil)

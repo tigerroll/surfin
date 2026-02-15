@@ -11,13 +11,13 @@ import (
 	"go.uber.org/fx"
 )
 
-// NewWeatherProcessorComponentBuilder creates a jsl.ComponentBuilder for the WeatherProcessor.
+// NewHourlyForecastTransformProcessorComponentBuilder creates a jsl.ComponentBuilder for the HourlyForecastTransformProcessor.
 // This function is called by Fx as a provider.
 //
 // Returns:
 //
-//	A jsl.ComponentBuilder function that can construct a WeatherProcessor.
-func NewWeatherProcessorComponentBuilder() jsl.ComponentBuilder {
+//	A jsl.ComponentBuilder function that can construct a HourlyForecastTransformProcessor.
+func NewHourlyForecastTransformProcessorComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver core.ExpressionResolver,
@@ -26,7 +26,7 @@ func NewWeatherProcessorComponentBuilder() jsl.ComponentBuilder {
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
 		_ = dbResolver
-		processor, err := NewWeatherProcessor(cfg, resolver, properties)
+		processor, err := NewHourlyForecastTransformProcessor(cfg, resolver, properties)
 		if err != nil {
 			return nil, err
 		}
@@ -34,21 +34,22 @@ func NewWeatherProcessorComponentBuilder() jsl.ComponentBuilder {
 	})
 }
 
-func RegisterWeatherProcessorBuilder(
+func RegisterHourlyForecastTransformProcessorBuilder(
 	jf *support.JobFactory,
 	builder jsl.ComponentBuilder,
 ) {
+	// Register the builder with the key "weatherItemProcessor" matching the 'ref' in JSL (job.yaml).
 	jf.RegisterComponentBuilder("weatherItemProcessor", builder)
-	logger.Debugf("WeatherProcessor ComponentBuilder registered with JobFactory. JSL ref: 'weatherItemProcessor'")
+	logger.Debugf("HourlyForecastTransformProcessor ComponentBuilder registered with JobFactory. JSL ref: 'weatherItemProcessor'")
 }
 
 var Module = fx.Options(
 	fx.Provide(fx.Annotate(
-		NewWeatherProcessorComponentBuilder,
+		NewHourlyForecastTransformProcessorComponentBuilder,
 		fx.ResultTags(`name:"weatherItemProcessor"`),
 	)),
 	fx.Invoke(fx.Annotate(
-		RegisterWeatherProcessorBuilder,
+		RegisterHourlyForecastTransformProcessorBuilder,
 		fx.ParamTags(``, `name:"weatherItemProcessor"`),
 	)),
 )
