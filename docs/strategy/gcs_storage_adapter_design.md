@@ -1,14 +1,14 @@
-# Google Cloud Storage (GCS) アダプター 方式設計/基本設計書
+# Google Cloud Storage (GCS) アダプター 方式設計/基本設計書 (Storage Adapter の GCS 実装)
 
 ## 1. はじめに
 
-本設計書は、バッチフレームワークにおけるGoogle Cloud Storage (GCS) アダプターの導入に関する方式設計および基本設計を定義します。これにより、フレームワークがGCSと連携し、オブジェクトストレージ上のデータを効率的に処理できるようになることを目指します。
+本設計書は、バッチフレームワークにおけるGoogle Cloud Storage (GCS) アダプターの導入に関する方式設計および基本設計を定義します。これにより、フレームワークがGCSと連携し、データストレージ上のデータを効率的に処理できるようになることを目指します。
 
 ## 2. 目的
 
 *   バッチフレームワークからGoogle Cloud Storageへのデータアクセスを可能にする。
-*   ファイル（JSON, Parquetなど）のアップロード、ダウンロード、リスト、削除といった基本的なオブジェクトストレージ操作を提供する。
-*   将来的な他のオブジェクトストレージサービス（Amazon S3, Azure Blob Storageなど）への拡張性を考慮し、`pkg/batch/core/adapter/interfaces.go` に定義されている汎用インターフェース (`ResourceConnection`, `ResourceProvider`, `ResourceConnectionResolver`) を活用した共通のインターフェースを導入する。
+*   ファイル（JSON, Parquetなど）のアップロード、ダウンロード、リスト、削除といった基本的なデータストレージ操作を提供する。
+*   将来的な他のデータストレージサービス（Amazon S3, Azure Blob Storage, ローカルファイルシステム, FTP/SFTP, データベースのBLOB/CLOBストレージなど）への拡張性を考慮し、`pkg/batch/core/adapter/interfaces.go` に定義されている汎用インターフェース (`ResourceConnection`, `ResourceProvider`, `ResourceConnectionResolver`) を活用した共通のインターフェースを導入する。
 
 ## 3. スコープ
 
@@ -23,7 +23,7 @@ GCSアダプターは、以下の機能を提供します。
 ## 4. 全体アーキテクチャにおける位置づけ
 
 GCSアダプターは、バッチフレームワークの「アダプター層」に位置づけられます。
-オブジェクトストレージ操作の汎用的な抽象化として `ObjectStorageAdapter` インターフェースを導入し、GCSアダプターはこのインターフェースを実装します。また、DBアダプターと同様に、接続の管理と解決のために `ObjectStorageProvider` および `ObjectStorageConnectionResolver` インターフェースを導入し、それぞれ `adapter.ResourceProvider` および `adapter.ResourceConnectionResolver` を埋め込みます。これにより、フレームワークのコアロジック（例: アイテムリーダー、アイテムライター）は、特定のクラウドプロバイダーに依存せず、共通のインターフェースを通じてオブジェクトストレージと連携できるようになります。
+データストレージ操作の汎用的な抽象化として `StorageAdapter` インターフェースを導入し、GCSアダプターはこのインターフェースを実装します。また、DBアダプターと同様に、接続の管理と解決のために `StorageProvider` および `StorageConnectionResolver` インターフェースを導入し、それぞれ `adapter.ResourceProvider` および `adapter.ResourceConnectionResolver` を埋め込みます。これにより、フレームワークのコアロジック（例: アイテムリーダー、アイテムライター）は、特定のストレージプロバイダーに依存せず、共通のインターフェースを通じてデータストレージと連携できるようになります。
 
 ```mermaid
 graph LR
@@ -32,9 +32,9 @@ graph LR
     end
 
     subgraph "アダプター層"
-        B1["ObjectStorageConnectionResolver<br>(adapter.ResourceConnectionResolver)"]
-        B2["ObjectStorageProvider<br>(adapter.ResourceProvider)"]
-        B3["ObjectStorageAdapter<br>(adapter.ResourceConnection)"]
+        B1["StorageConnectionResolver<br>(adapter.ResourceConnectionResolver)"]
+        B2["StorageProvider<br>(adapter.ResourceProvider)"]
+        B3["StorageAdapter<br>(adapter.ResourceConnection)"]
         C1["GCSConnectionResolver"]
         C2["GCSProvider"]
         C3["GCSAdapter"]
@@ -90,9 +90,9 @@ graph LR
         storageConfig "github.com/tigerroll/surfin/pkg/batch/adapter/storage/config"
     )
 
-    // ObjectStorageAdapter は汎用的なオブジェクトストレージ操作を定義します。
+    // StorageAdapter は汎用的なデータストレージ操作を定義します。
     // coreAdapter.ResourceConnection を埋め込み、リソース接続としての機能を提供します。
-    type ObjectStorageAdapter interface {
+    type StorageAdapter interface {
         coreAdapter.ResourceConnection // Close(), Type(), Name() を継承
 
         Upload(ctx context.Context, bucket, objectName string, data io.Reader, contentType string) error
@@ -102,29 +102,29 @@ graph LR
         Config() storageConfig.StorageConfig
     }
 
-    // ObjectStorageProvider はオブジェクトストレージ接続の取得と管理を行います。
+    // StorageProvider はデータストレージ接続の取得と管理を行います。
     // coreAdapter.ResourceProvider を埋め込み、汎用的なプロバイダ機能を提供します。
-    type ObjectStorageProvider interface {
+    type StorageProvider interface {
         coreAdapter.ResourceProvider // GetConnection(), CloseAll(), Type() を継承
 
-        // GetConnection は指定された名前の ObjectStorageAdapter 接続を取得します。
-        GetConnection(name string) (ObjectStorageAdapter, error)
+        // GetConnection は指定された名前の StorageAdapter 接続を取得します。
+        GetConnection(name string) (StorageAdapter, error)
         // ForceReconnect は指定された名前の既存の接続を強制的に閉じ、再確立します。
-        ForceReconnect(name string) (ObjectStorageAdapter, error)
+        ForceReconnect(name string) (StorageAdapter, error)
     }
 
-    // ObjectStorageConnectionResolver は実行コンテキストに基づいて適切なオブジェクトストレージ接続インスタンスを解決します。
+    // StorageConnectionResolver は実行コンテキストに基づいて適切なデータストレージ接続インスタンスを解決します。
     // coreAdapter.ResourceConnectionResolver を埋め込み、汎用的なリソース解決機能を提供します。
-    type ObjectStorageConnectionResolver interface {
+    type StorageConnectionResolver interface {
         coreAdapter.ResourceConnectionResolver // ResolveConnection(), ResolveConnectionName() を継承
 
-        // ResolveObjectStorageConnection は指定された名前の ObjectStorageAdapter 接続インスタンスを解決します。
+        // ResolveStorageConnection は指定された名前の StorageAdapter 接続インスタンスを解決します。
         // 返される接続が有効であり、必要に応じて再確立されることを保証します。
-        ResolveObjectStorageConnection(ctx context.Context, name string) (ObjectStorageAdapter, error)
+        ResolveStorageConnection(ctx context.Context, name string) (StorageAdapter, error)
 
-        // ResolveObjectStorageConnectionName は実行コンテキストに基づいてオブジェクトストレージ接続の名前を解決します。
+        // ResolveStorageConnectionName は実行コンテキストに基づいてデータストレージ接続の名前を解決します。
         // jobExecution と stepExecution はモデルパッケージとの循環依存を避けるため interface{} として渡されます。
-        ResolveObjectStorageConnectionName(ctx context.Context, jobExecution interface{}, stepExecution interface{}, defaultName string) (string, error)
+        ResolveStorageConnectionName(ctx context.Context, jobExecution interface{}, stepExecution interface{}, defaultName string) (string, error)
     }
     ```
 
@@ -134,10 +134,10 @@ graph LR
 *   **パッケージ**: `gcs`
 
 *   **実装構造体**: `gcsAdapter`
-    *   **目的**: `ObjectStorageAdapter` インターフェースを実装し、GCSへの具体的な操作を提供します。
+    *   **目的**: `StorageAdapter` インターフェースを実装し、GCSへの具体的な操作を提供します。
     *   **内部状態**: 内部に `*storage.Client` (Google Cloud Storage Go SDKのクライアント) と、`pkg/batch/adapter/storage/config.StorageConfig` を保持します。
-    *   **実装インターフェース**: `ObjectStorageAdapter` (および `adapter.ResourceConnection`)
-    *   **コンストラクタ**: `NewGCSAdapter(ctx context.Context, cfg storageConfig.StorageConfig, name string) (ObjectStorageAdapter, error)`
+    *   **実装インターフェース**: `StorageAdapter` (および `adapter.ResourceConnection`)
+    *   **コンストラクタ**: `NewGCSAdapter(ctx context.Context, cfg storageConfig.StorageConfig, name string) (StorageAdapter, error)`
         *   このコンストラクタは、`GCSProvider` の内部で具体的な `gcsAdapter` インスタンスを生成するために使用されます。
         *   `pkg/batch/adapter/storage/config.StorageConfig` オブジェクトと、解決するストレージ接続の名前 (`name`) を受け取ります。
     *   **依存ライブラリ**: `cloud.google.com/go/storage`
@@ -156,18 +156,18 @@ graph LR
         | `Config` | アダプターが使用している `pkg/batch/adapter/storage/config.StorageConfig` を返します。 |
 
 *   **実装構造体**: `GCSProvider`
-    *   **目的**: `ObjectStorageProvider` インターフェースを実装し、GCS接続のライフサイクル管理（取得、再接続、クローズ）を行います。
+    *   **目的**: `StorageProvider` インターフェースを実装し、GCS接続のライフサイクル管理（取得、再接続、クローズ）を行います。
     *   **内部状態**: アプリケーション全体の `config.Config` と、管理する `gcsAdapter` インスタンスのマップを保持します。
-    *   **実装インターフェース**: `ObjectStorageProvider` (および `adapter.ResourceProvider`)
-    *   **コンストラクタ**: `NewGCSProvider(cfg *config.Config) ObjectStorageProvider`
+    *   **実装インターフェース**: `StorageProvider` (および `adapter.ResourceProvider`)
+    *   **コンストラクタ**: `NewGCSProvider(cfg *config.Config) StorageProvider`
     *   **メソッド**: `GetConnection`, `ForceReconnect`, `CloseAll`, `Type` を実装します。`GetConnection` は、設定から `storageConfig.StorageConfig` をデコードし、`NewGCSAdapter` を呼び出して `gcsAdapter` インスタンスを生成・管理します。
 
 *   **実装構造体**: `GCSConnectionResolver`
-    *   **目的**: `ObjectStorageConnectionResolver` インターフェースを実装し、複数の `ObjectStorageProvider` (GCS, S3など) を管理し、要求された接続名に基づいて適切な `ObjectStorageAdapter` を解決する役割を担います。
-    *   **内部状態**: `ObjectStorageProvider` のマップとアプリケーション全体の `config.Config` を保持します。
-    *   **実装インターフェース**: `ObjectStorageConnectionResolver` (および `adapter.ResourceConnectionResolver`)
-    *   **コンストラクタ**: `NewGCSConnectionResolver(providers []ObjectStorageProvider, cfg *config.Config) ObjectStorageConnectionResolver`
-    *   **メソッド**: `ResolveConnection`, `ResolveConnectionName`, `ResolveObjectStorageConnection`, `ResolveObjectStorageConnectionName` を実装します。`ResolveObjectStorageConnection` は、設定から接続タイプを判断し、対応する `ObjectStorageProvider` を介して接続を取得します。
+    *   **目的**: `StorageConnectionResolver` インターフェースを実装し、複数の `StorageProvider` (GCS, S3, LocalFSなど) を管理し、要求された接続名に基づいて適切な `StorageAdapter` を解決する役割を担います。
+    *   **内部状態**: `StorageProvider` のマップとアプリケーション全体の `config.Config` を保持します。
+    *   **実装インターフェース**: `StorageConnectionResolver` (および `adapter.ResourceConnectionResolver`)
+    *   **コンストラクタ**: `NewGCSConnectionResolver(providers []StorageProvider, cfg *config.Config) StorageConnectionResolver`
+    *   **メソッド**: `ResolveConnection`, `ResolveConnectionName`, `ResolveStorageConnection`, `ResolveStorageConnectionName` を実装します。`ResolveStorageConnection` は、設定から接続タイプを判断し、対応する `StorageProvider` を介して接続を取得します。
 
 ## 6. 認証・認可
 
@@ -192,9 +192,9 @@ GCSアダプターは、Google Cloud Storageへの認証に以下の方法をサ
 
 package config
 
-// StorageConfig holds configuration for a single object storage connection.
+// StorageConfig holds configuration for a single storage connection.
 type StorageConfig struct {
-	Type            string `yaml:"type"`             // Type of storage (e.g., "gcs", "s3").
+	Type            string `yaml:"type"`             // Type of storage (e.g., "gcs", "s3", "local", "ftp", "sftp").
 	BucketName      string `yaml:"bucket_name"`      // Default bucket name for operations.
 	CredentialsFile string `yaml:"credentials_file"` // Path to credentials file (e.g., service account key for GCS).
 }
@@ -208,7 +208,7 @@ type DatasourcesConfig map[string]StorageConfig
 surfin:
   # ... その他のフレームワーク共通設定
   adapter: # アダプターの設定
-    storage: # ストレージアダプターの設定
+    storage: # データストレージアダプターの設定
       gcs: # database と同じで、任意の名称を指定できる
         type: gcs
         bucket_name: your-default-gcs-bucket
@@ -223,8 +223,8 @@ surfin:
 ## 8. 考慮事項
 
 *   **リソース管理**:
-    *   `ObjectStorageAdapter` インターフェースの `Close()` メソッド（`adapter.ResourceConnection` から継承）を適切に実装し、GCSクライアントのリソースを確実に解放する必要があります。
-    *   Fxライフサイクルと連携させ、アプリケーション終了時に `ObjectStorageProvider` の `CloseAll()` メソッドが呼び出されるようにします。
+    *   `StorageAdapter` インターフェースの `Close()` メソッド（`adapter.ResourceConnection` から継承）を適切に実装し、GCSクライアントのリソースを確実に解放する必要があります。
+    *   Fxライフサイクルと連携させ、アプリケーション終了時に `StorageProvider` の `CloseAll()` メソッドが呼び出されるようにします。
 *   **エラーハンドリング**:
     *   設定のデコード失敗や、GCSクライアントの初期化失敗など、アダプターの初期化段階でのエラーハンドリングを適切に行う必要があります。
 
