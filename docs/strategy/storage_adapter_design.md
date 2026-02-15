@@ -1,4 +1,4 @@
-# Google Cloud Storage (GCS) アダプター 方式設計/基本設計書 (Storage Adapter の GCS 実装)
+# Storage Adapter 方式設計/基本設計書
 
 ## 1. はじめに
 
@@ -9,6 +9,7 @@
 *   バッチフレームワークからGoogle Cloud Storageへのデータアクセスを可能にする。
 *   ファイル（JSON, Parquetなど）のアップロード、ダウンロード、リスト、削除といった基本的なデータストレージ操作を提供する。
 *   将来的な他のデータストレージサービス（Amazon S3, Azure Blob Storage, ローカルファイルシステム, FTP/SFTP, データベースのBLOB/CLOBストレージなど）への拡張性を考慮し、`pkg/batch/core/adapter/interfaces.go` に定義されている汎用インターフェース (`ResourceConnection`, `ResourceProvider`, `ResourceConnectionResolver`) を活用した共通のインターフェースを導入する。
+*   これにより、バッチフレームワークのアイテムリーダーやアイテムライターといったコアコンポーネントが、特定のストレージ実装（GCS、ローカルファイルシステムなど）に依存せず、共通のインターフェースを通じてデータにアクセスできるようになることを目指します。
 
 ## 3. スコープ
 
@@ -47,6 +48,7 @@ graph LR
     B2 -- "接続インスタンス" --> B3
     B1 -- "実装" --> C1
     B2 -- "実装" --> C2
+    B3 -- "汎用インターフェースを介したデータアクセス" --> A
     B3 -- "実装" --> C3
     C3 -- "Go SDK利用" --> D
 ```
@@ -57,11 +59,11 @@ graph LR
 
 *   **ファイルパス**: `pkg/batch/adapter/storage/interfaces.go`
 *   **パッケージ**: `storage`
-*   **インターフェース**: `ObjectStorageAdapter`
+*   **インターフェース**: `StorageAdapter`
     *   **目的**:
-        *   汎用的なオブジェクトストレージ操作を定義する。
+        *   汎用的なストレージ操作を定義する。
         *   `pkg/batch/core/adapter.ResourceConnection` インターフェースを埋め込むことで、汎用的なリソース接続としての機能（リソースタイプ、名前、クローズ）を提供する。
-        *   これにより、具体的なストレージサービス（GCS, S3など）に依存しない形で、ファイル操作を行うことができる。
+        *   これにより、具体的なストレージサービス（GCS, S3, ローカルファイルシステムなど）に依存しない形で、ファイル操作を行うことができる。
     *   **メソッド**:
 
         | メソッド名 | 説明 |
@@ -163,10 +165,51 @@ graph LR
     *   **メソッド**: `GetConnection`, `ForceReconnect`, `CloseAll`, `Type` を実装します。`GetConnection` は、設定から `storageConfig.StorageConfig` をデコードし、`NewGCSAdapter` を呼び出して `gcsAdapter` インスタンスを生成・管理します。
 
 *   **実装構造体**: `GCSConnectionResolver`
-    *   **目的**: `StorageConnectionResolver` インターフェースを実装し、複数の `StorageProvider` (GCS, S3, LocalFSなど) を管理し、要求された接続名に基づいて適切な `StorageAdapter` を解決する役割を担います。
+    *   **目的**: `StorageConnectionResolver` インターフェースを実装し、複数の `StorageProvider` (GCS, S3, local など) を管理し、要求された接続名に基づいて適切な `StorageAdapter` を解決する役割を担います。
     *   **内部状態**: `StorageProvider` のマップとアプリケーション全体の `config.Config` を保持します。
     *   **実装インターフェース**: `StorageConnectionResolver` (および `adapter.ResourceConnectionResolver`)
     *   **コンストラクタ**: `NewGCSConnectionResolver(providers []StorageProvider, cfg *config.Config) StorageConnectionResolver`
+    *   **メソッド**: `ResolveConnection`, `ResolveConnectionName`, `ResolveStorageConnection`, `ResolveStorageConnectionName` を実装します。`ResolveStorageConnection` は、設定から接続タイプを判断し、対応する `StorageProvider` を介して接続を取得します。
+
+### 5.3. ローカルファイルシステムアダプター実装
+
+*   **ファイルパス**: `pkg/batch/adapter/storage/local/adapter.go` (LocalAdapter, LocalProvider, LocalConnectionResolver)
+*   **パッケージ**: `local`
+
+*   **実装構造体**: `localAdapter`
+    *   **目的**: `StorageAdapter` インターフェースを実装し、ローカルファイルシステムへの具体的な操作を提供します。
+    *   **内部状態**: `pkg/batch/adapter/storage/config.StorageConfig` を保持し、特に `BaseDir` を利用してファイル操作を行います。
+    *   **実装インターフェース**: `StorageAdapter` (および `adapter.ResourceConnection`)
+    *   **コンストラクタ**: `NewLocalAdapter(cfg storageConfig.StorageConfig, name string) (StorageAdapter, error)`
+        *   このコンストラクタは、`LocalProvider` の内部で具体的な `localAdapter` インスタンスを生成するために使用されます。
+        *   `pkg/batch/adapter/storage/config.StorageConfig` オブジェクトと、解決するストレージ接続の名前 (`name`) を受け取ります。
+        *   `BaseDir` が指定されていない場合や無効なパスの場合にはエラーを返すようにします。
+    *   **依存ライブラリ**: 標準の `os`, `path/filepath`, `io` パッケージなど。
+    *   **メソッド実装**:
+
+        | メソッド名 | 説明 |
+        |---|---|
+        | `Close` | ローカルファイルシステムアダプターは特別なリソースを保持しないため、何もしません。 |
+        | `Type` | "local" を返します。 |
+        | `Name` | この接続の名前を返します。 |
+        | `Upload` | 指定されたバケット（ローカルではディレクトリとして扱われる）とオブジェクト名（ファイルパス）にデータを書き込みます。`BaseDir` を基準とした相対パスとしてファイルを生成します。必要に応じてディレクトリを作成します。 |
+        | `Download` | 指定されたバケットとオブジェクト名からデータを読み込みます。`BaseDir` を基準とした相対パスとしてファイルを読み込みます。 |
+        | `ListObjects` | 指定されたバケットとプレフィックス内のファイルをリストし、ファイル名をコールバック関数 `fn` に渡して逐次処理します。`BaseDir` を基準とした相対パスとしてディレクトリを走査します。 |
+        | `DeleteObject` | 指定されたバケットとオブジェクト名を削除します。`BaseDir` を基準とした相対パスとしてファイルを削除します。 |
+        | `Config` | アダプターが使用している `pkg/batch/adapter/storage/config.StorageConfig` を返します。 |
+
+*   **実装構造体**: `LocalProvider`
+    *   **目的**: `StorageProvider` インターフェースを実装し、ローカルファイルシステム接続のライフサイクル管理（取得、再接続、クローズ）を行います。
+    *   **内部状態**: アプリケーション全体の `config.Config` と、管理する `localAdapter` インスタンスのマップを保持します。
+    *   **実装インターフェース**: `StorageProvider` (および `adapter.ResourceProvider`)
+    *   **コンストラクタ**: `NewLocalProvider(cfg *config.Config) StorageProvider`
+    *   **メソッド**: `GetConnection`, `ForceReconnect`, `CloseAll`, `Type` を実装します。`GetConnection` は、設定から `storageConfig.StorageConfig` をデコードし、`NewLocalAdapter` を呼び出して `localAdapter` インスタンスを生成・管理します。
+
+*   **実装構造体**: `LocalConnectionResolver`
+    *   **目的**: `StorageConnectionResolver` インターフェースを実装し、複数の `StorageProvider` (GCS, S3, local など) を管理し、要求された接続名に基づいて適切な `StorageAdapter` を解決する役割を担います。
+    *   **内部状態**: `StorageProvider` のマップとアプリケーション全体の `config.Config` を保持します。
+    *   **実装インターフェース**: `StorageConnectionResolver` (および `adapter.ResourceConnectionResolver`)
+    *   **コンストラクタ**: `NewLocalConnectionResolver(providers []StorageProvider, cfg *config.Config) StorageConnectionResolver`
     *   **メソッド**: `ResolveConnection`, `ResolveConnectionName`, `ResolveStorageConnection`, `ResolveStorageConnectionName` を実装します。`ResolveStorageConnection` は、設定から接続タイプを判断し、対応する `StorageProvider` を介して接続を取得します。
 
 ## 6. 認証・認可
@@ -197,6 +240,7 @@ type StorageConfig struct {
 	Type            string `yaml:"type"`             // Type of storage (e.g., "gcs", "s3", "local", "ftp", "sftp").
 	BucketName      string `yaml:"bucket_name"`      // Default bucket name for operations.
 	CredentialsFile string `yaml:"credentials_file"` // Path to credentials file (e.g., service account key for GCS).
+	BaseDir         string `yaml:"base_dir"`         // Base directory for local file system operations.
 }
 
 // DatasourcesConfig holds a map of named storage configurations.
@@ -218,6 +262,10 @@ surfin:
         bucket_name: your-s3-bucket
         region: ap-northeast-1
         credentials_file: "/path/to/s3_credentials.json"
+      local:
+        type: local
+        base_dir: "/tmp/batch_data" # ローカルファイル操作のベースディレクトリ
+        # bucket_name や credentials_file は local タイプでは不要
 ```
 
 ## 8. 考慮事項
@@ -228,7 +276,18 @@ surfin:
 *   **エラーハンドリング**:
     *   設定のデコード失敗や、GCSクライアントの初期化失敗など、アダプターの初期化段階でのエラーハンドリングを適切に行う必要があります。
 
-## 9. 課題と修正指針
+## 9.1. 汎用的なアイテムリーダー/ライターの実現
+
+| 項目 | 説明 |
+|---|---|
+| **目的** | バッチフレームワークのアイテムリーダーやアイテムライターが、特定のストレージ実装に依存せず、共通のインターフェースを通じてデータにアクセスできるようにする。 |
+| **設計** | 本設計の核となるのは、`StorageAdapter` インターフェースによるストレージ操作の抽象化です。これにより、バッチフレームワークの `ItemReader` や `ItemWriter` といったコンポーネントは、特定のストレージ技術（GCS、S3、ローカルファイルシステムなど）に直接依存することなく、共通の `StorageAdapter` インターフェースを介してデータにアクセスします。 |
+| **具体例** | 例えば、`ItemReader` はコンストラクタで `storage.StorageAdapter` を受け取るように設計されます。実行時に設定ファイルで `type: gcs` を指定すればGCSアダプターが、`type: local` を指定すればローカルファイルシステムアダプターが注入され、`ItemReader` の内部ロジックを変更することなく、異なるストレージからデータを読み込むことが可能になります。これは、ユーザーが懸念している「GCSに特化した step/reader」が作成されることを防ぎ、高い再利用性と柔軟性を提供します。 |
+| **実装** | `ItemReader` や `ItemWriter` の実装は、`StorageAdapter` インターフェースのメソッド（`Upload`, `Download`, `ListObjects`, `DeleteObject`）のみを利用します。これにより、GCSアダプターの実装が完了した後も、これらのコアコンポーネントは変更不要で、他のストレージアダプター（例: ローカルファイルシステムアダプター）が追加された際にもそのまま利用できます。 |
+
+---
+
+## 10. 課題と修正指針
 
 本セクションでは、GCSアダプターの設計における具体的な課題と、それに対する修正指針を詳述します。
 
