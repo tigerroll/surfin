@@ -38,8 +38,8 @@
     *   S3: `pkg/batch/adapter/storage/s3/` (例: `s3_adapter.go`)
     *   GCS: `pkg/batch/adapter/storage/gcs/` (例: `gcs_adapter.go`)
 *   **内容:**
-    *   `pkg/batch/core/adapter/storage.go` に、`ObjectStorageAdapter` という汎用的なオブジェクトストレージ操作インターフェースを定義します。
-    *   S3およびGCSそれぞれに対応するアダプター（例: `gcsAdapter`）は、この `ObjectStorageAdapter` インターフェースを実装します。
+    *   `pkg/batch/core/adapter/storage.go` に、`StorageAdapter` という汎用的なストレージ操作インターフェースを定義します。
+    *   S3およびGCSそれぞれに対応するアダプター（例: `gcsAdapter`）は、この `StorageAdapter` インターフェースを実装します。
     *   ファイル（JSON, Parquetなど）のアップロード、ダウンロード、リスト、削除などの基本操作をサポートします。
     *   **設定:** `pkg/batch/core/config/config.go` に、`Datasources` と同様に、名前付きのオブジェクトストレージ接続設定（例: `StorageConnections map[string]StorageConfig`）を追加することを検討します。これにより、複数のストレージ接続を一元的に管理し、名前で解決できるようになります。
 
