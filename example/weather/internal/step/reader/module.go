@@ -11,18 +11,18 @@ import (
 	"go.uber.org/fx"
 )
 
-// NewWeatherReaderComponentBuilderParams defines the dependencies for NewWeatherReaderComponentBuilder.
-type NewWeatherReaderComponentBuilderParams struct {
+// NewHourlyForecastAPIReaderComponentBuilderParams defines the dependencies for NewHourlyForecastAPIReaderComponentBuilder.
+type NewHourlyForecastAPIReaderComponentBuilderParams struct {
 	fx.In
 }
 
-// NewWeatherReaderComponentBuilder creates a jsl.ComponentBuilder for the WeatherReader.
+// NewHourlyForecastAPIReaderComponentBuilder creates a jsl.ComponentBuilder for the HourlyForecastAPIReader.
 // This function is called by Fx as a provider.
 //
 // Returns:
 //
-//	A jsl.ComponentBuilder function that can construct a WeatherReader.
-func NewWeatherReaderComponentBuilder() jsl.ComponentBuilder {
+//	A jsl.ComponentBuilder function that can construct a HourlyForecastAPIReader.
+func NewHourlyForecastAPIReaderComponentBuilder() jsl.ComponentBuilder {
 	// Returns the actual builder function that JobFactory calls to construct the component.
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
@@ -32,7 +32,7 @@ func NewWeatherReaderComponentBuilder() jsl.ComponentBuilder {
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
 		_ = dbResolver
-		reader, err := NewWeatherReader(cfg, resolver, properties)
+		reader, err := NewHourlyForecastAPIReader(cfg, resolver, properties)
 		if err != nil {
 			return nil, err
 		}
@@ -40,24 +40,24 @@ func NewWeatherReaderComponentBuilder() jsl.ComponentBuilder {
 	})
 }
 
-// RegisterWeatherReaderBuilder is an Fx invoke function that registers the created ComponentBuilder with the JobFactory.
-func RegisterWeatherReaderBuilder(
+// RegisterHourlyForecastAPIReaderBuilder is an Fx invoke function that registers the created ComponentBuilder with the JobFactory.
+func RegisterHourlyForecastAPIReaderBuilder(
 	jf *support.JobFactory,
 	builder jsl.ComponentBuilder,
 ) {
 	// Register the builder with the key "weatherItemReader" matching the 'ref' in JSL (job.yaml).
 	jf.RegisterComponentBuilder("weatherItemReader", builder)
-	logger.Debugf("ComponentBuilder for WeatherReader registered with JobFactory. JSL ref: 'weatherItemReader'")
+	logger.Debugf("ComponentBuilder for HourlyForecastAPIReader registered with JobFactory. JSL ref: 'weatherItemReader'")
 }
 
 // Module defines Fx options for the weatherReader component.
 var Module = fx.Options(
 	fx.Provide(fx.Annotate(
-		NewWeatherReaderComponentBuilder,
+		NewHourlyForecastAPIReaderComponentBuilder,
 		fx.ResultTags(`name:"weatherItemReader"`),
 	)),
 	fx.Invoke(fx.Annotate(
-		RegisterWeatherReaderBuilder,
+		RegisterHourlyForecastAPIReaderBuilder,
 		fx.ParamTags(``, `name:"weatherItemReader"`),
 	)),
 )

@@ -16,26 +16,26 @@ import (
 
 import coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 
-// WeatherWriterComponentBuilderParams defines the dependencies for [NewWeatherWriterComponentBuilder].
+// HourlyForecastDatabaseWriterComponentBuilderParams defines the dependencies for [NewHourlyForecastDatabaseWriterComponentBuilder].
 //
 // Parameters:
 //
 //	fx.In: Fx-injected parameters.
 //	AllDBConnections: A map of all established database connections, keyed by their name. This is provided by the main application module.
-type WeatherWriterComponentBuilderParams struct {
+type HourlyForecastDatabaseWriterComponentBuilderParams struct {
 	fx.In
 	AllDBConnections map[string]database.DBConnection
 }
 
-// NewWeatherWriterComponentBuilder creates a [jsl.ComponentBuilder] for the weatherItemWriter.
+// NewHourlyForecastDatabaseWriterComponentBuilder creates a [jsl.ComponentBuilder] for the hourlyForecastDatabaseWriter.
 //
 // It now receives its core dependencies (AllDBConnections) via Fx.
 //
 // Returns:
 //
-//	A jsl.ComponentBuilder function that can construct a WeatherItemWriter.
-func NewWeatherWriterComponentBuilder(p WeatherWriterComponentBuilderParams) jsl.ComponentBuilder {
-	// Returns the builder function with a standard signature that JobFactory calls to construct the component.
+//	A jsl.ComponentBuilder function that can construct a HourlyForecastDatabaseWriter.
+func NewHourlyForecastDatabaseWriterComponentBuilder(p HourlyForecastDatabaseWriterComponentBuilderParams) jsl.ComponentBuilder {
+	// Returns the actual builder function with a standard signature that JobFactory calls to construct the component.
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver core.ExpressionResolver, // The expression resolver for dynamic property resolution.
@@ -47,9 +47,9 @@ func NewWeatherWriterComponentBuilder(p WeatherWriterComponentBuilderParams) jsl
 		if !ok {
 			return nil, fmt.Errorf("dbResolver is not of type database.DBConnectionResolver")
 		}
-		// Pass allDBConnections injected from Fx to NewWeatherWriter.
+		// Pass allDBConnections injected from Fx to NewHourlyForecastDatabaseWriter.
 		// The p.AllTxManagers dependency was removed as TxManager is now created on demand. This comment is now redundant.
-		writer, err := NewWeatherWriter(cfg, p.AllDBConnections, resolver, dbConnResolver, properties)
+		writer, err := NewHourlyForecastDatabaseWriter(cfg, p.AllDBConnections, resolver, dbConnResolver, properties)
 		if err != nil {
 			return nil, err
 		}
@@ -57,30 +57,30 @@ func NewWeatherWriterComponentBuilder(p WeatherWriterComponentBuilderParams) jsl
 	})
 }
 
-// RegisterWeatherWriterBuilder registers the created jsl.ComponentBuilder with the support.JobFactory.
-// This makes the "weatherItemWriter" component available for use in JSL definitions.
+// RegisterHourlyForecastDatabaseWriterBuilder registers the created jsl.ComponentBuilder with the support.JobFactory.
+// This makes the "hourlyForecastDatabaseWriter" component available for use in JSL definitions.
 //
 // Parameters:
 //
 //	jf: The JobFactory instance to register the builder with.
-//	builder: The jsl.ComponentBuilder for the WeatherItemWriter.
-func RegisterWeatherWriterBuilder(
+//	builder: The jsl.ComponentBuilder for the HourlyForecastDatabaseWriter.
+func RegisterHourlyForecastDatabaseWriterBuilder(
 	jf *support.JobFactory,
 	builder jsl.ComponentBuilder,
 ) {
 	jf.RegisterComponentBuilder("weatherItemWriter", builder)
-	logger.Debugf("ComponentBuilder for WeatherWriter registered with JobFactory. JSL ref: 'weatherItemWriter'")
+	logger.Debugf("ComponentBuilder for HourlyForecastDatabaseWriter registered with JobFactory. JSL ref: 'weatherItemWriter'")
 }
 
 // Module defines the Fx options for the weather writer component.
 // It provides the component builder and registers it with the support.JobFactory.
 var Module = fx.Options(
 	fx.Provide(fx.Annotate(
-		NewWeatherWriterComponentBuilder,
+		NewHourlyForecastDatabaseWriterComponentBuilder,
 		fx.ResultTags(`name:"weatherItemWriter"`),
 	)),
 	fx.Invoke(fx.Annotate(
-		RegisterWeatherWriterBuilder,
+		RegisterHourlyForecastDatabaseWriterBuilder,
 		fx.ParamTags(``, `name:"weatherItemWriter"`),
 	)),
 )

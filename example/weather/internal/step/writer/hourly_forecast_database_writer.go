@@ -17,14 +17,14 @@ import (
 	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 )
 
-// WeatherWriterConfig holds configuration specific to the WeatherItemWriter, typically for JSL property binding.
-type WeatherWriterConfig struct {
+// HourlyForecastDatabaseWriterConfig holds configuration specific to the HourlyForecastDatabaseWriter, typically for JSL property binding.
+type HourlyForecastDatabaseWriterConfig struct {
 	TargetDBName string `yaml:"targetDBName,omitempty"` // TargetDBName is the name of the database connection to use.
 	Database     string `yaml:"database,omitempty"`     // Database is an alias for TargetDBName, for backward compatibility.
 }
 
-// WeatherItemWriter implements [port.ItemWriter] for writing weather data to a database.
-type WeatherItemWriter struct {
+// HourlyForecastDatabaseWriter implements [port.ItemWriter] for writing weather data to a database.
+type HourlyForecastDatabaseWriter struct {
 	Repo appRepo.WeatherRepository // Repo is the repository instance, initialized in the [Open] method based on the database type.
 
 	AllDBConnections map[string]database.DBConnection // AllDBConnections is a map of all established database connections, keyed by their name.
@@ -41,10 +41,10 @@ type WeatherItemWriter struct {
 	dbResolver  database.DBConnectionResolver // dbResolver is the database connection resolver.
 }
 
-// Verify that WeatherItemWriter implements the [port.ItemWriter[any]] interface.
-var _ port.ItemWriter[any] = (*WeatherItemWriter)(nil)
+// Verify that HourlyForecastDatabaseWriter implements the [port.ItemWriter[any]] interface.
+var _ port.ItemWriter[any] = (*HourlyForecastDatabaseWriter)(nil)
 
-// NewWeatherWriter creates a new [WeatherItemWriter] instance.
+// NewHourlyForecastDatabaseWriter creates a new [HourlyForecastDatabaseWriter] instance.
 //
 // Parameters:
 //
@@ -54,17 +54,17 @@ var _ port.ItemWriter[any] = (*WeatherItemWriter)(nil)
 //	dbResolver: A [adapter.DBConnectionResolver] for resolving database connections.
 //
 // properties is a map of JSL properties for this writer.
-func NewWeatherWriter(
+func NewHourlyForecastDatabaseWriter(
 	cfg *batch_config.Config,
 	allDBConnections map[string]database.DBConnection,
 	resolver port.ExpressionResolver,
 	dbResolver database.DBConnectionResolver,
 	properties map[string]string,
-) (*WeatherItemWriter, error) {
+) (*HourlyForecastDatabaseWriter, error) {
 
-	writerCfg := &WeatherWriterConfig{}
+	writerCfg := &HourlyForecastDatabaseWriterConfig{}
 	if err := configbinder.BindProperties(properties, writerCfg); err != nil {
-		return nil, exception.NewBatchError("weather_writer", "Failed to bind properties", err, false, false)
+		return nil, exception.NewBatchError("hourly_forecast_database_writer", "Failed to bind properties", err, false, false)
 	}
 
 	// Prioritize 'targetDBName' specified in JSL, fallback to 'database', then default.
@@ -82,7 +82,7 @@ func NewWeatherWriter(
 		return nil, fmt.Errorf("database connection '%s' not found", dbName)
 	}
 
-	return &WeatherItemWriter{
+	return &HourlyForecastDatabaseWriter{
 		// Repo is initialized in Open.
 		// The TxManager is no longer directly held by the writer; it's created on demand
 		// by the ChunkStep using the TxManagerFactory and passed to the Write method.
@@ -106,13 +106,13 @@ func NewWeatherWriter(
 //	ctx: The context for the operation.
 //
 // ec is the ExecutionContext to initialize the writer with.
-func (w *WeatherItemWriter) Open(ctx context.Context, ec model.ExecutionContext) error {
+func (w *HourlyForecastDatabaseWriter) Open(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
-	logger.Debugf("WeatherItemWriter.Open is called.")
+	logger.Debugf("HourlyForecastDatabaseWriter.Open is called.")
 
 	conn, ok := w.AllDBConnections[w.TargetDBName]
 	if !ok {
@@ -146,7 +146,7 @@ func (w *WeatherItemWriter) Open(ctx context.Context, ec model.ExecutionContext)
 //
 // tx is the current transaction.
 // items is the list of items to be written.
-func (w *WeatherItemWriter) Write(ctx context.Context, tx tx.Tx, items []any) error {
+func (w *HourlyForecastDatabaseWriter) Write(ctx context.Context, tx tx.Tx, items []any) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -161,7 +161,7 @@ func (w *WeatherItemWriter) Write(ctx context.Context, tx tx.Tx, items []any) er
 	for _, item := range items {
 		typedItem, ok := item.(*weather_entity.WeatherDataToStore)
 		if !ok {
-			return exception.NewBatchError("weather_writer", fmt.Sprintf("unexpected input item type: %T, expected type: *weather_entity.WeatherDataToStore", item), nil, false, true)
+			return exception.NewBatchError("hourly_forecast_database_writer", fmt.Sprintf("unexpected input item type: %T, expected type: *weather_entity.WeatherDataToStore", item), nil, false, true)
 		}
 		if typedItem != nil {
 			finalDataToStore = append(finalDataToStore, *typedItem)
@@ -174,13 +174,13 @@ func (w *WeatherItemWriter) Write(ctx context.Context, tx tx.Tx, items []any) er
 	}
 
 	if w.Repo == nil {
-		return exception.NewBatchError("weather_writer", "WeatherRepository is not initialized (was Open called?)", nil, true, false)
+		return exception.NewBatchError("hourly_forecast_database_writer", "WeatherRepository is not initialized (was Open called?)", nil, true, false)
 	}
 
 	err := w.Repo.BulkInsertWeatherData(ctx, tx, finalDataToStore)
 	if err != nil {
 		// Changed isRetryable to true based on common DB error handling.
-		return exception.NewBatchError("weather_writer", "failed to bulk insert weather data", err, true, true)
+		return exception.NewBatchError("hourly_forecast_database_writer", "failed to bulk insert weather data", err, true, true)
 	}
 
 	logger.Debugf("Saved chunk of weather data items to the database. Count: %d", len(finalDataToStore))
@@ -190,16 +190,16 @@ func (w *WeatherItemWriter) Write(ctx context.Context, tx tx.Tx, items []any) er
 // Close releases any resources held by the writer.
 //
 // ctx is the context for the operation.
-func (w *WeatherItemWriter) Close(ctx context.Context) error {
+func (w *HourlyForecastDatabaseWriter) Close(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
-	logger.Debugf("WeatherItemWriter.Close is called.")
+	logger.Debugf("HourlyForecastDatabaseWriter.Close is called.")
 	// Save internal state to the Step's ExecutionContext.
 	if err := w.saveWriterStateToExecutionContext(ctx); err != nil {
-		logger.Errorf("WeatherWriter.Close: failed to save internal state: %v", err)
+		logger.Errorf("HourlyForecastDatabaseWriter.Close: failed to save internal state: %v", err)
 	}
 	return nil
 }
@@ -208,7 +208,7 @@ func (w *WeatherItemWriter) Close(ctx context.Context) error {
 //
 // ctx is the context for the operation.
 // ec is the ExecutionContext to set.
-func (w *WeatherItemWriter) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
+func (w *HourlyForecastDatabaseWriter) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -223,13 +223,13 @@ func (w *WeatherItemWriter) SetExecutionContext(ctx context.Context, ec model.Ex
 // ctx is the context for the operation.
 //
 // Returns the current ExecutionContext and an error if retrieval fails.
-func (w *WeatherItemWriter) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
+func (w *HourlyForecastDatabaseWriter) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
-	logger.Debugf("WeatherWriter.GetExecutionContext is called.")
+	logger.Debugf("HourlyForecastDatabaseWriter.GetExecutionContext is called.")
 
 	// Save internal state to "writer_context" in the Step ExecutionContext.
 	if err := w.saveWriterStateToExecutionContext(ctx); err != nil {
@@ -240,40 +240,40 @@ func (w *WeatherItemWriter) GetExecutionContext(ctx context.Context) (model.Exec
 }
 
 // GetTargetDBName returns the name of the target database for this writer.
-func (w *WeatherItemWriter) GetTargetDBName() string {
+func (w *HourlyForecastDatabaseWriter) GetTargetDBName() string {
 	return w.TargetDBName
 }
 
 // GetTableName returns the name of the target table for this writer.
-func (w *WeatherItemWriter) GetTableName() string {
+func (w *HourlyForecastDatabaseWriter) GetTableName() string {
 	return w.TableName
 }
 
 // restoreWriterStateFromExecutionContext extracts writer-specific state from the step's ExecutionContext.
-func (w *WeatherItemWriter) restoreWriterStateFromExecutionContext(ctx context.Context) error {
+func (w *HourlyForecastDatabaseWriter) restoreWriterStateFromExecutionContext(ctx context.Context) error {
 	// Extract writer-specific context from stepExecutionContext.
 	writerCtxVal, ok := w.stepExecutionContext.Get("writer_context")
 	var writerCtx model.ExecutionContext
 	if !ok || writerCtxVal == nil {
 		writerCtx = model.NewExecutionContext()
 		w.stepExecutionContext.Put("writer_context", writerCtx)
-		logger.Debugf("WeatherWriter: Initialized new Writer ExecutionContext.")
+		logger.Debugf("HourlyForecastDatabaseWriter: Initialized new Writer ExecutionContext.")
 	} else if rcv, isEC := writerCtxVal.(model.ExecutionContext); isEC {
 		writerCtx = rcv
 	} else {
-		logger.Warnf("WeatherWriter: ExecutionContext 'writer_context' key has unexpected type (%T). Initializing new ExecutionContext.", writerCtxVal)
+		logger.Warnf("HourlyForecastDatabaseWriter: ExecutionContext 'writer_context' key has unexpected type (%T). Initializing new ExecutionContext.", writerCtxVal)
 		writerCtx = model.NewExecutionContext()
 		w.stepExecutionContext.Put("writer_context", writerCtx)
 	}
 
 	// The writer currently holds no special internal state, but copies writerState.
 	w.writerState = writerCtx.Copy()
-	logger.Debugf("WeatherWriter: Internal state restored.")
+	logger.Debugf("HourlyForecastDatabaseWriter: Internal state restored.")
 	return nil
 }
 
 // saveWriterStateToExecutionContext saves the writer's internal state to the step's ExecutionContext.
-func (w *WeatherItemWriter) saveWriterStateToExecutionContext(ctx context.Context) error {
+func (w *HourlyForecastDatabaseWriter) saveWriterStateToExecutionContext(ctx context.Context) error {
 	// Extract writer-specific context from stepExecutionContext (created if not present)
 	writerCtxVal, ok := w.stepExecutionContext.Get("writer_context")
 	var writerCtx model.ExecutionContext
@@ -283,7 +283,7 @@ func (w *WeatherItemWriter) saveWriterStateToExecutionContext(ctx context.Contex
 	} else if rcv, isEC := writerCtxVal.(model.ExecutionContext); isEC {
 		writerCtx = rcv
 	} else {
-		logger.Warnf("WeatherWriter: ExecutionContext key 'writer_context' has unexpected type (%T). Initializing new ExecutionContext.", writerCtxVal)
+		logger.Warnf("HourlyForecastDatabaseWriter: ExecutionContext key 'writer_context' has unexpected type (%T). Initializing new ExecutionContext.", writerCtxVal)
 		writerCtx = model.NewExecutionContext()
 		w.stepExecutionContext.Put("writer_context", writerCtx)
 	}
@@ -298,6 +298,6 @@ func (w *WeatherItemWriter) saveWriterStateToExecutionContext(ctx context.Contex
 	writerCtx.Put("decision.condition", "true")
 	w.writerState.Put("decision.condition", "true")
 
-	logger.Debugf("WeatherWriter: Internal state saved to ExecutionContext.")
+	logger.Debugf("HourlyForecastDatabaseWriter: Internal state saved to ExecutionContext.")
 	return nil
 }
