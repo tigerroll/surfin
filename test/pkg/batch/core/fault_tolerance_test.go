@@ -7,7 +7,6 @@ import (
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
-	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 
 	"github.com/google/uuid"
@@ -146,7 +145,7 @@ func (m *MockWriter) ResetWrittenItems() {
 	m.writtenItems = nil
 }
 
-func (m *MockWriter) Write(ctx context.Context, tx tx.Tx, items []TestItem) error {
+func (m *MockWriter) Write(ctx context.Context, items []TestItem) error { // Removed tx.Tx from signature
 	shouldFailTransiently := false
 
 	// Check if any item triggers the transient failure AND we still have failures left
@@ -288,7 +287,7 @@ ProcessPhase:
 
 	// Simulate Write Retry Loop (Chunk Retry)
 	for {
-		err := writer.Write(ctx, nil, processedItems)
+		err := writer.Write(ctx, processedItems) // Removed nil argument
 
 		if err != nil {
 			be, isBatchError := err.(*exception.BatchError)

@@ -42,7 +42,6 @@ type RunFrameworkMigrationsHookParams struct {
 	Lifecycle        fx.Lifecycle                   // The Fx lifecycle to append hooks.
 	Cfg              *config.Config                 // The application configuration.
 	MigratorProvider migration.MigratorProvider     // Provider for database migrators.
-	DBResolver       database.DBConnectionResolver  // Resolver for database connections.
 	AllMigrationFS   map[string]fs.FS               `name:"allMigrationFS"` // A map of file systems containing migration scripts, including "frameworkMigrationsFS".
 	AllDBProviders   map[string]database.DBProvider // All registered DB providers, mapped by their database type.
 }
@@ -92,9 +91,13 @@ func runFrameworkMigrationsHook(
 				return nil
 			}
 
-			dbConn, err := p.DBResolver.ResolveDBConnection(ctx, p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
+			dbProvider, ok := p.AllDBProviders[dbConfig.Type]
+			if !ok {
+				return fmt.Errorf("no DBProvider found for database type '%s'", dbConfig.Type)
+			}
+			dbConn, err := dbProvider.GetConnection(p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef)
 			if err != nil {
-				return fmt.Errorf("failed to resolve DB connection for framework migrations: %w", err)
+				return fmt.Errorf("failed to get DB connection for framework migrations: %w", err)
 			}
 
 			frameworkFS, ok := p.AllMigrationFS["frameworkMigrationsFS"]

@@ -21,6 +21,16 @@ import (
 
 // resolveComponentRefProperties resolves dynamic expressions within the ComponentRef's Properties map.
 // It resolves expressions that do not depend on JobParameters or ExecutionContext, as JobExecution/StepExecution are nil during JSL conversion.
+//
+// Parameters:
+//
+//	resolver: The expression resolver.
+//	ref: The ComponentRef containing properties to resolve.
+//
+// Returns:
+//
+//	A new map with resolved properties, or the original map if no properties are present.
+//	An error if any property resolution fails.
 func resolveComponentRefProperties(resolver core.ExpressionResolver, ref *ComponentRef) (map[string]string, error) {
 	module := "jsl_converter"
 	if ref == nil || len(ref.Properties) == 0 {
@@ -56,7 +66,7 @@ func resolveComponentRefProperties(resolver core.ExpressionResolver, ref *Compon
 //	stepFactory: The factory for creating core step instances.
 //	partitionerBuilders: A map of builders for partitioners.
 //	resolver: The expression resolver for dynamic property resolution.
-//	dbResolver: The database connection resolver.
+//	resourceProviders: A map of all registered resource providers (e.g., database, storage).
 //	stepListenerBuilders: A map of builders for step execution listeners.
 //	itemReadListenerBuilders: A map of builders for item read listeners.
 //	itemProcessListenerBuilders: A map of builders for item process listeners.
@@ -76,9 +86,9 @@ func ConvertJSLToCoreFlow(
 	decisionBuilders map[string]ConditionalDecisionBuilder,
 	splitBuilders map[string]SplitBuilder,
 	stepFactory step_factory.StepFactory,
-	partitionerBuilders map[string]core.PartitionerBuilder, // Builders for partitioners.
+	partitionerBuilders map[string]core.PartitionerBuilder,
 	resolver core.ExpressionResolver,
-	dbResolver coreAdapter.ResourceConnectionResolver,
+	resourceProviders map[string]coreAdapter.ResourceProvider,
 	stepListenerBuilders map[string]StepExecutionListenerBuilder,
 	itemReadListenerBuilders map[string]ItemReadListenerBuilder,
 	itemProcessListenerBuilders map[string]ItemProcessListenerBuilder,
@@ -247,7 +257,7 @@ func ConvertJSLToCoreFlow(
 				resolvedWriterRef := jslStep.Writer
 				resolvedWriterRef.Properties = resolvedWriterProps
 
-				r, p, w, err := buildReaderWriterProcessor(module, componentBuilders, cfg, resolver, dbResolver, &resolvedReaderRef, &resolvedProcessorRef, &resolvedWriterRef)
+				r, p, w, err := buildReaderWriterProcessor(module, componentBuilders, cfg, resolver, resourceProviders, &resolvedReaderRef, &resolvedProcessorRef, &resolvedWriterRef)
 				if err != nil {
 					return nil, err
 				}
@@ -301,7 +311,7 @@ func ConvertJSLToCoreFlow(
 					return nil, err
 				}
 
-				taskletInstance, err := taskletBuilder(cfg, resolver, dbResolver, resolvedTaskletProps)
+				taskletInstance, err := taskletBuilder(cfg, resolver, resourceProviders, resolvedTaskletProps)
 				if err != nil {
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Tasklet '%s'", jslStep.Tasklet.Ref), err, false, false)
 				}
@@ -527,7 +537,7 @@ func ConvertJSLToCoreFlow(
 					resolvedWorkerWriterRef := workerStepJSL.Writer
 					resolvedWorkerWriterRef.Properties = resolvedWorkerWriterProps
 
-					r, p, w, err := buildReaderWriterProcessor(module, componentBuilders, cfg, resolver, dbResolver, &resolvedWorkerReaderRef, &resolvedWorkerProcessorRef, &resolvedWorkerWriterRef)
+					r, p, w, err := buildReaderWriterProcessor(module, componentBuilders, cfg, resolver, resourceProviders, &resolvedWorkerReaderRef, &resolvedWorkerProcessorRef, &resolvedWorkerWriterRef)
 					if err != nil {
 						return nil, err
 					}
@@ -572,7 +582,7 @@ func ConvertJSLToCoreFlow(
 						return nil, err
 					}
 
-					taskletInstance, err := taskletBuilder(cfg, resolver, dbResolver, resolvedWorkerTaskletProps)
+					taskletInstance, err := taskletBuilder(cfg, resolver, resourceProviders, resolvedWorkerTaskletProps)
 					if err != nil {
 						return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Worker Tasklet '%s'", workerStepJSL.Tasklet.Ref), err, false, false)
 					}
@@ -666,7 +676,7 @@ func ConvertJSLToCoreFlow(
 //	componentBuilders: A map of component builders.
 //	cfg: The application configuration.
 //	resolver: The expression resolver.
-//	dbResolver: The database connection resolver.
+//	resourceProviders: A map of all registered resource providers (e.g., database, storage).
 //	readerRef: The ComponentRef for the ItemReader.
 //	processorRef: The ComponentRef for the ItemProcessor.
 //	writerRef: The ComponentRef for the ItemWriter.
@@ -679,7 +689,7 @@ func buildReaderWriterProcessor(
 	componentBuilders map[string]ComponentBuilder,
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
-	dbResolver coreAdapter.ResourceConnectionResolver,
+	resourceProviders map[string]coreAdapter.ResourceProvider,
 	readerRef *ComponentRef,
 	processorRef *ComponentRef,
 	writerRef *ComponentRef,
@@ -692,7 +702,7 @@ func buildReaderWriterProcessor(
 	if !ok {
 		return nil, nil, nil, exception.NewBatchErrorf(module, "Reader builder '%s' not found", readerRef.Ref)
 	}
-	readerInstance, err := readerBuilder(cfg, resolver, dbResolver, readerRef.Properties)
+	readerInstance, err := readerBuilder(cfg, resolver, resourceProviders, readerRef.Properties)
 	if err != nil {
 		return nil, nil, nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Reader '%s'", readerRef.Ref), err, false, false)
 	}
@@ -705,7 +715,7 @@ func buildReaderWriterProcessor(
 	if !ok {
 		return nil, nil, nil, exception.NewBatchErrorf(module, "Processor builder '%s' not found", processorRef.Ref)
 	}
-	processorInstance, err := processorBuilder(cfg, resolver, dbResolver, processorRef.Properties)
+	processorInstance, err := processorBuilder(cfg, resolver, resourceProviders, processorRef.Properties)
 	if err != nil {
 		return nil, nil, nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Processor '%s'", processorRef.Ref), err, false, false)
 	}
@@ -718,7 +728,7 @@ func buildReaderWriterProcessor(
 	if !ok {
 		return nil, nil, nil, exception.NewBatchErrorf(module, "Writer builder '%s' not found", writerRef.Ref)
 	}
-	writerInstance, err := writerBuilder(cfg, resolver, dbResolver, writerRef.Properties)
+	writerInstance, err := writerBuilder(cfg, resolver, resourceProviders, writerRef.Properties)
 	if err != nil {
 		return nil, nil, nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Writer '%s'", writerRef.Ref), err, false, false)
 	}
@@ -732,14 +742,18 @@ func buildReaderWriterProcessor(
 
 // validateTransition validates a single transition rule.
 // It checks for:
-// - Presence of 'on' attribute.
-// - Mutual exclusivity of 'to', 'end', 'fail', and 'stop' attributes.
+//   - Presence of 'on' attribute.
+//   - Mutual exclusivity of 'to', 'end', 'fail', and 'stop' attributes.
 //
 // Parameters:
 //
 //	fromElementID: The ID of the source flow element.
 //	t: The Transition rule to validate.
 //	allElements: A map of all flow elements, used to check target element existence.
+//
+// Returns:
+//
+//	An error if the transition rule is invalid.
 func validateTransition(fromElementID string, t Transition, allElements map[string]interface{}) error {
 	if t.On == "" {
 		return exception.NewBatchError("jsl_converter", fmt.Sprintf("Transition rule for flow element '%s' is missing 'on'", fromElementID), nil, false, false)

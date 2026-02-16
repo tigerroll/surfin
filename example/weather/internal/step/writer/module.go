@@ -3,7 +3,6 @@
 package writer
 
 import (
-	"fmt"
 	"go.uber.org/fx"
 
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
@@ -21,35 +20,28 @@ import coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 // Parameters:
 //
 //	fx.In: Fx-injected parameters.
-//	AllDBConnections: A map of all established database connections, keyed by their name. This is provided by the main application module.
+//	AllDBConnections: A map of all established database connections, keyed by their name.
+//	DBResolver: The database connection resolver.
 type HourlyForecastDatabaseWriterComponentBuilderParams struct {
 	fx.In
-	AllDBConnections map[string]database.DBConnection
+	DBResolver database.DBConnectionResolver
 }
 
 // NewHourlyForecastDatabaseWriterComponentBuilder creates a [jsl.ComponentBuilder] for the hourlyForecastDatabaseWriter.
 //
-// It now receives its core dependencies (AllDBConnections) via Fx.
+// It now receives its core dependencies via Fx.
 //
 // Returns:
 //
 //	A jsl.ComponentBuilder function that can construct a HourlyForecastDatabaseWriter.
 func NewHourlyForecastDatabaseWriterComponentBuilder(p HourlyForecastDatabaseWriterComponentBuilderParams) jsl.ComponentBuilder {
-	// Returns the actual builder function with a standard signature that JobFactory calls to construct the component.
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver core.ExpressionResolver, // The expression resolver for dynamic property resolution.
-		dbResolver coreAdapter.ResourceConnectionResolver,
+		resourceProviders map[string]coreAdapter.ResourceProvider,
 		properties map[string]string,
 	) (interface{}, error) {
-		// Type assert dbResolver to database.DBConnectionResolver.
-		dbConnResolver, ok := dbResolver.(database.DBConnectionResolver)
-		if !ok {
-			return nil, fmt.Errorf("dbResolver is not of type database.DBConnectionResolver")
-		}
-		// Pass allDBConnections injected from Fx to NewHourlyForecastDatabaseWriter.
-		// The p.AllTxManagers dependency was removed as TxManager is now created on demand. This comment is now redundant.
-		writer, err := NewHourlyForecastDatabaseWriter(cfg, p.AllDBConnections, resolver, dbConnResolver, properties)
+		writer, err := NewHourlyForecastDatabaseWriter(cfg, resolver, p.DBResolver, properties)
 		if err != nil {
 			return nil, err
 		}

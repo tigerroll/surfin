@@ -76,8 +76,8 @@ type MockItemWriter struct {
 	mock.Mock
 }
 
-func (m *MockItemWriter) Write(ctx context.Context, txAdapter tx.Tx, items []any) error {
-	args := m.Called(ctx, txAdapter, items)
+func (m *MockItemWriter) Write(ctx context.Context, items []any) error {
+	args := m.Called(ctx, items) // The mock now records only ctx and items
 	return args.Error(0)
 }
 func (m *MockItemWriter) Open(ctx context.Context, ec model.ExecutionContext) error {
@@ -103,6 +103,18 @@ func (m *MockItemWriter) GetTableName() string {
 
 // GetTargetDBName is a mock implementation of the GetTargetDBName method from the port.ItemWriter interface.
 func (m *MockItemWriter) GetTargetDBName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+// GetTargetResourceName is a mock implementation of the GetTargetResourceName method from the port.ItemWriter interface.
+func (m *MockItemWriter) GetTargetResourceName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+// GetResourcePath is a mock implementation of the GetResourcePath method from the port.ItemWriter interface.
+func (m *MockItemWriter) GetResourcePath() string {
 	args := m.Called()
 	return args.String(0)
 }
@@ -450,13 +462,13 @@ func TestChunkStep_ChunkSplittingOnSkippableWriteFailure(t *testing.T) {
 	// 2. Item Writer Mocks: Write calls during chunk splitting
 
 	// Item 1 write: Success
-	writer.On("Write", mock.Anything, txAdapter1, []any{"item1"}).Return(nil).Once()
+	writer.On("Write", mock.Anything, []any{"item1"}).Return(nil).Once() // Updated mock expectation
 
 	// Item 2 write: Failure (Skippable)
-	writer.On("Write", mock.Anything, txAdapter2, []any{"item2"}).Return(skippableErr).Once()
+	writer.On("Write", mock.Anything, []any{"item2"}).Return(skippableErr).Once() // Updated mock expectation
 
 	// Item 3 write: Success
-	writer.On("Write", mock.Anything, txAdapter3, []any{"item3"}).Return(nil).Once()
+	writer.On("Write", mock.Anything, []any{"item3"}).Return(nil).Once() // Updated mock expectation
 
 	// 3. Listener/Metric Mocks
 	// Item 2 Skip notification
@@ -515,13 +527,13 @@ func TestChunkStep_ChunkSplitting_FatalError(t *testing.T) {
 
 	// Item 1: Success
 	txManager.On("Begin", mock.Anything, mock.Anything).Return(txAdapter1, nil).Once()
-	writer.On("Write", mock.Anything, txAdapter1, []any{"item1"}).Return(nil).Once()
+	writer.On("Write", mock.Anything, []any{"item1"}).Return(nil).Once() // Updated mock expectation
 	txManager.On("Commit", txAdapter1).Return(nil).Once()
 	recorder.On("RecordItemWrite", mock.Anything, "testStep", 1).Once()
 
 	// Item 2: Failure (Fatal error during write)
 	txManager.On("Begin", mock.Anything, mock.Anything).Return(txAdapter2, nil).Once()
-	writer.On("Write", mock.Anything, txAdapter2, []any{"item2"}).Return(fatalWriteErr).Once()
+	writer.On("Write", mock.Anything, []any{"item2"}).Return(fatalWriteErr).Once() // Updated mock expectation
 
 	// If a fatal error occurs, the transaction for that item is rolled back.
 	txManager.On("Rollback", txAdapter2).Return(nil).Once()

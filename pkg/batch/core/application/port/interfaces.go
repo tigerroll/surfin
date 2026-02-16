@@ -9,7 +9,6 @@ import (
 	"errors"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
-	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 )
 
 // Standard errors
@@ -291,12 +290,11 @@ type ItemWriter[I any] interface {
 	//
 	// Parameters:
 	//   ctx: The context for the operation.
-	//   tx: The current transaction.
 	//   items: The list of items to be written.
 	//
 	// Returns:
 	//   error: An error if writing fails.
-	Write(ctx context.Context, tx tx.Tx, items []I) error
+	Write(ctx context.Context, items []I) error
 	// Close closes resources and saves state.
 	//
 	// Parameters:
@@ -324,16 +322,16 @@ type ItemWriter[I any] interface {
 	//   error: An error if retrieval fails.
 	GetExecutionContext(ctx context.Context) (model.ExecutionContext, error)
 
-	// GetTargetDBName returns the name of the target database for this writer (e.g., "workload", "metadata").
+	// GetTargetResourceName returns the name of the target resource for this writer (e.g., "workload_db", "s3_bucket").
 	//
 	// Returns:
-	//   string: The name of the target database.
-	GetTargetDBName() string
-	// GetTableName returns the name of the target table for this writer.
+	//   string: The name of the target resource.
+	GetTargetResourceName() string
+	// GetResourcePath returns the path or identifier within the target resource for this writer (e.g., "table_name", "s3_key_prefix").
 	//
 	// Returns:
-	//   string: The name of the target table.
-	GetTableName() string
+	//   string: The path or identifier within the target resource.
+	GetResourcePath() string
 }
 
 // Tasklet is the interface for a step that performs a single operation.

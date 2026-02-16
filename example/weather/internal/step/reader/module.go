@@ -23,15 +23,14 @@ type NewHourlyForecastAPIReaderComponentBuilderParams struct {
 //
 //	A jsl.ComponentBuilder function that can construct a HourlyForecastAPIReader.
 func NewHourlyForecastAPIReaderComponentBuilder() jsl.ComponentBuilder {
-	// Returns the actual builder function that JobFactory calls to construct the component.
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver core.ExpressionResolver,
-		dbResolver coreAdapter.ResourceConnectionResolver,
+		resourceProviders map[string]coreAdapter.ResourceProvider,
 		properties map[string]string,
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
-		_ = dbResolver
+		_ = resourceProviders // This reader does not use resource providers.
 		reader, err := NewHourlyForecastAPIReader(cfg, resolver, properties)
 		if err != nil {
 			return nil, err
@@ -41,6 +40,12 @@ func NewHourlyForecastAPIReaderComponentBuilder() jsl.ComponentBuilder {
 }
 
 // RegisterHourlyForecastAPIReaderBuilder is an Fx invoke function that registers the created ComponentBuilder with the JobFactory.
+// This makes the "weatherItemReader" component available for use in JSL definitions.
+//
+// Parameters:
+//
+//	jf: The JobFactory instance to register the builder with.
+//	builder: The jsl.ComponentBuilder for the HourlyForecastAPIReader.
 func RegisterHourlyForecastAPIReaderBuilder(
 	jf *support.JobFactory,
 	builder jsl.ComponentBuilder,
@@ -50,7 +55,8 @@ func RegisterHourlyForecastAPIReaderBuilder(
 	logger.Debugf("ComponentBuilder for HourlyForecastAPIReader registered with JobFactory. JSL ref: 'weatherItemReader'")
 }
 
-// Module defines Fx options for the weatherReader component.
+// Module defines Fx options for the weather reader component.
+// It provides the component builder and registers it with the support.JobFactory.
 var Module = fx.Options(
 	fx.Provide(fx.Annotate(
 		NewHourlyForecastAPIReaderComponentBuilder,

@@ -25,9 +25,10 @@ func NewNoOpItemReaderComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		_ *config.Config, // Not used by NoOpItemReader
 		_ port.ExpressionResolver, // Not used by NoOpItemReader
-		_ coreAdapter.ResourceConnectionResolver, // Not used by NoOpItemReader
+		resourceProviders map[string]coreAdapter.ResourceProvider,
 		_ map[string]string, // Not used by NoOpItemReader
 	) (interface{}, error) {
+		_ = resourceProviders // This reader does not use resource providers.
 		return NewNoOpItemReader[any](), nil
 	}
 }
@@ -44,9 +45,10 @@ func NewPassThroughItemProcessorComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		_ *config.Config, // Not used by PassThroughItemProcessor
 		_ port.ExpressionResolver, // Not used by PassThroughItemProcessor
-		_ coreAdapter.ResourceConnectionResolver, // Not used by PassThroughItemProcessor
+		resourceProviders map[string]coreAdapter.ResourceProvider,
 		_ map[string]string, // Not used by PassThroughItemProcessor
 	) (interface{}, error) {
+		_ = resourceProviders // This processor does not use resource providers.
 		return NewPassThroughItemProcessor[any](), nil
 	}
 }
@@ -64,9 +66,10 @@ func NewNoOpItemWriterComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		_ *config.Config, // Not used by NoOpItemWriter
 		_ port.ExpressionResolver, // Not used by NoOpItemReader
-		_ coreAdapter.ResourceConnectionResolver, // Not used by NoOpItemWriter
+		resourceProviders map[string]coreAdapter.ResourceProvider,
 		_ map[string]string, // Not used by NoOpItemWriter
 	) (interface{}, error) {
+		_ = resourceProviders // This writer does not use resource providers.
 		return NewNoOpItemWriter[any](), nil
 	}
 }
@@ -83,13 +86,13 @@ func NewExecutionContextItemWriterComponentBuilder() jsl.ComponentBuilder {
 	return func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver coreAdapter.ResourceConnectionResolver,
+		resourceProviders map[string]coreAdapter.ResourceProvider,
 		properties map[string]string,
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
-		_ = cfg        // Not used by ExecutionContextItemWriter
-		_ = resolver   // Not used by ExecutionContextItemWriter
-		_ = dbResolver // Not used by ExecutionContextItemWriter
+		_ = cfg               // Not used by ExecutionContextItemWriter
+		_ = resolver          // Not used by ExecutionContextItemWriter
+		_ = resourceProviders // Not used by ExecutionContextItemWriter
 
 		key, ok := properties["key"]
 		if !ok || key == "" {
@@ -115,10 +118,10 @@ type genericItemBuilders struct {
 // It maps the named component builders to their respective JSL reference names.
 //
 // Registered components:
-// - "noOpItemReader"
-// - "passThroughItemProcessor"
-// - "noOpItemWriter"
-// - "executionContextItemWriter"
+//   - "noOpItemReader"
+//   - "passThroughItemProcessor"
+//   - "noOpItemWriter"
+//   - "executionContextItemWriter"
 //
 // Parameters:
 //

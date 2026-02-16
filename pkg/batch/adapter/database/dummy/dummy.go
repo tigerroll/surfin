@@ -15,7 +15,9 @@ import (
 
 // dummyDBConnection is a dummy implementation of the database.DBConnection interface.
 // It performs no actual database operations, suitable for DB-less mode or testing.
-type dummyDBConnection struct{}
+type dummyDBConnection struct {
+	name string
+}
 
 // ExecuteUpdate is a dummy implementation of DBExecutor.ExecuteUpdate.
 func (d *dummyDBConnection) ExecuteUpdate(ctx context.Context, model interface{}, operation string, tableName string, query map[string]interface{}) (int64, error) {
@@ -63,7 +65,7 @@ func (d *dummyDBConnection) RefreshConnection(ctx context.Context) error {
 func (d *dummyDBConnection) Type() string { return "dummy" }
 
 // Name returns the name of the dummy database connection.
-func (d *dummyDBConnection) Name() string { return "dummy" }
+func (d *dummyDBConnection) Name() string { return d.name }
 
 // Close closes the dummy database connection (no-op).
 func (d *dummyDBConnection) Close() error { return nil }
@@ -86,13 +88,13 @@ type dummyDBProvider struct{}
 // GetConnection returns a dummy DBConnection.
 func (d *dummyDBProvider) GetConnection(name string) (database.DBConnection, error) {
 	logger.Debugf("Dummy DBProvider: GetConnection called for '%s'.", name)
-	return &dummyDBConnection{}, nil
+	return NewDummyDBConnection(name), nil
 }
 
 // ForceReconnect returns a new dummy DBConnection, simulating re-establishment.
 func (d *dummyDBProvider) ForceReconnect(name string) (database.DBConnection, error) {
 	logger.Debugf("Dummy DBProvider: ForceReconnect called for '%s'.", name)
-	return &dummyDBConnection{}, nil
+	return NewDummyDBConnection(name), nil
 }
 
 // CloseAll performs no operation for dummy connections.
@@ -104,9 +106,12 @@ func (d *dummyDBProvider) CloseAll() error {
 // Type returns the type of the dummy database provider.
 func (d *dummyDBProvider) Type() string { return "dummy" }
 
+// Name returns the unique name of this resource provider.
+func (d *dummyDBProvider) Name() string { return "database" }
+
 // NewDummyDBConnection returns a new dummy DBConnection instance.
-func NewDummyDBConnection() database.DBConnection {
-	return &dummyDBConnection{}
+func NewDummyDBConnection(name string) database.DBConnection {
+	return &dummyDBConnection{name: name}
 }
 
 // NewDummyDBProvider returns a new dummy DBProvider instance.
@@ -173,7 +178,7 @@ func NewDefaultDBConnectionResolver() *DefaultDBConnectionResolver {
 // ResolveDBConnection resolves a database connection instance by name, returning a dummy connection.
 func (r *DefaultDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (database.DBConnection, error) {
 	logger.Warnf("Attempted to resolve DB connection '%s' in DB-less mode. Returning dummy connection.", name)
-	return &dummyDBConnection{}, nil
+	return NewDummyDBConnection(name), nil
 }
 
 // ResolveConnection resolves a resource connection instance by name, returning a dummy connection.

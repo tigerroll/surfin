@@ -87,7 +87,7 @@ func (d *dummyPortDBConnectionResolver) ResolveConnection(ctx context.Context, n
 	logger.Debugf("Dummy Port DBConnectionResolver: ResolveConnection called for '%s'.", name)
 	// Since database.DBConnection embeds coreAdapter.ResourceConnection,
 	// dummy.NewDummyDBConnection() also functions as a ResourceConnection.
-	return dummy.NewDummyDBConnection(), nil
+	return dummy.NewDummyDBConnection(name), nil
 }
 
 // ResolveConnectionName is a method embedded from coreAdapter.ResourceConnectionResolver.
@@ -131,7 +131,7 @@ func (d *dummyPortDBConnectionResolver) ResolveDBConnectionName(ctx context.Cont
 //   - A dummy DBConnection instance and nil error.
 func (d *dummyPortDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (database.DBConnection, error) {
 	logger.Debugf("Dummy Port DBConnectionResolver: ResolveDBConnection called for '%s'.", name)
-	return dummy.NewDummyDBConnection(), nil
+	return dummy.NewDummyDBConnection(name), nil
 }
 
 // realEnvironmentExpander implements the config.EnvironmentExpander interface

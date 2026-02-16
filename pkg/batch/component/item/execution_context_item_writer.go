@@ -12,7 +12,6 @@ import (
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
-	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
@@ -46,8 +45,8 @@ func NewExecutionContextItemWriter[I any](key string) port.ItemWriter[I] {
 	}
 }
 
-// Open opens resources.
-// This method initializes the writer with the provided `ExecutionContext`.
+// Open initializes the writer with the provided `ExecutionContext`.
+//
 // Parameters:
 //
 //	ctx: The context for the operation.
@@ -58,15 +57,14 @@ func (w *ExecutionContextItemWriter[I]) Open(ctx context.Context, ec model.Execu
 	return nil
 }
 
-// Write stores the number of items in the ExecutionContext.
-// This method increments the count stored under the configured key in the `ExecutionContext`
+// Write increments the count stored under the configured key in the `ExecutionContext`
 // by the number of items provided in the current chunk.
+//
 // Parameters:
 //
 //	ctx: The context for the operation.
-//	tx: The current transaction.
 //	items: The items to be written.
-func (w *ExecutionContextItemWriter[I]) Write(ctx context.Context, tx tx.Tx, items []I) error {
+func (w *ExecutionContextItemWriter[I]) Write(ctx context.Context, items []I) error {
 	logger.Debugf("ExecutionContextItemWriter: Writing %d items to ExecutionContext key '%s'.", len(items), w.key)
 
 	// Retrieve existing count.
@@ -88,8 +86,9 @@ func (w *ExecutionContextItemWriter[I]) Write(ctx context.Context, tx tx.Tx, ite
 	return nil
 }
 
-// Close closes resources.
+// Close releases any resources held by the writer.
 // For `ExecutionContextItemWriter`, there are no external resources to close, so this method does nothing.
+//
 // Parameters:
 //
 //	ctx: The context for the operation.
@@ -98,8 +97,8 @@ func (w *ExecutionContextItemWriter[I]) Close(ctx context.Context) error {
 	return nil
 }
 
-// SetExecutionContext sets the ExecutionContext.
-// This method updates the internal `ExecutionContext` used by the writer.
+// SetExecutionContext updates the internal `ExecutionContext` used by the writer.
+//
 // Parameters:
 //
 //	ctx: The context for the operation.
@@ -109,8 +108,8 @@ func (w *ExecutionContextItemWriter[I]) SetExecutionContext(ctx context.Context,
 	return nil
 }
 
-// GetExecutionContext retrieves the ExecutionContext.
-// This method returns the current `ExecutionContext` held by the writer.
+// GetExecutionContext returns the current `ExecutionContext` held by the writer.
+//
 // Parameters:
 //
 //	ctx: The context for the operation.
@@ -123,22 +122,24 @@ func (w *ExecutionContextItemWriter[I]) GetExecutionContext(ctx context.Context)
 	return w.ec, nil
 }
 
-// GetTargetDBName returns the name of the target database for this writer.
-// Since `ExecutionContextItemWriter` does not interact with a database, this method returns an empty string.
+// GetTargetResourceName returns the name of the target resource for this writer.
+// Since `ExecutionContextItemWriter` does not interact with a specific resource, this method returns an empty string.
+//
 // Returns:
 //
-//	string: An empty string, as this writer does not write to a specific database.
-func (w *ExecutionContextItemWriter[I]) GetTargetDBName() string {
-	return "" // This writer does not write to a specific database, so an empty string is returned.
+//	string: An empty string, as this writer does not write to a specific resource.
+func (w *ExecutionContextItemWriter[I]) GetTargetResourceName() string {
+	return "" // This writer does not write to a specific resource, so an empty string is returned.
 }
 
-// GetTableName returns the name of the target table for this writer.
-// Since `ExecutionContextItemWriter` does not interact with a database, this method returns an empty string.
+// GetResourcePath returns the path or identifier within the target resource for this writer.
+// Since `ExecutionContextItemWriter` does not interact with a specific resource, this method returns an empty string.
+//
 // Returns:
 //
-//	string: An empty string, as this writer does not write to a specific table.
-func (w *ExecutionContextItemWriter[I]) GetTableName() string {
-	return "" // This writer does not write to a specific table, so an empty string is returned.
+//	string: An empty string, as this writer does not write to a specific path.
+func (w *ExecutionContextItemWriter[I]) GetResourcePath() string {
+	return "" // This writer does not write to a specific path, so an empty string is returned.
 }
 
 // NewExecutionContextItemWriterBuilder creates a `jsl.ComponentBuilder` for `ExecutionContextItemWriter`.
@@ -153,13 +154,13 @@ func NewExecutionContextItemWriterBuilder() jsl.ComponentBuilder {
 	return func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver coreAdapter.ResourceConnectionResolver, // The database connection resolver.
+		resourceProviders map[string]coreAdapter.ResourceProvider,
 		properties map[string]string,
 	) (interface{}, error) {
 		// Unused arguments are ignored for this component.
 		_ = cfg
 		_ = resolver
-		_ = dbResolver // This writer does not interact with a database directly.
+		_ = resourceProviders // This writer does not interact with a database directly.
 
 		key, ok := properties["key"]
 		if !ok {

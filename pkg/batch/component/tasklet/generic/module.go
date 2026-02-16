@@ -28,13 +28,13 @@ func NewExecutionContextWriterTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver coreAdapter.ResourceConnectionResolver, // The database connection resolver.
+		resourceProviders map[string]coreAdapter.ResourceProvider,
 		properties map[string]string,
 	) (interface{}, error) {
 		// Unused arguments are ignored for this component.
 		_ = cfg
 		_ = resolver
-		_ = dbResolver // This tasklet does not interact with a database directly.
+		_ = resourceProviders // This tasklet does not interact with resource providers directly.
 		return NewExecutionContextWriterTasklet("executionContextWriterTasklet", properties), nil
 	})
 }
@@ -70,13 +70,13 @@ func NewRandomFailTaskletComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver coreAdapter.ResourceConnectionResolver, // The database connection resolver.
+		resourceProviders map[string]coreAdapter.ResourceProvider,
 		properties map[string]string,
 	) (interface{}, error) {
 		// Unused arguments are ignored for this component.
 		_ = cfg
 		_ = resolver
-		_ = dbResolver // This tasklet does not interact with a database directly.
+		_ = resourceProviders // This tasklet does not interact with resource providers directly.
 		return NewRandomFailTasklet("randomFailTasklet", properties), nil
 	})
 }
