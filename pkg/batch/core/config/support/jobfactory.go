@@ -47,7 +47,7 @@ type JobBuilder func(
 type JobFactory struct {
 	config                           *config.Config
 	expressionResolver               port.ExpressionResolver
-	dbConnectionResolver             coreAdapter.ResourceConnectionResolver
+	resourceProviders                map[string]coreAdapter.ResourceProvider // This line is added
 	componentBuilders                map[string]jsl.ComponentBuilder
 	jobBuilders                      map[string]JobBuilder
 	jobListenerBuilders              map[string]jsl.JobExecutionListenerBuilder
@@ -75,15 +75,15 @@ type JobFactory struct {
 // Each field represents a dependency required for the JobFactory to fulfill its responsibilities.
 type JobFactoryParams struct {
 	fx.In
-	Repo              repository.JobRepository               // JobRepository used for persisting job metadata.
-	Cfg               *config.Config                         // Global configuration for the framework.
-	Resolver          port.ExpressionResolver                // ExpressionResolver for resolving dynamic expressions within JSL.
-	MetricRecorder    metrics.MetricRecorder                 // MetricRecorder for recording metrics.
-	Tracer            metrics.Tracer                         // Tracer for distributed tracing.
-	DBResolver        coreAdapter.ResourceConnectionResolver // DBConnectionResolver for resolving database connection names.
-	MetadataTxManager tx.TransactionManager                  `name:"metadata"` // Metadata Transaction Manager, used by JobRepository.
-	StepFactory       step_factory.StepFactory               // StepFactory for building steps.
-	TxFactory         tx.TransactionManagerFactory           // Transaction Manager Factory.
+	Repo                 repository.JobRepository       // JobRepository used for persisting job metadata.
+	Cfg                  *config.Config                 // Global configuration for the framework.
+	Resolver             port.ExpressionResolver        // ExpressionResolver for resolving dynamic expressions within JSL.
+	MetricRecorder       metrics.MetricRecorder         // MetricRecorder for recording metrics.
+	Tracer               metrics.Tracer                 // Tracer for distributed tracing.
+	AllResourceProviders []coreAdapter.ResourceProvider `group:"resourceProviders"`
+	MetadataTxManager    tx.TransactionManager          `name:"metadata"` // Metadata Transaction Manager, used by JobRepository.
+	StepFactory          step_factory.StepFactory       // StepFactory for building steps.
+	TxFactory            tx.TransactionManagerFactory   // Transaction Manager Factory.
 }
 
 // NewJobFactory creates a new instance of JobFactory.
@@ -96,10 +96,16 @@ type JobFactoryParams struct {
 //
 //	A pointer to the initialized JobFactory.
 func NewJobFactory(p JobFactoryParams) *JobFactory {
+	// Convert slice of ResourceProviders to a map for easier lookup by name
+	resourceProvidersMap := make(map[string]coreAdapter.ResourceProvider)
+	for _, provider := range p.AllResourceProviders {
+		resourceProvidersMap[provider.Name()] = provider
+	}
+
 	return &JobFactory{
 		jobRepository:                    p.Repo,
 		expressionResolver:               p.Resolver,
-		dbConnectionResolver:             p.DBResolver,
+		resourceProviders:                resourceProvidersMap,
 		metricRecorder:                   p.MetricRecorder,
 		tracer:                           p.Tracer,
 		componentBuilders:                make(map[string]jsl.ComponentBuilder),
@@ -317,7 +323,7 @@ func (f *JobFactory) CreateJob(jobName string) (port.Job, error) {
 		f.stepFactory,
 		f.partitionerBuilders,
 		f.expressionResolver,
-		f.dbConnectionResolver,
+		f.resourceProviders, // This line is changed
 		f.stepListenerBuilders,
 		f.itemReadListenerBuilders,
 		f.itemProcessListenerBuilders,

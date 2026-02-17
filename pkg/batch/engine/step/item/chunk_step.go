@@ -269,8 +269,6 @@ func (s *ChunkStep) GetPropagation() string {
 	return s.propagation
 }
 
-// --- Listener Notifiers ---
-
 // notifyRetryRead notifies listeners that an item read operation is being retried.
 //
 // Parameters:
@@ -440,27 +438,28 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 RetryChunk: // Jump here on write retry
 	for {
 		var currentTxManager tx.TransactionManager
-		var targetDBName string // Target DB name for ItemWriter
-		var tableName string    // Target table name for ItemWriter
+		var targetResourceName string // Target resource name for ItemWriter
+		var resourcePath string       // Path/identifier within the target resource for ItemWriter
 
 		if s.writer != nil {
-			targetDBName = s.writer.GetTargetDBName()
-			tableName = s.writer.GetTableName()
+			targetResourceName = s.writer.GetTargetResourceName()
+			resourcePath = s.writer.GetResourcePath()
 		}
 
-		if targetDBName == "" && s.writer != nil {
-			chunkError = exception.NewBatchError(s.id, "ItemWriter must provide a target DB name for transaction management.", nil, false, false)
+		// For ChunkStep, the target resource is expected to be a database for transaction management.
+		if targetResourceName == "" && s.writer != nil {
+			chunkError = exception.NewBatchError(s.id, "ItemWriter must provide a target resource name (expected to be a DB name for ChunkStep) for transaction management.", nil, false, false)
 			break
 		}
 
-		dbConnAsResource, err := s.dbResolver.ResolveConnection(ctx, targetDBName)
+		dbConnAsResource, err := s.dbResolver.ResolveConnection(ctx, targetResourceName)
 		if err != nil {
-			chunkError = exception.NewBatchError(s.id, fmt.Sprintf("Failed to resolve DB connection '%s' for chunk transaction", targetDBName), err, false, false)
+			chunkError = exception.NewBatchError(s.id, fmt.Sprintf("Failed to resolve DB connection '%s' for chunk transaction", targetResourceName), err, false, false)
 			break
 		}
 		dbConn, ok := dbConnAsResource.(database.DBConnection)
 		if !ok {
-			chunkError = exception.NewBatchError(s.id, fmt.Sprintf("Internal error: Resolved connection '%s' is not a database.DBConnection", targetDBName), nil, false, false)
+			chunkError = exception.NewBatchError(s.id, fmt.Sprintf("Internal error: Resolved connection '%s' is not a database.DBConnection", targetResourceName), nil, false, false)
 			break
 		}
 		currentTxManager = s.txManagerFactory.NewTransactionManager(dbConn)
@@ -470,7 +469,7 @@ RetryChunk: // Jump here on write retry
 			chunkError = exception.NewBatchError(s.id, "Failed to begin transaction for chunk", err, false, false)
 			break
 		}
-		txCtx := context.WithValue(ctx, "tx", txAdapter)
+		txCtx := tx.ContextWithTx(ctx, txAdapter)
 
 		// Listener notification (BeforeChunk)
 		for _, l := range s.chunkListeners {
@@ -611,7 +610,7 @@ RetryChunk: // Jump here on write retry
 
 			// Write retry loop (Chunk Retry / Chunk Splitting)
 			for {
-				writeErr = s.writer.Write(txCtx, txAdapter, itemsToWrite)
+				writeErr = s.writer.Write(txCtx, itemsToWrite)
 
 				if writeErr != nil {
 					be, isBatchError := writeErr.(*exception.BatchError)
@@ -667,12 +666,13 @@ RetryChunk: // Jump here on write retry
 			writeCount += len(itemsToWrite)
 		}
 
-		if s.writer != nil && targetDBName != "" && tableName != "" {
-			_, err := s.dbResolver.ResolveConnection(ctx, targetDBName)
+		if s.writer != nil && targetResourceName != "" && resourcePath != "" {
+			// Note: For ChunkStep, targetResourceName is expected to be a database connection name.
+			_, err := s.dbResolver.ResolveConnection(ctx, targetResourceName)
 			if err != nil {
-				logger.Errorf("ChunkStep '%s': Failed to resolve DB connection for post-commit verification for '%s': %v", s.id, targetDBName, err)
+				logger.Errorf("ChunkStep '%s': Failed to resolve DB connection for post-commit verification for '%s': %v", s.id, targetResourceName, err)
 			} else {
-				logger.Debugf("ChunkStep '%s': Successfully resolved DB connection '%s' for table '%s' for post-commit verification.", s.id, targetDBName, tableName)
+				logger.Debugf("ChunkStep '%s': Successfully resolved DB connection '%s' for resource path '%s' for post-commit verification.", s.id, targetResourceName, resourcePath)
 			}
 		}
 
@@ -872,10 +872,10 @@ func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalIte
 			fatalError = exception.NewBatchError(taskletName, "Failed to begin transaction for chunk splitting", err, false, false)
 			break
 		}
-		txCtx := context.WithValue(ctx, "tx", txAdapter)
+		txCtx := tx.ContextWithTx(ctx, txAdapter)
 
 		// 1.2. Write single item
-		writeErr := s.writer.Write(txCtx, txAdapter, []any{item})
+		writeErr := s.writer.Write(txCtx, []any{item})
 
 		if writeErr != nil {
 			// 1.3. Write failed: Skip processing
@@ -907,8 +907,8 @@ func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalIte
 
 			// Do not add successful items to remainingItems (as they are already persisted)
 			writeCount := stepExecution.WriteCount + 1
-			stepExecution.WriteCount = writeCount            // Update statistics
-			s.metricRecorder.RecordItemWrite(txCtx, s.id, 1) // Record metric
+			stepExecution.WriteCount = writeCount
+			s.metricRecorder.RecordItemWrite(txCtx, s.id, 1)
 		}
 	}
 

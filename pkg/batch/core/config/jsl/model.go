@@ -153,7 +153,7 @@ type Partition struct {
 type ComponentBuilder func(
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
-	dbResolver coreAdapter.ResourceConnectionResolver, // Type changed to coreAdapter.ResourceConnectionResolver.
+	resourceProviders map[string]coreAdapter.ResourceProvider, // Type changed to coreAdapter.ResourceConnectionResolver.
 	properties map[string]string,
 ) (interface{}, error)
 

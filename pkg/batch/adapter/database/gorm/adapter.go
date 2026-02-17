@@ -133,6 +133,11 @@ type GormDBAdapter struct {
 	name   string
 }
 
+// Name returns the name of the database connection.
+func (a *GormDBAdapter) Name() string {
+	return a.name
+}
+
 // NewGormDBAdapter creates a new GormDBAdapter.
 func NewGormDBAdapter(db *gorm.DB, cfg dbconfig.DatabaseConfig, name string) database.DBConnection {
 	sqlDB, err := db.DB()
@@ -168,10 +173,6 @@ func (a *GormDBAdapter) Close() error {
 
 func (a *GormDBAdapter) Type() string {
 	return a.dbType
-}
-
-func (a *GormDBAdapter) Name() string {
-	return a.name
 }
 
 // IsTableNotExistError implements adapter.DBConnection.

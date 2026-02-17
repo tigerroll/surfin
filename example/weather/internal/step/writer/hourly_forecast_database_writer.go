@@ -19,19 +19,18 @@ import (
 
 // HourlyForecastDatabaseWriterConfig holds configuration specific to the HourlyForecastDatabaseWriter, typically for JSL property binding.
 type HourlyForecastDatabaseWriterConfig struct {
-	TargetDBName string `yaml:"targetDBName,omitempty"` // TargetDBName is the name of the database connection to use.
-	Database     string `yaml:"database,omitempty"`     // Database is an alias for TargetDBName, for backward compatibility.
+	TargetResourceName string `yaml:"targetResourceName,omitempty"` // TargetResourceName is the name of the resource (e.g., database connection) to use.
+	Database           string `yaml:"database,omitempty"`           // Database is an alias for TargetResourceName, for backward compatibility.
 }
 
 // HourlyForecastDatabaseWriter implements [port.ItemWriter] for writing weather data to a database.
 type HourlyForecastDatabaseWriter struct {
 	Repo appRepo.WeatherRepository // Repo is the repository instance, initialized in the [Open] method based on the database type.
 
-	AllDBConnections map[string]database.DBConnection // AllDBConnections is a map of all established database connections, keyed by their name.
-	DBResolver       database.DBConnectionResolver    // DBResolver is the database connection resolver, used to obtain DB connections.
-	Config           *batch_config.Config             // Config is the application's global configuration.
-	TargetDBName     string                           // TargetDBName is the name of the target database connection, resolved from JSL properties.
-	TableName        string                           // TableName is the name of the target table for this writer, derived from the entity.
+	DBResolver         database.DBConnectionResolver // DBResolver is the database connection resolver, used to obtain DB connections.
+	Config             *batch_config.Config          // Config is the application's global configuration.
+	TargetResourceName string                        // TargetResourceName is the name of the target resource (e.g., database connection), resolved from JSL properties.
+	ResourcePath       string                        // ResourcePath is the path or identifier within the target resource (e.g., table name), derived from the entity.
 
 	// stepExecutionContext holds the reference to the Step's ExecutionContext.
 	stepExecutionContext model.ExecutionContext
@@ -53,10 +52,9 @@ var _ port.ItemWriter[any] = (*HourlyForecastDatabaseWriter)(nil)
 //	resolver: An [port.ExpressionResolver] for dynamic property resolution.
 //	dbResolver: A [adapter.DBConnectionResolver] for resolving database connections.
 //
-// properties is a map of JSL properties for this writer.
+//	properties: A map of JSL properties for this writer.
 func NewHourlyForecastDatabaseWriter(
 	cfg *batch_config.Config,
-	allDBConnections map[string]database.DBConnection,
 	resolver port.ExpressionResolver,
 	dbResolver database.DBConnectionResolver,
 	properties map[string]string,
@@ -67,19 +65,13 @@ func NewHourlyForecastDatabaseWriter(
 		return nil, exception.NewBatchError("hourly_forecast_database_writer", "Failed to bind properties", err, false, false)
 	}
 
-	// Prioritize 'targetDBName' specified in JSL, fallback to 'database', then default.
-	dbName := writerCfg.TargetDBName
-	if dbName == "" {
-		dbName = writerCfg.Database
+	// Prioritize 'targetResourceName' specified in JSL, fallback to 'database', then default.
+	resourceName := writerCfg.TargetResourceName
+	if resourceName == "" {
+		resourceName = writerCfg.Database
 	}
-	if dbName == "" {
-		dbName = "workload" // Default value
-	}
-
-	// Check for DBConnection existence. The actual connection is used during Open.
-	_, ok := allDBConnections[dbName]
-	if !ok {
-		return nil, fmt.Errorf("database connection '%s' not found", dbName)
+	if resourceName == "" {
+		resourceName = "workload" // Default value
 	}
 
 	return &HourlyForecastDatabaseWriter{
@@ -87,11 +79,10 @@ func NewHourlyForecastDatabaseWriter(
 		// The TxManager is no longer directly held by the writer; it's created on demand
 		// by the ChunkStep using the TxManagerFactory and passed to the Write method.
 
-		AllDBConnections: allDBConnections,
-		DBResolver:       dbResolver,
-		Config:           cfg,
-		TargetDBName:     dbName,
-		TableName:        weather_entity.WeatherDataToStore{}.TableName(), // TableName is initialized from the entity's TableName method.
+		DBResolver:         dbResolver,
+		Config:             cfg,
+		TargetResourceName: resourceName,
+		ResourcePath:       weather_entity.WeatherDataToStore{}.TableName(), // ResourcePath is initialized from the entity's TableName method.
 
 		resolver:             resolver,
 		stepExecutionContext: model.NewExecutionContext(),
@@ -105,7 +96,7 @@ func NewHourlyForecastDatabaseWriter(
 //
 //	ctx: The context for the operation.
 //
-// ec is the ExecutionContext to initialize the writer with.
+//	ec: The ExecutionContext to initialize the writer with.
 func (w *HourlyForecastDatabaseWriter) Open(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
@@ -114,9 +105,9 @@ func (w *HourlyForecastDatabaseWriter) Open(ctx context.Context, ec model.Execut
 	}
 	logger.Debugf("HourlyForecastDatabaseWriter.Open is called.")
 
-	conn, ok := w.AllDBConnections[w.TargetDBName]
-	if !ok {
-		return fmt.Errorf("database connection '%s' not found", w.TargetDBName)
+	conn, err := w.DBResolver.ResolveDBConnection(ctx, w.TargetResourceName)
+	if err != nil {
+		return fmt.Errorf("failed to resolve database connection '%s': %w", w.TargetResourceName, err)
 	}
 
 	// Select the appropriate repository implementation based on the connection type.
@@ -143,10 +134,8 @@ func (w *HourlyForecastDatabaseWriter) Open(ctx context.Context, ec model.Execut
 // Parameters:
 //
 //	ctx: The context for the operation.
-//
-// tx is the current transaction.
-// items is the list of items to be written.
-func (w *HourlyForecastDatabaseWriter) Write(ctx context.Context, tx tx.Tx, items []any) error {
+//	items: The list of items to be written.
+func (w *HourlyForecastDatabaseWriter) Write(ctx context.Context, items []any) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -155,6 +144,13 @@ func (w *HourlyForecastDatabaseWriter) Write(ctx context.Context, tx tx.Tx, item
 	if len(items) == 0 {
 		logger.Debugf("No items to write.")
 		return nil
+	}
+
+	// Retrieve the transaction from the context.
+	currentTx, ok := tx.TxFromContext(ctx)
+	if !ok {
+		// If no transaction is found in the context, return an error.
+		return exception.NewBatchError("hourly_forecast_database_writer", "transaction not found in context for database write", nil, false, false)
 	}
 
 	var finalDataToStore []weather_entity.WeatherDataToStore
@@ -177,9 +173,9 @@ func (w *HourlyForecastDatabaseWriter) Write(ctx context.Context, tx tx.Tx, item
 		return exception.NewBatchError("hourly_forecast_database_writer", "WeatherRepository is not initialized (was Open called?)", nil, true, false)
 	}
 
-	err := w.Repo.BulkInsertWeatherData(ctx, tx, finalDataToStore)
+	// Execute database operations using the retrieved transaction.
+	err := w.Repo.BulkInsertWeatherData(ctx, currentTx, finalDataToStore)
 	if err != nil {
-		// Changed isRetryable to true based on common DB error handling.
 		return exception.NewBatchError("hourly_forecast_database_writer", "failed to bulk insert weather data", err, true, true)
 	}
 
@@ -189,7 +185,9 @@ func (w *HourlyForecastDatabaseWriter) Write(ctx context.Context, tx tx.Tx, item
 
 // Close releases any resources held by the writer.
 //
-// ctx is the context for the operation.
+// Parameters:
+//
+//	ctx: The context for the operation.
 func (w *HourlyForecastDatabaseWriter) Close(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -206,8 +204,10 @@ func (w *HourlyForecastDatabaseWriter) Close(ctx context.Context) error {
 
 // SetExecutionContext sets the ExecutionContext for the writer and restores its state.
 //
-// ctx is the context for the operation.
-// ec is the ExecutionContext to set.
+// Parameters:
+//
+//	ctx: The context for the operation.
+//	ec: The ExecutionContext to set.
 func (w *HourlyForecastDatabaseWriter) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
@@ -220,9 +220,11 @@ func (w *HourlyForecastDatabaseWriter) SetExecutionContext(ctx context.Context, 
 
 // GetExecutionContext retrieves the current ExecutionContext from the writer.
 //
-// ctx is the context for the operation.
+// Parameters:
 //
-// Returns the current ExecutionContext and an error if retrieval fails.
+//	ctx: The context for the operation.
+//
+// Returns: The current ExecutionContext and an error if retrieval fails.
 func (w *HourlyForecastDatabaseWriter) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	select {
 	case <-ctx.Done():
@@ -239,14 +241,14 @@ func (w *HourlyForecastDatabaseWriter) GetExecutionContext(ctx context.Context) 
 	return w.writerState, nil
 }
 
-// GetTargetDBName returns the name of the target database for this writer.
-func (w *HourlyForecastDatabaseWriter) GetTargetDBName() string {
-	return w.TargetDBName
+// GetTargetResourceName returns the name of the target resource for this writer.
+func (w *HourlyForecastDatabaseWriter) GetTargetResourceName() string {
+	return w.TargetResourceName
 }
 
-// GetTableName returns the name of the target table for this writer.
-func (w *HourlyForecastDatabaseWriter) GetTableName() string {
-	return w.TableName
+// GetResourcePath returns the path or identifier within the target resource for this writer.
+func (w *HourlyForecastDatabaseWriter) GetResourcePath() string {
+	return w.ResourcePath
 }
 
 // restoreWriterStateFromExecutionContext extracts writer-specific state from the step's ExecutionContext.

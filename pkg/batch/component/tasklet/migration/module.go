@@ -13,7 +13,6 @@ import (
 	support "github.com/tigerroll/surfin/pkg/batch/core/config/support"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
-	"fmt"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
 	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
 
@@ -27,7 +26,7 @@ type MigrationTaskletComponentBuilderParams struct {
 	// TxFactory is the TransactionManagerFactory for creating transaction managers.
 	TxFactory tx.TransactionManagerFactory
 	// DBResolver is the DBConnectionResolver for resolving database connections.
-	DBResolver coreAdapter.ResourceConnectionResolver // The resource connection resolver for resolving database connections.
+	DBResolver database.DBConnectionResolver // The resource connection resolver for resolving database connections.
 	// MigratorProvider is the provider for obtaining Migrator instances.
 	MigratorProvider MigratorProvider
 	// AllMigrationFS is a map of all registered migration file systems, keyed by name.
@@ -51,18 +50,16 @@ func NewMigrationTaskletComponentBuilder(p MigrationTaskletComponentBuilderParam
 	return func(
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
-		dbResolver coreAdapter.ResourceConnectionResolver, // The resource connection resolver.
+		resourceProviders map[string]coreAdapter.ResourceProvider,
 		properties map[string]string,
 	) (interface{}, error) {
-		dbConnResolver, ok := dbResolver.(database.DBConnectionResolver)
-		if !ok {
-			return nil, fmt.Errorf("dbResolver (type %T) is not of type database.DBConnectionResolver", dbResolver)
-		}
+		// resourceProviders is not directly used by MigrationTasklet, but it's part of the ComponentBuilder signature.
+		_ = resourceProviders
 		return NewMigrationTasklet(
 			cfg,
 			resolver,
 			p.TxFactory,
-			dbConnResolver,
+			p.DBResolver,
 			p.MigratorProvider,
 			p.AllMigrationFS,
 			properties,

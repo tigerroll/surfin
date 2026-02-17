@@ -6,7 +6,6 @@ import (
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
-	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
@@ -113,9 +112,8 @@ func (w *NoOpItemWriter[I]) Open(ctx context.Context, ec model.ExecutionContext)
 // Parameters:
 //
 //	ctx: The context for the operation.
-//	tx: The current transaction.
 //	items: The items to be written.
-func (w *NoOpItemWriter[I]) Write(ctx context.Context, tx tx.Tx, items []I) error {
+func (w *NoOpItemWriter[I]) Write(ctx context.Context, items []I) error {
 	logger.Debugf("NoOpItemWriter: Write called with %d items.", len(items))
 	return nil
 }
@@ -155,20 +153,20 @@ func (w *NoOpItemWriter[I]) GetExecutionContext(ctx context.Context) (model.Exec
 	return w.ec, nil
 }
 
-// GetTargetDBName returns the name of the target database for this writer.
+// GetTargetResourceName returns the name of the target resource for this writer.
 //
 // Returns:
 //
-//	string: An empty string, as this writer does not write to a specific database.
-func (w *NoOpItemWriter[I]) GetTargetDBName() string {
-	return "" // This writer does not write to a specific database, so an empty string is returned.
+//	string: An empty string, as this writer does not write to a specific resource.
+func (w *NoOpItemWriter[I]) GetTargetResourceName() string {
+	return "" // This writer does not write to a specific resource, so an empty string is returned.
 }
 
-// GetTableName returns the name of the target table for this writer.
+// GetResourcePath returns the path or identifier within the target resource for this writer.
 //
 // Returns:
 //
-//	string: An empty string, as this writer does not write to a specific table.
-func (w *NoOpItemWriter[I]) GetTableName() string {
-	return "" // This writer does not write to a specific table, so an empty string is returned.
+//	string: An empty string, as this writer does not write to a specific path.
+func (w *NoOpItemWriter[I]) GetResourcePath() string {
+	return "" // This writer does not write to a specific path, so an empty string is returned.
 }

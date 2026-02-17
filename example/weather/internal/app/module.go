@@ -12,13 +12,13 @@ import (
 
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database" // Imports the generic database adapter interface.
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database/dummy" // For temporary dummy DBConnectionResolver
 	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"github.com/mitchellh/mapstructure"
-	dummy "github.com/tigerroll/surfin/pkg/batch/adapter/database/dummy" // Dummy database implementations
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/mysql"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/postgres"
@@ -152,7 +152,7 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 		// Handle dummy type explicitly: provide dummy implementations instead of skipping.
 		if dbConfig.Type == "dummy" {
 			logger.Infof("DB connection '%s' is configured as 'dummy'. Providing dummy implementations.", name)
-			conn = dummy.NewDummyDBConnection()
+			conn = dummy.NewDummyDBConnection(name)
 		} else {
 			provider, ok := providerMap[dbConfig.Type]
 			if !ok {
@@ -282,4 +282,9 @@ var Module = fx.Options(
 	)),
 	// migrationfs.Module explicitly provides the framework migration FS on the application side.
 	migrationfs.Module,
+
+	// Provide the default DBConnectionResolver (dummy implementation for now)
+	fx.Provide(fx.Annotate(
+		dummy.NewDefaultDBConnectionResolver,
+	)),
 )

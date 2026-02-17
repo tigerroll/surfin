@@ -22,6 +22,8 @@ type ResourceProvider interface {
 	CloseAll() error
 	// Type returns the type of resource handled by this provider (e.g., "database", "storage").
 	Type() string
+	// Name returns the unique name of this resource provider (e.g., "database", "s3").
+	Name() string
 }
 
 // ResourceConnectionResolver is an interface that resolves the required resource connection instance based on the execution context.

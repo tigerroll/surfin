@@ -7,7 +7,7 @@ import (
 	"context"
 	"database/sql"
 
-	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 )
 
 // TxExecutor is an interface that defines common write operations executable within a transaction.
@@ -17,29 +17,41 @@ type TxExecutor interface {
 	// ExecuteUpdate performs database write operations (INSERT, UPDATE, DELETE) on the specified model.
 	// This operation is executed within the current transaction context.
 	//
-	// ctx: The context for the operation.
-	// model: A Go struct or slice containing the data to be saved or updated in the database.
-	// operation: A string indicating the type of operation to be performed (e.g., "CREATE", "UPDATE", "DELETE").
-	// tableName: The name of the target database table.
-	// query: A key-value map for specifying conditions in UPDATE or DELETE operations.
-	//        Keys are column names, values are corresponding values. Multiple entries are combined with AND.
-	// Returns: The number of affected rows and any error that occurred during the operation.
+	// Parameters:
+	//   ctx: The context for the operation.
+	//   model: A Go struct or slice containing the data to be saved or updated in the database.
+	//   operation: A string indicating the type of operation to be performed (e.g., "CREATE", "UPDATE", "DELETE").
+	//   tableName: The name of the target database table.
+	//   query: A key-value map for specifying conditions in UPDATE or DELETE operations.
+	//          Keys are column names, values are corresponding values. Multiple entries are combined with AND.
+	//
+	// Returns:
+	//   The number of affected rows and any error that occurred during the operation.
 	ExecuteUpdate(ctx context.Context, model interface{}, operation string, tableName string, query map[string]interface{}) (rowsAffected int64, err error)
 
 	// ExecuteUpsert performs an UPSERT operation (INSERT OR REPLACE / ON CONFLICT DO UPDATE) on the database.
 	// This operation is executed within the current transaction context.
 	//
-	// ctx: The context for the operation.
-	// model: A Go struct or slice containing the data to be inserted or updated in the database.
-	// tableName: The name of the target database table.
-	// conflictColumns: A list of column names used to detect conflicts. If the combination of these columns
-	//                  duplicates an existing record, an UPSERT is triggered.
-	// updateColumns: A list of column names to be updated if a conflict occurs. If this list is nil or empty,
-	//                conflicts will be treated as DO NOTHING.
-	// Returns: The number of affected rows and any error that occurred during the operation.
+	// Parameters:
+	//   ctx: The context for the operation.
+	//   model: A Go struct or slice containing the data to be inserted or updated in the database.
+	//   tableName: The name of the target database table.
+	//   conflictColumns: A list of column names used to detect conflicts. If the combination of these columns
+	//                    duplicates an existing record, an UPSERT is triggered.
+	//   updateColumns: A list of column names to be updated if a conflict occurs. If this list is nil or empty,
+	//                  conflicts will be treated as DO NOTHING.
+	//
+	// Returns:
+	//   The number of affected rows and any error that occurred during the operation.
 	ExecuteUpsert(ctx context.Context, model interface{}, tableName string, conflictColumns []string, updateColumns []string) (rowsAffected int64, err error)
 
 	// IsTableNotExistError checks if the given error indicates that a table does not exist.
+	//
+	// Parameters:
+	//   err: The error to check.
+	//
+	// Returns:
+	//   True if the error indicates a table does not exist, false otherwise.
 	IsTableNotExistError(err error) bool
 }
 
@@ -50,14 +62,22 @@ type Tx interface {
 
 	// Savepoint creates a new savepoint within the current transaction.
 	// This allows rolling back a portion of the transaction to this savepoint later.
-	// name: The unique name for the savepoint to be created.
-	// Returns: An error that occurred during savepoint creation.
+	//
+	// Parameters:
+	//   name: The unique name for the savepoint to be created.
+	//
+	// Returns:
+	//   An error that occurred during savepoint creation.
 	Savepoint(name string) error
 
 	// RollbackToSavepoint rolls back the transaction to the savepoint with the specified name.
 	// This undoes changes made after the savepoint, but preserves changes made before it.
-	// name: The name of the savepoint to roll back to.
-	// Returns: An error that occurred during the rollback.
+	//
+	// Parameters:
+	//   name: The name of the savepoint to roll back to.
+	//
+	// Returns:
+	//   An error that occurred during the rollback.
 	RollbackToSavepoint(name string) error
 }
 
@@ -65,17 +85,29 @@ type Tx interface {
 // This interface abstracts transaction propagation and isolation level control.
 type TransactionManager interface {
 	// Begin starts a new database transaction.
-	// ctx: The context for the transaction.
-	// opts: Optional arguments specifying transaction options (e.g., isolation level, read-only flag).
-	// Returns: An instance of the started Tx interface and any error that occurred during transaction initiation.
+	//
+	// Parameters:
+	//   ctx: The context for the transaction.
+	//   opts: Optional arguments specifying transaction options (e.g., isolation level, read-only flag).
+	//
+	// Returns:
+	//   An instance of the started Tx interface and any error that occurred during transaction initiation.
 	Begin(ctx context.Context, opts ...*sql.TxOptions) (Tx, error)
 	// Commit commits the specified transaction, persisting all changes made within that transaction.
-	// tx: The instance of the Tx interface to commit.
-	// Returns: An error that occurred during the commit.
+	//
+	// Parameters:
+	//   tx: The instance of the Tx interface to commit.
+	//
+	// Returns:
+	//   An error that occurred during the commit.
 	Commit(tx Tx) error
 	// Rollback rolls back the specified transaction, undoing all changes made within that transaction.
-	// tx: The instance of the Tx interface to roll back.
-	// Returns: An error that occurred during the rollback.
+	//
+	// Parameters:
+	//   tx: The instance of the Tx interface to roll back.
+	//
+	// Returns:
+	//   An error that occurred during the rollback.
 	Rollback(tx Tx) error
 }
 
@@ -83,8 +115,12 @@ type TransactionManager interface {
 // This allows for the generation of TransactionManagers that are independent of specific database connection types.
 type TransactionManagerFactory interface {
 	// NewTransactionManager creates a new TransactionManager based on the specified database connection.
-	// dbConn: The database connection that the TransactionManager will manage.
-	// Returns: A new TransactionManager instance.
+	//
+	// Parameters:
+	//   dbConn: The database connection that the TransactionManager will manage.
+	//
+	// Returns:
+	//   A new TransactionManager instance.
 	NewTransactionManager(dbConn coreAdapter.ResourceConnection) TransactionManager
 }
 
@@ -95,3 +131,37 @@ type TransactionManagerFactory interface {
 // Deprecated: This type alias may be removed in the future.
 // New code should use the `Tx` interface directly.
 type TransactionAdapter = Tx
+
+// contextKey is a type used as a key for context values.
+type contextKey string
+
+// TransactionContextKey is the key used to store a transaction in the context.
+const TransactionContextKey contextKey = "batch_transaction_key"
+
+// ContextWithTx stores the given transaction in the context and returns a new context.
+//
+// Parameters:
+//
+//	ctx: The parent context.
+//	tx: The transaction to store.
+//
+// Returns:
+//
+//	A new context with the transaction stored.
+func ContextWithTx(ctx context.Context, tx Tx) context.Context {
+	return context.WithValue(ctx, TransactionContextKey, tx)
+}
+
+// TxFromContext retrieves a transaction from the context.
+//
+// Parameters:
+//
+//	ctx: The context to retrieve the transaction from.
+//
+// Returns:
+//
+//	The Tx interface and true if a transaction is found, otherwise nil and false.
+func TxFromContext(ctx context.Context) (Tx, bool) {
+	tx, ok := ctx.Value(TransactionContextKey).(Tx)
+	return tx, ok
+}
