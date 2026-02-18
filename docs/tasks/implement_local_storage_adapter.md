@@ -25,9 +25,9 @@
     // StorageConfig holds configuration for a single storage connection.
     type StorageConfig struct {
         Type            string `yaml:"type"`             // Type of storage (e.g., "gcs", "s3", "local", "ftp", "sftp").
-        BucketName      string `yaml:"bucket_name"`      // Default bucket name for operations. (GCS/S3向け)
-        CredentialsFile string `yaml:"credentials_file"` // Path to credentials file (e.g., service account key for GCS). (GCS/S3向け)
-        BaseDir         string `yaml:"base_dir"`         // Base directory for local file system operations. (Local向け)
+        BucketName      string `yaml:"bucket_name"`      // Default bucket name for operations.
+        CredentialsFile string `yaml:"credentials_file"` // Path to credentials file (e.g., service account key for GCS).
+        BaseDir         string `yaml:"base_dir"`         // Base directory for local file system operations.
     }
 
     // DatasourcesConfig holds a map of named storage configurations.
@@ -451,3 +451,33 @@
         return defaultName, nil
     }
     ```
+
+#### 2.2. `pkg/batch/adapter/storage/local/module.go` の作成
+
+*   **目的**: Fxアプリケーションにローカルストレージアダプターのコンポーネントを提供するFxモジュールを定義します。
+*   **変更ファイル**:
+    *   `pkg/batch/adapter/storage/local/module.go` (新規作成)
+*   **変更内容**:
+    ```go
+    package local
+
+    import (
+        "go.uber.org/fx"
+
+        coreConfig "github.com/tigerroll/surfin/pkg/batch/core/config"
+        storageAdapter "github.com/tigerroll/surfin/pkg/batch/adapter/storage"
+    )
+
+    // Module は Local ストレージアダプターの Fx モジュールです。
+    var Module = fx.Options(
+        fx.Provide(NewLocalProvider),
+        fx.Provide(func(providers []storageAdapter.StorageProvider, cfg *coreConfig.Config) storageAdapter.StorageConnectionResolver {
+            return NewLocalConnectionResolver(providers, cfg)
+        }),
+        fx.Provide(func(p *LocalProvider) storageAdapter.StorageProvider {
+            return p // LocalProviderをStorageProviderとして提供
+        }),
+    )
+    ```
+*   **テスト方法**:
+    *   Goのビルド (`go build ./...`) を実行し、構文エラーがないことを確認します。
