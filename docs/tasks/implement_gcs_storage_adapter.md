@@ -20,48 +20,59 @@
     package storage
 
     import (
-        "context"
-        "io"
+    	"context"
+    	"io"
 
-        coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
-        storageConfig "github.com/tigerroll/surfin/pkg/batch/adapter/storage/config"
+    	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
+    	storageConfig "github.com/tigerroll/surfin/pkg/batch/adapter/storage/config"
     )
 
-    // StorageAdapter は汎用的なデータストレージ操作を定義します。
-    // coreAdapter.ResourceConnection を埋め込み、リソース接続としての機能を提供します。
-    type StorageAdapter interface {
-        coreAdapter.ResourceConnection // Close(), Type(), Name() を継承
+    // StorageExecutor は汎用的なストレージ操作を定義します。
+    // StorageAdapter に埋め込まれ、具体的なストレージ操作を提供します。
+    type StorageExecutor interface {
+    	Upload(ctx context.Context, bucket, objectName string, data io.Reader, contentType string) error
+    	Download(ctx context.Context, bucket, objectName string) (io.ReadCloser, error)
+    	ListObjects(ctx context.Context, bucket, prefix string, fn func(objectName string) error) error
+    	DeleteObject(ctx context.Context, bucket, objectName string) error
+    }
 
-        Upload(ctx context.Context, bucket, objectName string, data io.Reader, contentType string) error
-        Download(ctx context.Context, bucket, objectName string) (io.ReadCloser, error)
-        ListObjects(ctx context.Context, bucket, prefix string, fn func(objectName string) error) error
-        DeleteObject(ctx context.Context, bucket, objectName string) error
-        Config() storageConfig.StorageConfig
+    // StorageAdapter は汎用的なデータストレージ接続を表します。
+    // coreAdapter.ResourceConnection と StorageExecutor を埋め込み、リソース接続としての機能と具体的なストレージ操作を提供します。
+    type StorageAdapter interface {
+    	coreAdapter.ResourceConnection // Close(), Type(), Name() を継承
+    	StorageExecutor                // Upload(), Download(), ListObjects(), DeleteObject() を継承
+
+    	Config() storageConfig.StorageConfig
     }
 
     // StorageProvider はデータストレージ接続の取得と管理を行います。
-    // coreAdapter.ResourceProvider を埋め込み、汎用的なプロバイダ機能を提供します。
+    // coreAdapter.ResourceProvider と同様の機能を提供しますが、直接埋め込みは行いません。
+    // 注意: coreAdapter.ResourceProvider には Name() メソッドがありますが、StorageProvider には定義されていません。
+    // これは、StorageProvider が特定の「タイプ」（例: "storage"）のプロバイダであり、そのタイプ自体が識別子として機能するためです。
+    // ComponentBuilder などで coreAdapter.ResourceProvider として扱う場合は、別途ラッパーなどが必要になる可能性があります。
     type StorageProvider interface {
-        coreAdapter.ResourceProvider // GetConnection(), CloseAll(), Type() を継承
-
-        // GetConnection は指定された名前の StorageAdapter 接続を取得します。
-        GetConnection(name string) (StorageAdapter, error)
-        // ForceReconnect は指定された名前の既存の接続を強制的に閉じ、再確立します。
-        ForceReconnect(name string) (StorageAdapter, error)
+    	// GetConnection は指定された名前の StorageAdapter 接続を取得します。
+    	GetConnection(name string) (StorageAdapter, error)
+    	// CloseAll はこのプロバイダが管理する全ての接続を閉じます。
+    	CloseAll() error
+    	// Type はこのプロバイダが扱うリソースのタイプ（例: "database", "storage"）を返します。
+    	Type() string
+    	// ForceReconnect は指定された名前の既存の接続を強制的に閉じ、再確立します。
+    	ForceReconnect(name string) (StorageAdapter, error)
     }
 
     // StorageConnectionResolver は実行コンテキストに基づいて適切なデータストレージ接続インスタンスを解決します。
     // coreAdapter.ResourceConnectionResolver を埋め込み、汎用的なリソース解決機能を提供します。
     type StorageConnectionResolver interface {
-        coreAdapter.ResourceConnectionResolver // ResolveConnection(), ResolveConnectionName() を継承
+    	coreAdapter.ResourceConnectionResolver // ResolveConnection(), ResolveConnectionName() を継承
 
-        // ResolveStorageConnection は指定された名前の StorageAdapter 接続インスタンスを解決します。
-        // 返される接続が有効であり、必要に応じて再確立されることを保証します。
-        ResolveStorageConnection(ctx context.Context, name string) (StorageAdapter, error)
+    	// ResolveStorageConnection は指定された名前の StorageAdapter 接続インスタンスを解決します。
+    	// 返される接続が有効であり、必要に応じて再確立されることを保証します。
+    	ResolveStorageConnection(ctx context.Context, name string) (StorageAdapter, error)
 
-        // ResolveStorageConnectionName は実行コンテキストに基づいてデータストレージ接続の名前を解決します。
-        // jobExecution と stepExecution はモデルパッケージとの循環依存を避けるため interface{} として渡されます。
-        ResolveStorageConnectionName(ctx context.Context, jobExecution interface{}, stepExecution interface{}, defaultName string) (string, error)
+    	// ResolveStorageConnectionName は実行コンテキストに基づいてデータストレージ接続の名前を解決します。
+    	// jobExecution と stepExecution はモデルパッケージとの循環依存を避けるため interface{} として渡されます。
+    	ResolveStorageConnectionName(ctx context.Context, jobExecution interface{}, stepExecution interface{}, defaultName string) (string, error)
     }
     ```
 *   **テスト方法**:
@@ -88,9 +99,10 @@
 
     // StorageConfig holds configuration for a single storage connection.
     type StorageConfig struct {
-        Type            string `yaml:"type"`             // Type of storage (e.g., "gcs", "s3", "local", "ftp", "sftp").
-        BucketName      string `yaml:"bucket_name"`      // Default bucket name for operations.
-        CredentialsFile string `yaml:"credentials_file"` // Path to credentials file (e.g., service account key for GCS).
+    	Type            string `yaml:"type"`             // Type of storage (e.g., "gcs", "s3", "local", "ftp", "sftp").
+    	BucketName      string `yaml:"bucket_name"`      // Default bucket name for operations.
+    	CredentialsFile string `yaml:"credentials_file"` // Path to credentials file (e.g., service account key for GCS).
+    	BaseDir         string `yaml:"base_dir"`         // Base directory for local file system operations.
     }
 
     // DatasourcesConfig holds a map of named storage configurations.
@@ -558,7 +570,7 @@
 
     // Run the application.
     // Cast embeddedConfig and embeddedJSL to their respective type aliases and add jobDoneChan.
-    app.RunApplication(ctx, envFilePath, config.EmbeddedConfig(embeddedConfig), jsl.JSLDefinitionBytes(embeddedJSL), applicationMigrationsFS, adapterProviderOptions, jobDoneChan) // 変数名を変更
+    app.RunApplication(ctx, envFilePath, config.EmbeddedConfig(embeddedConfig), jsl.JSLDefinitionBytes(embeddedJSL), applicationMigrationsFS, adapterProviderOptions, jobDoneChan)
     // [ここまで変更]
     // Exit the process with exit code 0 after application execution completes.
     os.Exit(0)
