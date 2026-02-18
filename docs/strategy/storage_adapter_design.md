@@ -24,7 +24,7 @@ GCSアダプターは、以下の機能を提供します。
 ## 4. 全体アーキテクチャにおける位置づけ
 
 GCSアダプターは、バッチフレームワークの「アダプター層」に位置づけられます。
-データストレージ操作の汎用的な抽象化として `StorageAdapter` インターフェースを導入し、GCSアダプターはこのインターフェースを実装します。また、DBアダプターと同様に、接続の管理と解決のために `StorageProvider` および `StorageConnectionResolver` インターフェースを導入し、それぞれ `adapter.ResourceProvider` および `adapter.ResourceConnectionResolver` を埋め込みます。これにより、フレームワークのコアロジック（例: アイテムリーダー、アイテムライター）は、特定のストレージプロバイダーに依存せず、共通のインターフェースを通じてデータストレージと連携できるようになります。
+データストレージ操作の汎用的な抽象化として `StorageAdapter` インターフェースを導入し、GCSアダプターはこのインターフェースを実装します。また、DBアダプターと同様に、接続の管理と解決のために `StorageProvider` および `StorageConnectionResolver` インターフェースを導入します。特に `StorageConnectionResolver` は `adapter.ResourceConnectionResolver` を埋め込みます。これにより、フレームワークのコアロジック（例: アイテムリーダー、アイテムライター）は、特定のストレージプロバイダーに依存せず、共通のインターフェースを通じてデータストレージと連携できるようになります。
 
 ```mermaid
 graph LR
@@ -34,8 +34,8 @@ graph LR
 
     subgraph "アダプター層"
         B1["StorageConnectionResolver<br>(adapter.ResourceConnectionResolver)"]
-        B2["StorageProvider<br>(adapter.ResourceProvider)"]
-        B3["StorageAdapter<br>(adapter.ResourceConnection)"]
+        B2["StorageProvider"]
+        B3["StorageAdapter<br>(coreAdapter.ResourceConnection)"]
         C1["GCSConnectionResolver"]
         C2["GCSProvider"]
         C3["GCSAdapter"]
@@ -60,21 +60,23 @@ graph LR
 *   **ファイルパス**: `pkg/batch/adapter/storage/interfaces.go`
 *   **パッケージ**: `storage`
 *   **インターフェース**: `StorageAdapter`
+*   **インターフェース**: `StorageExecutor`
     *   **目的**:
-        *   汎用的なストレージ操作を定義する。
+        *   `StorageExecutor` は、汎用的なストレージ操作（アップロード、ダウンロード、リスト、削除）を定義します。
+        *   `StorageAdapter` は、`coreAdapter.ResourceConnection` と `StorageExecutor` を埋め込むことで、リソース接続としての機能と具体的なストレージ操作の両方を提供します。
         *   `pkg/batch/core/adapter.ResourceConnection` インターフェースを埋め込むことで、汎用的なリソース接続としての機能（リソースタイプ、名前、クローズ）を提供する。
         *   これにより、具体的なストレージサービス（GCS, S3, ローカルファイルシステムなど）に依存しない形で、ファイル操作を行うことができる。
     *   **メソッド**:
 
         | メソッド名 | 説明 |
         |---|---|
-        | `Close`        | アダプターが保持するリソース（例: 内部のクライアント接続）を解放します。(`adapter.ResourceConnection` から継承) |
-        | `Type`         | リソースのタイプ（例: "gcs", "s3"）を返します。(`adapter.ResourceConnection` から継承) |
-        | `Name`         | 接続名（例: "default", "archive"）を返します。(`adapter.ResourceConnection` から継承) |
-        | `Upload`       | 指定されたバケットとオブジェクト名（パスを含む）にデータをアップロードします。`data` はアップロードするデータのストリームです。`contentType` はアップロードするデータのMIMEタイプを指定します。 |
-        | `Download`     | 指定されたバケットとオブジェクト名（パスを含む）からデータをダウンロードします。ダウンロードしたデータのストリームを返します。このストリームは使用後に必ずクローズする必要があります。 |
-        | `ListObjects`  | 指定されたバケットとプレフィックス内のオブジェクトをリストし、オブジェクト名をコールバック関数 `fn` に渡して逐次処理します。これにより、メモリ負荷を抑えつつ大量のオブジェクトを扱えます。 |
-        | `DeleteObject` | 指定されたバケットとオブジェクト名を削除します。|
+        | `Close`        | アダプターが保持するリソース（例: 内部のクライアント接続）を解放します。(`coreAdapter.ResourceConnection` から継承) |
+        | `Type`         | リソースのタイプ（例: "gcs", "s3"）を返します。(`coreAdapter.ResourceConnection` から継承) |
+        | `Name`         | 接続名（例: "default", "archive"）を返します。(`coreAdapter.ResourceConnection` から継承) |
+        | `Upload`       | 指定されたバケットとオブジェクト名（パスを含む）にデータをアップロードします。`data` はアップロードするデータのストリームです。`contentType` はアップロードするデータのMIMEタイプを指定します。(`StorageExecutor` から継承) |
+        | `Download`     | 指定されたバケットとオブジェクト名（パスを含む）からデータをダウンロードします。ダウンロードしたデータのストリームを返します。このストリームは使用後に必ずクローズする必要があります。(`StorageExecutor` から継承) |
+        | `ListObjects`  | 指定されたバケットとプレフィックス内のオブジェクトをリストし、オブジェクト名をコールバック関数 `fn` に渡して逐次処理します。これにより、メモリ負荷を抑えつつ大量のオブジェクトを扱えます。(`StorageExecutor` から継承) |
+        | `DeleteObject` | 指定されたバケットとオブジェクト名を削除します。(`StorageExecutor` から継承)|
         | `Config`       | このアダプターが使用している設定（`pkg/batch/adapter/storage/config.StorageConfig`）を返します。|
 
 *   **推奨されるインターフェース定義 (Go)**:
@@ -92,25 +94,36 @@ graph LR
         storageConfig "github.com/tigerroll/surfin/pkg/batch/adapter/storage/config"
     )
 
-    // StorageAdapter は汎用的なデータストレージ操作を定義します。
-    // coreAdapter.ResourceConnection を埋め込み、リソース接続としての機能を提供します。
-    type StorageAdapter interface {
-        coreAdapter.ResourceConnection // Close(), Type(), Name() を継承
-
+    // StorageExecutor は汎用的なストレージ操作を定義します。
+    // StorageAdapter に埋め込まれ、具体的なストレージ操作を提供します。
+    type StorageExecutor interface {
         Upload(ctx context.Context, bucket, objectName string, data io.Reader, contentType string) error
         Download(ctx context.Context, bucket, objectName string) (io.ReadCloser, error)
         ListObjects(ctx context.Context, bucket, prefix string, fn func(objectName string) error) error
         DeleteObject(ctx context.Context, bucket, objectName string) error
+    }
+
+    // StorageAdapter は汎用的なデータストレージ接続を表します。
+    // coreAdapter.ResourceConnection と StorageExecutor を埋め込み、リソース接続としての機能と具体的なストレージ操作を提供します。
+    type StorageAdapter interface {
+        coreAdapter.ResourceConnection // Close(), Type(), Name() を継承
+        StorageExecutor                // Upload(), Download(), ListObjects(), DeleteObject() を継承
+
         Config() storageConfig.StorageConfig
     }
 
     // StorageProvider はデータストレージ接続の取得と管理を行います。
-    // coreAdapter.ResourceProvider を埋め込み、汎用的なプロバイダ機能を提供します。
+    // coreAdapter.ResourceProvider と同様の機能を提供しますが、直接埋め込みは行いません。
+    // 注意: coreAdapter.ResourceProvider には Name() メソッドがありますが、StorageProvider には定義されていません。
+    // これは、StorageProvider が特定の「タイプ」（例: "storage"）のプロバイダであり、そのタイプ自体が識別子として機能するためです。
+    // ComponentBuilder などで coreAdapter.ResourceProvider として扱う場合は、別途ラッパーなどが必要になる可能性があります。
     type StorageProvider interface {
-        coreAdapter.ResourceProvider // GetConnection(), CloseAll(), Type() を継承
-
         // GetConnection は指定された名前の StorageAdapter 接続を取得します。
         GetConnection(name string) (StorageAdapter, error)
+        // CloseAll はこのプロバイダが管理する全ての接続を閉じます。
+        CloseAll() error
+        // Type はこのプロバイダが扱うリソースのタイプ（例: "database", "storage"）を返します。
+        Type() string
         // ForceReconnect は指定された名前の既存の接続を強制的に閉じ、再確立します。
         ForceReconnect(name string) (StorageAdapter, error)
     }

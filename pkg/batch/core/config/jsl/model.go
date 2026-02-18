@@ -137,14 +137,14 @@ type Partition struct {
 }
 
 // ComponentBuilder is a generic function type for building core components such as ItemReader, ItemProcessor, and ItemWriter.
-// This builder provides access to framework configuration, expression resolvers, and resource connection resolvers,
-// allowing components to access dynamic property resolution logic.
+// This builder provides access to framework configuration, expression resolvers, and resource providers,
+// allowing components to access dynamic property resolution logic and specific resource connections.
 //
 // Parameters:
 //
 //	cfg: The global framework configuration.
 //	resolver: The expression resolver for dynamic property resolution.
-//	dbResolver: The resource connection resolver for resolving database connections.
+//	resourceProviders: A map of all registered resource providers (e.g., database, storage), keyed by their Name().
 //	properties: A map of properties injected from JSL.
 //
 // Returns:
@@ -153,7 +153,7 @@ type Partition struct {
 type ComponentBuilder func(
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
-	resourceProviders map[string]coreAdapter.ResourceProvider, // Type changed to coreAdapter.ResourceConnectionResolver.
+	resourceProviders map[string]coreAdapter.ResourceProvider, // Map of all registered resource providers.
 	properties map[string]string,
 ) (interface{}, error)
 
