@@ -266,19 +266,44 @@ surfin:
   # ... その他のフレームワーク共通設定
   adapter: # アダプターの設定
     storage: # データストレージアダプターの設定
-      gcs: # database と同じで、任意の名称を指定できる
-        type: gcs
-        bucket_name: your-default-gcs-bucket
-        credentials_file: "" # 空文字列の場合はデフォルト認証を使用
-      s3:
-        type: s3
-        bucket_name: your-s3-bucket
-        region: ap-northeast-1
-        credentials_file: "/path/to/s3_credentials.json"
-      local:
-        type: local
-        base_dir: "/tmp/batch_data" # ローカルファイル操作のベースディレクトリ
-        # bucket_name や credentials_file は local タイプでは不要
+      local_storage: # ★変更: ローカルストレージアダプターの設定名を local_storage に変更
+        type: "local" # タイプを"local"に設定
+        base_dir: "/tmp/surfin_batch_data" # ローカルファイルが保存されるディレクトリのパス
+
+    # Batch framework settings
+    batch:
+      polling_interval_seconds: 3600 # Polling interval (seconds)
+      api_endpoint: "https://api.open-meteo.com/v1" # Open-Meteo API base URL
+      api_key: ""
+      job_name: "weatherJob"
+      # Step-level retry settings (for the entire chunk process)
+      retry:
+        max_attempts: 3
+        initial_interval: 1
+        max_interval: 10
+        factor: 2
+        circuit_breaker_threshold: 3
+        circuit_breaker_reset_interval: 60
+      # Item-level retry settings
+      item_retry:
+        max_attempts: 3
+        retryable_exceptions: ["io.EOF", "net.OpError"]
+      # Item-level skip settings
+      item_skip:
+        skip_limit: 5
+        skippable_exceptions: ["json.UnmarshalTypeError"]
+      chunk_size: 50 # Default chunk size.
+
+    # System-wide settings
+    system:
+      timezone: "Asia/Tokyo"
+      logging:
+        level: "DEBUG"
+        format: "json" # Default log format is JSON.
+      
+    # Infrastructure settings
+    infrastructure:
+      job_repository_db_ref: "metadata" # DB connection name used by JobRepository
 ```
 
 ## 8. 考慮事項

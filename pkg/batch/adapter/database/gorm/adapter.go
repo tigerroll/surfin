@@ -220,10 +220,21 @@ func (a *GormDBAdapter) GetSQLDB() (*sql.DB, error) {
 func (a *GormDBAdapter) ExecuteQuery(ctx context.Context, target interface{}, query map[string]interface{}) error {
 	db := a.db.WithContext(ctx)
 
-	db = applyTableName(db, target) // Fix: Check TableNamer and apply table name.
+	// If the query map contains a "query" key with a string value, treat it as a raw SQL query.
+	if rawSQL, ok := query["query"].(string); ok {
+		// Execute raw SQL query and scan results into target.
+		// Note: This assumes no additional arguments are passed for the raw SQL.
+		// If arguments are needed, the 'query' map convention or the interface would need to be extended.
+		result := db.Raw(rawSQL).Scan(target)
+		if result.Error != nil {
+			return result.Error
+		}
+		return nil
+	}
 
-	// Execute the query using GORM's Find method.
-	// If query is a map, it is used as a Where clause.
+	// Otherwise, apply table name and use the map as a Where clause.
+	db = applyTableName(db, target)
+
 	result := db.Where(query).Find(target)
 
 	if result.Error != nil {

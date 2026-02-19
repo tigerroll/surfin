@@ -58,6 +58,11 @@ surfin:
           max_idle_conns: 1
           conn_max_lifetime_minutes: 0
 
+    storage:
+      local: 
+        type: "local"
+        base_dir: "/tmp/surfin_batch_data"
+
   # Batch framework settings
   batch:
     polling_interval_seconds: 3600 # Polling interval (seconds)
