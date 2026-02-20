@@ -1,24 +1,24 @@
 id: weatherJob # Match config.Batch.JobName
 name: Weather Data Processing Job
 description: This job fetches weather data, processes it, and stores it.
-incrementer: # Add
-  ref: "timestampIncrementer" # Add: Generates unique parameters using a timestamp every time
+incrementer: # Job parameters incrementer configuration.
+  ref: "timestampIncrementer" # Generates unique parameters using a timestamp for each job execution.
 listeners:
   - ref: loggingJobListener # Listener name registered in JobFactory
   - ref: jobCompletionSignaler
 
 flow:
-  start-element: migrateMetadataStep # Starting element of the flow
+  start-element: migrateMetadataStep # The initial starting element of the job flow.
   elements:
     migrateMetadataStep: # Step to run framework migrations
       id: migrateMetadataStep
       tasklet:
         ref: migrationTasklet
         properties:
-          dbRef: "metadata" # DB connection name used by JobRepository
-          migrationFSName: "frameworkMigrationsFS" # Framework migration FS name
-          migrationDir: "postgres" # Directory containing PostgreSQL migration files
-          isFramework: "true" # Indicates this is a framework migration
+          dbRef: "metadata" # Database connection name used by JobRepository.
+          migrationFSName: "frameworkMigrationsFS" # Name of the embedded file system for framework migrations.
+          migrationDir: "postgres" # Directory within the migration FS containing PostgreSQL migration files.
+          isFramework: "true" # Indicates this is a framework migration.
       listeners:
         - ref: loggingStepListener
       transitions:
@@ -32,10 +32,10 @@ flow:
       tasklet:
         ref: migrationTasklet
         properties:
-          dbRef: "workload" # Workload DB connection name
-          migrationFSName: "weatherAppFS" # Application migration FS name
-          migrationDir: "postgres" # Directory containing SQLite migration files
-          isFramework: "false" # Indicates this is an application migration
+          dbRef: "workload" # Workload database connection name.
+          migrationFSName: "weatherAppFS" # Name of the embedded file system for application migrations.
+          migrationDir: "postgres" # Directory within the migration FS containing PostgreSQL migration files.
+          isFramework: "false" # Indicates this is an application migration.
       listeners:
         - ref: loggingStepListener
       transitions:
@@ -52,10 +52,10 @@ flow:
         ref: weatherItemProcessor
       writer: # Write to database
         ref: weatherItemWriter
-        properties:
-          targetDBName: "workload" # Specify target DB name for Writer
+        properties: # Properties for the writer component.
+          targetDBName: "workload" # Specifies the target database connection name for the writer.
       chunk:
-        item-count: 50 # Use config.Batch.ChunkSize
+        item-count: 50 # Number of items to process in a single chunk.
         commit-interval: 1
       listeners: # Step level listeners
         - ref: loggingStepListener
@@ -73,14 +73,30 @@ flow:
         - ref: loggingChunkListener
       execution-context-promotion: # Promote reader state to Job EC
         keys:
-          - "reader_context" # Promote the entire context saved by WeatherReader
-          - "decision.condition" # Promote the condition set by the tasklet
+          - "reader_context" # Promotes the entire context saved by WeatherReader.
+          - "decision.condition" # Promotes the condition set by the tasklet.
       transitions:
         - on: COMPLETED # If the step completes successfully
-          to: checkConditionDecision # Transition directly to Decision
+          to: exportHourlyForecastStep # Transition to exportHourlyForecastStep
         - on: FAILED # If the step fails
           fail: true # Terminate the entire job as failed
           
+    exportHourlyForecastStep:
+      id: exportHourlyForecastStep
+      tasklet:
+        ref: hourlyForecastExportTasklet # Reference to the tasklet builder.
+        properties: # Properties for the tasklet component.
+          dbRef: workload # Database connection name where the hourly_forecast table resides.
+          storageRef: local # Connection name for the local storage adapter.
+          outputBaseDir: "exported_weather_data" # Base directory for output files within the storage.
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED # If the step completes successfully.
+          to: checkConditionDecision # Transition to checkConditionDecision.
+        - on: FAILED
+          fail: true # Terminate the entire job as failed
+
     checkConditionDecision: # ConditionalDecision element
       id: checkConditionDecision
       ref: conditionalDecision # Reference to Decision Builder
@@ -89,7 +105,7 @@ flow:
         expectedValue: "true"             # COMPLETED if it matches this value
         defaultStatus: "FAILED"           # Default status if no match or key not found
       transitions:
-        - on: COMPLETED # If decision.condition is "true"
+        - on: COMPLETED # If the value of 'decision.condition' in the ExecutionContext is "true".
           to: randomFailTaskletStep # To the existing randomFailTaskletStep
         - on: FAILED # If decision.condition is not "true", or key not found
           to: anotherRandomFailTaskletStep # To another path
@@ -121,4 +137,4 @@ flow:
           end: true
         - on: FAILED
           fail: true
-  transition-rules: # Transition rules are defined within elements for clarity
+  transition-rules: # Transition rules are defined within elements for clarity.

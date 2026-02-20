@@ -13,6 +13,7 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database" // Imports the generic database adapter interface.
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/dummy" // For temporary dummy DBConnectionResolver
+	storageConfig "github.com/tigerroll/surfin/pkg/batch/adapter/storage/config"
 	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
@@ -24,6 +25,13 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/postgres"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/sqlite" // GORM SQLite provider
 	migrationfs "github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration/filesystem"
+
+	"github.com/tigerroll/surfin/example/weather/internal/step/tasklet"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/storage"       // Imports the storage package.
+	"github.com/tigerroll/surfin/pkg/batch/adapter/storage/local" // Imports the local storage adapter.
+
+	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"     // Added for jsl.ComponentBuilder.
+	"github.com/tigerroll/surfin/pkg/batch/core/config/support" // Added for support.JobFactory.
 
 	"go.uber.org/fx"
 )
@@ -207,6 +215,100 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 	return allConnections, allProviders, nil
 }
 
+// NewStorageConnectionsParams defines the dependencies for NewStorageConnections.
+type NewStorageConnectionsParams struct {
+	fx.In
+	Lifecycle fx.Lifecycle
+	Cfg       *config.Config
+	// StorageProviders is a slice of all StorageProvider implementations, automatically collected by Fx due to the `group:"storage_providers"` tag.
+	StorageProviders []storage.StorageProvider `group:"storage_providers"`
+}
+
+// NewStorageConnections establishes connections for all data sources defined in the configuration file, using the appropriate StorageProvider, and provides them as maps.
+func NewStorageConnections(p NewStorageConnectionsParams) (
+	map[string]storage.StorageAdapter,
+	map[string]storage.StorageProvider,
+	error,
+) {
+	allConnections := make(map[string]storage.StorageAdapter)
+	allProviders := make(map[string]storage.StorageProvider)
+
+	// Map providers by Storage type
+	providerMap := make(map[string]storage.StorageProvider)
+	for _, provider := range p.StorageProviders {
+		providerMap[provider.Type()] = provider
+		allProviders[provider.Type()] = provider // Store providers by Storage type
+	}
+
+	rawAdapterConfig, ok := p.Cfg.Surfin.AdapterConfigs.(map[string]interface{})
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid 'adapter' configuration format: expected map[string]interface{}")
+	}
+
+	storageAdapterConfig, ok := rawAdapterConfig["storage"]
+	if !ok {
+		logger.Warnf("No 'storage' adapter configuration found. Skipping storage connection setup.")
+		return allConnections, allProviders, nil
+	}
+
+	storageConfigsMap, ok := storageAdapterConfig.(map[string]interface{})
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid 'storage' adapter configuration format: expected map[string]interface{}")
+	}
+
+	for name, rawConfig := range storageConfigsMap {
+		var storageConfig storageConfig.StorageConfig
+		// Use mapstructure.DecoderConfig to recognize yaml tags.
+		decoderConfig := &mapstructure.DecoderConfig{
+			Metadata: nil,
+			Result:   &storageConfig,
+			TagName:  "yaml", // Specify the yaml tag here.
+		}
+		decoder, err := mapstructure.NewDecoder(decoderConfig)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create decoder for storage config '%s': %w", name, err)
+		}
+		if err := decoder.Decode(rawConfig); err != nil {
+			return nil, nil, fmt.Errorf("failed to decode storage config for '%s': %w", name, err)
+		}
+
+		provider, ok := providerMap[storageConfig.Type]
+		if !ok {
+			logger.Warnf("No StorageProvider found for storage type '%s' (Datasource: %s). Skipping connection.", storageConfig.Type, name)
+			continue
+		}
+
+		conn, err := provider.GetConnection(name)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get connection for '%s' using provider '%s': %w", name, provider.Type(), err)
+		}
+		allConnections[name] = conn
+		logger.Debugf("Initialized Storage Connection for: %s (%s)", name, storageConfig.Type)
+	}
+
+	p.Lifecycle.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			logger.Infof("Closing all storage connections...")
+			var wg sync.WaitGroup
+			var lastErr error
+			for _, provider := range p.StorageProviders {
+				wg.Add(1)
+				go func(p storage.StorageProvider) {
+					defer wg.Done()
+					if err := p.CloseAll(); err != nil {
+						logger.Errorf("Failed to close connections for storage provider %s: %v", p.Type(), err)
+						lastErr = err
+					}
+				}(provider)
+			}
+			wg.Wait()
+			return lastErr
+		},
+	})
+
+	return allConnections, allProviders, nil
+}
+
 // NewMetadataTxManager extracts the "metadata" TransactionManager from the map.
 // This function is responsible for providing the TransactionManager specifically for metadata operations.
 //
@@ -245,6 +347,9 @@ var Module = fx.Options(
 	postgres.Module, // Adds the PostgreSQL DBProvider to the Fx graph.
 	sqlite.Module,   // SQLite DBProvider is added to the Fx graph.
 
+	// Storage adapter related modules
+	local.Module, // Add Fx module for Local Storage Adapter
+
 	// Provide the aggregated map[string]database.DBConnection and map[string]tx.TransactionManager
 	// NewDBConnectionsAndTxManagers also provides map[string]database.DBProvider
 	fx.Provide(NewDBConnectionsAndTxManagers), // Provides map[string]database.DBConnection and map[string]database.DBProvider.
@@ -253,6 +358,17 @@ var Module = fx.Options(
 		NewMetadataTxManager,
 		fx.ResultTags(`name:"metadata"`), // Tagged as "metadata" for injection into JobFactoryParams.
 	)), // Note: An explicit fx.Provide for TxFactory is not needed here because gormadapter.Module already provides it. Fx automatically resolves TxFactory as a dependency for NewMetadataTxManager.
+
+	// Provide the aggregated map[string]storage.StorageAdapter and map[string]storage.StorageProvider
+	fx.Provide(NewStorageConnections), // Provides map[string]storage.StorageAdapter and map[string]storage.StorageProvider.
+
+	// Provide the StorageConnectionResolver using NewLocalConnectionResolver.
+	// This ensures that the []storage.StorageProvider group is fully assembled
+	// before NewLocalConnectionResolver is called.
+	fx.Provide(fx.Annotate(
+		local.NewLocalConnectionResolver,              // Use local.NewLocalConnectionResolver.
+		fx.As(new(storage.StorageConnectionResolver)), // Provide as storage.StorageConnectionResolver interface.
+	)),
 
 	fx.Provide( // Provide application migration FS by name.
 		fx.Annotate(
@@ -287,4 +403,17 @@ var Module = fx.Options(
 	fx.Provide(fx.Annotate(
 		dummy.NewDefaultDBConnectionResolver,
 	)),
+	// Add the tasklet module
+	tasklet.Module,
+
+	// Register the hourlyForecastExportTasklet builder with the JobFactory.
+	fx.Invoke(func(p struct {
+		fx.In
+		JobFactory                         *support.JobFactory
+		HourlyForecastExportTaskletBuilder jsl.ComponentBuilder `name:"hourlyForecastExportTasklet"`
+	}) {
+		// Call JobFactory's RegisterComponentBuilder method to register the builder.
+		p.JobFactory.RegisterComponentBuilder("hourlyForecastExportTasklet", p.HourlyForecastExportTaskletBuilder)
+		logger.Debugf("Registered 'hourlyForecastExportTasklet' with JobFactory.")
+	}),
 )
