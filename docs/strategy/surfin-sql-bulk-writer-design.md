@@ -15,11 +15,12 @@ Spring Batchの`JdbcBatchItemWriter`は、指定されたSQLステートメン�
 ### 3.2. 構造体定義
 ```go
 type SqlBulkWriter[T any] struct {
-	db         *sql.DB                 // データベース接続
-	sql        string                  // 実行するSQLステートメント（例: INSERT INTO table (col1, col2) VALUES (?, ?)）
-	bulkSize   int                     // 一度にコミットするアイテムの最大数
-	itemToArgs func(T) ([]any, error)  // T型のアイテムをSQLの引数スライスに変換する関数
 	name       string                  // Writerの名前。ロギングなどに使用されます。
+	bulkSize   int                     // 一度にコミットするアイテムの最大数
+	// 以下のフィールドは、TxインターフェースのExecuteUpsert/ExecuteUpdateを使用するために必要
+	tableName       string   // 対象となるテーブル名
+	conflictColumns []string // UPSERT時の競合カラム（例: プライマリキー）
+	updateColumns   []string // UPSERT時に更新するカラム（DO NOTHINGの場合は空）
 }
 ```
 
@@ -27,42 +28,41 @@ type SqlBulkWriter[T any] struct {
 `NewSqlBulkWriter`関数は、`SqlBulkWriter`の新しいインスタンスを作成する。
 
 ```go
-func NewSqlBulkWriter[T any](db *sql.DB, name string, sql string, bulkSize int, itemToArgs func(T) ([]any, error)) *SqlBulkWriter[T] {
+func NewSqlBulkWriter[T any](name string, bulkSize int, tableName string, conflictColumns []string, updateColumns []string) *SqlBulkWriter[T] {
 	return &SqlBulkWriter[T]{
-		db:         db,
 		name:       name,
-		sql:        sql,
 		bulkSize:   bulkSize,
-		itemToArgs: itemToArgs,
+		tableName: tableName,
+		conflictColumns: conflictColumns,
+		updateColumns: updateColumns,
 	}
 }
 ```
-*   `db *sql.DB`: データベース接続。
 *   `name string`: Writerのユニークな名前。ロギングなどに使用される。
-*   `sql string`: 実行するSQLステートメント。通常は`INSERT`または`UPSERT`文で、プレースホルダ（`?`）を含む。
+*   `name string`: Writerのユニークな名前。ロギングなどに使用される。
 *   `bulkSize int`: 一度のデータベース操作で処理するアイテムの最大数。
-*   `itemToArgs func(T) ([]any, error)`: ジェネリクス型`T`のデータを受け取り、SQLステートメントのプレースホルダにバインドするための`[]any`スライスを返す関数。
+*   `tableName string`: 対象となるテーブル名。
+*   `conflictColumns []string`: UPSERT時の競合カラム（例: プライマリキー）。
+*   `updateColumns []string`: UPSERT時に更新するカラム（DO NOTHINGの場合は空）。
 
 ### 3.4. ライフサイクルメソッドの実装
 
 #### `Open(ctx context.Context, ec model.ExecutionContext) error`
 *   **役割**: Writerの初期化。
-*   **動作**: 現時点では特別な初期化は不要だが、将来的にデータベース固有の最適化（例: プリペアドステートメントの準備）が必要になった場合のために用意する。
+*   **動作**: `Tx`インターフェースが内部でステートメントを管理するため、ここでは特別な初期化は不要。
 
 #### `Write(ctx context.Context, items []T) error`
 *   **役割**: 受け取ったデータ項目（`items`スライス）をデータベースに書き込む。
 *   **動作**:
     1.  `items`スライスを、設定された`bulkSize`ごとにチャンクに分割する。
-    2.  各チャンクに対してデータベーストランザクションを開始する。
-    3.  チャンク内の各アイテムについて、`itemToArgs`関数を使用してSQL引数を生成する。
-    4.  生成された引数を用いて、`sql`フィールドに指定されたSQLステートメントを`db.ExecContext`で実行する。この際、パフォーマンスのためにプリペアドステートメントを使用することが推奨される。
-    5.  チャンク内のすべてのアイテムの処理が完了したら、トランザクションをコミットする。
-    6.  途中でエラーが発生した場合は、トランザクションをロールバックし、`exception.NewBatchError`を返す。
-*   **注意点**: `database/sql`パッケージにはSpring Batchの`addBatch`/`executeBatch`のような直接的なバッチAPIはない。そのため、トランザクション内で個々の`ExecContext`をループ実行するか、複数の`VALUES`句を持つ単一の`INSERT`ステートメントを動的に構築して実行するアプローチが考えられる。汎用性を考慮すると、トランザクション内でのループ実行が一般的である。
+    2.  `context`からフレームワークが管理する`Tx`インスタンスを取得する。
+    3.  各チャンクを`Tx.ExecuteUpsert`メソッドに渡し、バルクUPSERTを実行する。
+    4.  `ExecuteUpsert`内でエラーが発生した場合は、`exception.NewBatchError`を返す。
+*   **注意点**: `SqlBulkWriter`は、フレームワークが提供するトランザクションに**参加**する。自身でトランザクションを開始・コミットしない。
 
 #### `Close(ctx context.Context) error`
 *   **役割**: 使用したリソースを解放する。
-*   **動作**: `Open`で確保したリソース（例: プリペアドステートメント）があればここでクローズする。
+*   **動作**: `Tx`インターフェースが内部でリソースを管理するため、ここでは特別なリソース解放は不要。
 
 ## 4. 信頼性の担保
 *   **バルク処理**: `bulkSize`を設定することで、ネットワークI/Oとデータベースの負荷を軽減し、大量データの書き込みパフォーマンスを向上させる。
