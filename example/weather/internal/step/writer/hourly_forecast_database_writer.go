@@ -5,12 +5,11 @@ import (
 	"fmt"
 
 	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
-	appRepo "github.com/tigerroll/surfin/example/weather/internal/repository"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
+	"github.com/tigerroll/surfin/pkg/batch/component/step/writer"
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	batch_config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
-	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
@@ -21,16 +20,20 @@ import (
 type HourlyForecastDatabaseWriterConfig struct {
 	TargetResourceName string `yaml:"targetResourceName,omitempty"` // TargetResourceName is the name of the resource (e.g., database connection) to use.
 	Database           string `yaml:"database,omitempty"`           // Database is an alias for TargetResourceName, for backward compatibility.
+	BulkSize           int    `yaml:"bulkSize,omitempty"`           // BulkSize is the maximum number of items to process in a single database operation for SqlBulkWriter.
 }
 
 // HourlyForecastDatabaseWriter implements [port.ItemWriter] for writing weather data to a database.
 type HourlyForecastDatabaseWriter struct {
-	Repo appRepo.WeatherRepository // Repo is the repository instance, initialized in the [Open] method based on the database type.
+	sqlBulkWriter *writer.SqlBulkWriter[weather_entity.WeatherDataToStore] // sqlBulkWriter is the internal SqlBulkWriter instance.
 
-	DBResolver         database.DBConnectionResolver // DBResolver is the database connection resolver, used to obtain DB connections.
-	Config             *batch_config.Config          // Config is the application's global configuration.
-	TargetResourceName string                        // TargetResourceName is the name of the target resource (e.g., database connection), resolved from JSL properties.
-	ResourcePath       string                        // ResourcePath is the path or identifier within the target resource (e.g., table name), derived from the entity.
+	DBResolver              database.DBConnectionResolver // DBResolver is the database connection resolver, used to obtain DB connections.
+	Config                  *batch_config.Config          // Config is the application's global configuration.
+	TargetResourceName      string                        // TargetResourceName is the name of the target resource (e.g., database connection), resolved from JSL properties.
+	ResourcePath            string                        // ResourcePath is the path or identifier within the target resource (e.g., table name), derived from the entity.
+	bulkSize                int                           // bulkSize is the resolved bulk size for the internal SqlBulkWriter.
+	resolvedConflictColumns []string                      // resolvedConflictColumns are the conflict columns determined at Open time.
+	resolvedUpdateColumns   []string                      // resolvedUpdateColumns are the update columns determined at Open time.
 
 	// stepExecutionContext holds the reference to the Step's ExecutionContext.
 	stepExecutionContext model.ExecutionContext
@@ -74,15 +77,18 @@ func NewHourlyForecastDatabaseWriter(
 		resourceName = "workload" // Default value
 	}
 
-	return &HourlyForecastDatabaseWriter{
-		// Repo is initialized in Open.
-		// The TxManager is no longer directly held by the writer; it's created on demand
-		// by the ChunkStep using the TxManagerFactory and passed to the Write method.
+	// Resolve bulkSize, default to 1000 if not specified or invalid
+	bulkSize := writerCfg.BulkSize
+	if bulkSize <= 0 {
+		bulkSize = 1000 // Default bulk size
+	}
 
+	return &HourlyForecastDatabaseWriter{
 		DBResolver:         dbResolver,
 		Config:             cfg,
 		TargetResourceName: resourceName,
 		ResourcePath:       weather_entity.WeatherDataToStore{}.TableName(), // ResourcePath is initialized from the entity's TableName method.
+		bulkSize:           bulkSize,
 
 		resolver:             resolver,
 		stepExecutionContext: model.NewExecutionContext(),
@@ -110,18 +116,32 @@ func (w *HourlyForecastDatabaseWriter) Open(ctx context.Context, ec model.Execut
 		return fmt.Errorf("failed to resolve database connection '%s': %w", w.TargetResourceName, err)
 	}
 
-	// Select the appropriate repository implementation based on the connection type.
+	// Determine conflict and update columns based on the connection type. (No change here)
 	dbType := conn.Type()
+	w.resolvedConflictColumns = []string{"time", "latitude", "longitude"} // Always these for weather data
 
-	switch dbType {
-	case "postgres", "redshift":
-		w.Repo = appRepo.NewPostgresWeatherRepository(conn, dbType) // Initialize repository
+	// Initialize SqlBulkWriter
+	// SqlBulkWriter no longer needs *sql.DB directly. It relies on TxFromContext.
+	switch dbType { // This block was moved here to ensure dbType is used for column resolution
+	case "postgres", "redshift", "sqlite":
+		w.resolvedUpdateColumns = []string{} // DO NOTHING for these
 	case "mysql":
-		w.Repo = appRepo.NewMySQLWeatherRepository(conn, dbType)
-	case "sqlite":
-		w.Repo = appRepo.NewSQLiteWeatherRepository(conn, dbType)
+		w.resolvedUpdateColumns = []string{"weather_code", "temperature_2m", "collected_at"} // DO UPDATE for MySQL
 	default:
 		return fmt.Errorf("unsupported database type '%s'", dbType)
+	}
+
+	w.sqlBulkWriter = writer.NewSqlBulkWriter[weather_entity.WeatherDataToStore](
+		w.TargetResourceName+"_sql_bulk_writer", // A more specific name for the internal writer
+		w.bulkSize,
+		weather_entity.WeatherDataToStore{}.TableName(),
+		w.resolvedConflictColumns,
+		w.resolvedUpdateColumns,
+	)
+
+	// Call Open on the internal SqlBulkWriter
+	if err := w.sqlBulkWriter.Open(ctx, ec); err != nil {
+		return fmt.Errorf("failed to open SqlBulkWriter: %w", err)
 	}
 
 	// Set stepExecutionContext and restore internal state from EC.
@@ -146,13 +166,6 @@ func (w *HourlyForecastDatabaseWriter) Write(ctx context.Context, items []any) e
 		return nil
 	}
 
-	// Retrieve the transaction from the context.
-	currentTx, ok := tx.TxFromContext(ctx)
-	if !ok {
-		// If no transaction is found in the context, return an error.
-		return exception.NewBatchError("hourly_forecast_database_writer", "transaction not found in context for database write", nil, false, false)
-	}
-
 	var finalDataToStore []weather_entity.WeatherDataToStore
 	for _, item := range items {
 		typedItem, ok := item.(*weather_entity.WeatherDataToStore)
@@ -169,14 +182,14 @@ func (w *HourlyForecastDatabaseWriter) Write(ctx context.Context, items []any) e
 		return nil
 	}
 
-	if w.Repo == nil {
-		return exception.NewBatchError("hourly_forecast_database_writer", "WeatherRepository is not initialized (was Open called?)", nil, true, false)
+	if w.sqlBulkWriter == nil {
+		return exception.NewBatchError("hourly_forecast_database_writer", "SqlBulkWriter is not initialized (was Open called?)", nil, true, false)
 	}
 
-	// Execute database operations using the retrieved transaction.
-	err := w.Repo.BulkInsertWeatherData(ctx, currentTx, finalDataToStore)
+	// Execute database operations using the SqlBulkWriter.
+	err := w.sqlBulkWriter.Write(ctx, finalDataToStore)
 	if err != nil {
-		return exception.NewBatchError("hourly_forecast_database_writer", "failed to bulk insert weather data", err, true, true)
+		return exception.NewBatchError("hourly_forecast_database_writer", "failed to bulk insert weather data via SqlBulkWriter", err, true, true)
 	}
 
 	logger.Debugf("Saved chunk of weather data items to the database. Count: %d", len(finalDataToStore))
@@ -198,6 +211,13 @@ func (w *HourlyForecastDatabaseWriter) Close(ctx context.Context) error {
 	// Save internal state to the Step's ExecutionContext.
 	if err := w.saveWriterStateToExecutionContext(ctx); err != nil {
 		logger.Errorf("HourlyForecastDatabaseWriter.Close: failed to save internal state: %v", err)
+	}
+
+	// Close the internal SqlBulkWriter
+	if w.sqlBulkWriter != nil {
+		if err := w.sqlBulkWriter.Close(ctx); err != nil {
+			return fmt.Errorf("failed to close SqlBulkWriter: %w", err)
+		}
 	}
 	return nil
 }
