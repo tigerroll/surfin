@@ -1,25 +1,21 @@
-// Package tasklet provides tasklet implementations for the weather example.
-// This includes HourlyForecastExportTasklet for exporting weather data.
+// Package tasklet provides implementations for various batch tasklets, including HourlyForecastExportTasklet for exporting weather data.
 package tasklet
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/mitchellh/mapstructure"
-	"github.com/xitongsys/parquet-go/parquet"
-	"github.com/xitongsys/parquet-go/writer"
 	"golang.org/x/sync/errgroup"
 
-	weatherModel "github.com/tigerroll/surfin/example/weather/internal/domain/model"
+	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/storage"
 	readerComponent "github.com/tigerroll/surfin/pkg/batch/component/step/reader"
+	writerComponent "github.com/tigerroll/surfin/pkg/batch/component/step/writer"
 	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
@@ -41,6 +37,8 @@ type HourlyForecastExportTaskletConfig struct {
 	OutputBaseDir string `mapstructure:"outputBaseDir"`
 	// ReadBufferSize defines the buffer size for the channel between reader and writer goroutines.
 	ReadBufferSize int `mapstructure:"readBufferSize"`
+	// ParquetCompressionType is the compression type for Parquet files (e.g., "SNAPPY", "GZIP", "NONE").
+	ParquetCompressionType string `mapstructure:"parquetCompressionType"`
 }
 
 // HourlyForecastExportTasklet is a Tasklet that exports hourly forecast data from a database
@@ -50,34 +48,43 @@ type HourlyForecastExportTasklet struct {
 	config                    *HourlyForecastExportTaskletConfig
 	dbConnectionResolver      database.DBConnectionResolver
 	storageConnectionResolver storage.StorageConnectionResolver
+	// parquetWriter is the ItemWriter responsible for writing data to Parquet files.
+	parquetWriter port.ItemWriter[weather_entity.HourlyForecast]
 }
 
 // Close is required to satisfy the Tasklet interface.
-// This tasklet does not hold long-term resources that need explicit closing, so it performs no operation.
+// This tasklet does not manage long-term resources that require explicit closing within its `Close` method,
+// as the `ParquetWriter`'s `Close` is handled internally by `Execute`.
 func (t *HourlyForecastExportTasklet) Close(ctx context.Context) error {
 	logger.Debugf("HourlyForecastExportTasklet for DbRef '%s' closed.", t.config.DbRef)
 	return nil
 }
 
 // GetExecutionContext is required to satisfy the Tasklet interface.
-// This tasklet does not maintain persistent execution context, so it returns an empty context.
+// This tasklet does not maintain persistent execution context across executions, thus it returns an empty context.
 func (t *HourlyForecastExportTasklet) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	return model.NewExecutionContext(), nil
 }
 
 // SetExecutionContext is required to satisfy the Tasklet interface.
-// This tasklet does not maintain persistent execution context, so it performs no operation.
+// This tasklet does not maintain persistent execution context, so this method performs no operation.
 func (t *HourlyForecastExportTasklet) SetExecutionContext(ctx context.Context, context model.ExecutionContext) error {
 	return nil
 }
 
-// NewHourlyForecastExportTasklet creates a new instance of HourlyForecastExportTasklet.
+// NewHourlyForecastExportTasklet creates a new instance of `HourlyForecastExportTasklet`.
+// This function initializes the tasklet with the provided configuration properties and resolvers,
+// including setting up the internal `ParquetWriter`.
 //
-// properties: A map of string properties for configuration.
-// dbConnectionResolver: Resolver for database connections.
-// storageConnectionResolver: Resolver for storage connections.
+// Parameters:
 //
-// Returns: A port.Tasklet instance and an error if configuration decoding fails.
+//	properties: Configuration properties for the tasklet, typically from JSL.
+//	dbConnectionResolver: The resolver for database connections, used to obtain the source database.
+//	storageConnectionResolver: The resolver for storage connections, used by the internal `ParquetWriter` for output.
+//
+// Returns:
+//
+//	A `port.Tasklet` instance or an error if initialization fails.
 func NewHourlyForecastExportTasklet(
 	properties map[string]string,
 	dbConnectionResolver database.DBConnectionResolver,
@@ -86,27 +93,56 @@ func NewHourlyForecastExportTasklet(
 	logger.Debugf("HourlyForecastExportTasklet builder received properties: %v", properties)
 
 	cfg := &HourlyForecastExportTaskletConfig{
-		ReadBufferSize: 1000, // Default buffer size
+		ReadBufferSize:         1000,     // Default buffer size
+		ParquetCompressionType: "SNAPPY", // Default compression type
 	}
 	if err := mapstructure.Decode(properties, cfg); err != nil {
 		return nil, fmt.Errorf("failed to decode properties into HourlyForecastExportTaskletConfig: %w", err)
+	}
+
+	// Build configuration properties for the ParquetWriter.
+	parquetWriterProps := map[string]string{
+		"storageRef":      cfg.StorageRef,
+		"outputBaseDir":   cfg.OutputBaseDir,
+		"compressionType": cfg.ParquetCompressionType,
+	}
+
+	// Create a ParquetWriter instance.
+	parquetWriter, err := writerComponent.NewParquetWriter[weather_entity.HourlyForecast](
+		"hourlyForecastParquetWriter", // Unique name for the ParquetWriter.
+		parquetWriterProps,
+		storageConnectionResolver,
+		&weather_entity.HourlyForecast{}, // Prototype for Parquet schema inference (pointer to struct).
+		func(item weather_entity.HourlyForecast) (string, error) { // Partition key extraction function.
+			recordTime := time.UnixMilli(item.Time)
+			// Hive-style partition key: dt=YYYY-MM-DD
+			return fmt.Sprintf("dt=%s", recordTime.Format("2006-01-02")), nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ParquetWriter: %w", err)
 	}
 
 	return &HourlyForecastExportTasklet{
 		config:                    cfg,
 		dbConnectionResolver:      dbConnectionResolver,
 		storageConnectionResolver: storageConnectionResolver,
+		parquetWriter:             parquetWriter,
 	}, nil
 }
 
-// Execute performs the tasklet's core logic: reading hourly forecast data from a database
-// and exporting it to Parquet files in a Hive-partitioned structure.
-// It utilizes a hybrid pipeline with goroutines and channels for concurrent processing.
+// Execute performs the tasklet's core logic: reading hourly forecast data from the configured database
+// and exporting it to Parquet files in a Hive-partitioned directory structure.
+// It employs a concurrent pipeline using goroutines and channels for efficient data transfer and processing.
 //
-// ctx: The context for the operation.
-// stepExecution: The current StepExecution, used for accessing ExecutionContext.
+// Parameters:
 //
-// Returns: An ExitStatus indicating success or failure, and an error if any occurs.
+//	ctx: The context for the operation, enabling cancellation and timeouts.
+//	stepExecution: The current `StepExecution` instance, providing access to the execution context.
+//
+// Returns:
+//
+//	An `ExitStatus` indicating the outcome of the execution, and an error if any critical failure occurs.
 func (t *HourlyForecastExportTasklet) Execute(ctx context.Context, stepExecution *model.StepExecution) (model.ExitStatus, error) {
 	logger.Infof("HourlyForecastExportTasklet is executing. Config: %+v", t.config)
 
@@ -120,8 +156,6 @@ func (t *HourlyForecastExportTasklet) Execute(ctx context.Context, stepExecution
 		}
 	}()
 
-	// Get the underlying *sql.DB from the DBConnection.
-	// This relies on the database.DBConnection interface now having a GetSQLDB() method.
 	var sqlDB *sql.DB
 	sqlDB, err = dbConn.GetSQLDB()
 	if err != nil {
@@ -129,9 +163,9 @@ func (t *HourlyForecastExportTasklet) Execute(ctx context.Context, stepExecution
 	}
 
 	// Initialize SqlCursorReader.
-	// The SQL query is adjusted to match the fields of weatherModel.HourlyForecast.
+	// The SQL query is adjusted to match the fields of weather_entity.HourlyForecast.
 	query := "SELECT " +
-		"CAST(EXTRACT(EPOCH FROM time) * 1000 AS BIGINT) AS time, " +
+		"CAST(EXTRACT(EPOCH FROM time) * 1000 AS BIGINT) AS time, " + // Aligns with weather_entity.HourlyForecast's int64 timestamp.
 		"weather_code, " +
 		"temperature_2m, " +
 		"latitude, " +
@@ -140,21 +174,21 @@ func (t *HourlyForecastExportTasklet) Execute(ctx context.Context, stepExecution
 		"FROM hourly_forecast ORDER BY time ASC"
 
 	// The name of SqlCursorReader is used as a restartability key in the ExecutionContext.
-	readerName := "hourlyForecastReader"
-	sqlReader := readerComponent.NewSqlCursorReader[weatherModel.HourlyForecast](
+	readerName := "hourlyForecastReader" // Descriptive name for the reader, reflecting the data type.
+	sqlReader := readerComponent.NewSqlCursorReader[weather_entity.HourlyForecast](
 		sqlDB,
 		readerName,
 		query,
 		nil, // No query arguments
-		func(rows *sql.Rows) (weatherModel.HourlyForecast, error) {
-			var hf weatherModel.HourlyForecast
+		func(rows *sql.Rows) (weather_entity.HourlyForecast, error) {
+			var hf weather_entity.HourlyForecast
 			err := rows.Scan(&hf.Time, &hf.WeatherCode, &hf.Temperature2M, &hf.Latitude, &hf.Longitude, &hf.CollectedAt)
 			return hf, err
 		},
 	)
 
 	// Channel between Reader and Writer goroutines.
-	dataCh := make(chan weatherModel.HourlyForecast, t.config.ReadBufferSize)
+	dataCh := make(chan weather_entity.HourlyForecast, t.config.ReadBufferSize)
 	g, gCtx := errgroup.WithContext(ctx)
 
 	// Reader Goroutine
@@ -195,46 +229,31 @@ func (t *HourlyForecastExportTasklet) Execute(ctx context.Context, stepExecution
 
 	// Writer Goroutine.
 	g.Go(func() error {
-		// Resolve storage connection once for the writer goroutine.
-		rawStorageConn, err := t.storageConnectionResolver.ResolveStorageConnection(gCtx, t.config.StorageRef)
-		if err != nil {
-			return fmt.Errorf("failed to resolve storage connection '%s': %w", t.config.StorageRef, err)
+		// Open the ParquetWriter.
+		if err := t.parquetWriter.Open(gCtx, stepExecution.ExecutionContext); err != nil {
+			return fmt.Errorf("failed to open ParquetWriter: %w", err)
 		}
+		// Defer closing the ParquetWriter to ensure buffered data is written.
 		defer func() {
-			if err := rawStorageConn.Close(); err != nil {
-				logger.Errorf("Failed to close storage connection '%s': %v", t.config.StorageRef, err)
+			if err := t.parquetWriter.Close(gCtx); err != nil { // This flushes buffered data.
+				logger.Errorf("Failed to close ParquetWriter: %v", err)
 			}
 		}()
-
-		// Type assert to storage.StorageConnection to access the Upload method.
-		concreteStorageConn, ok := rawStorageConn.(storage.StorageConnection)
-		if !ok {
-			return fmt.Errorf("resolved storage connection '%s' does not implement storage.StorageConnection interface", t.config.StorageRef)
-		}
-
-		// Group data by date for Parquet export
-		forecastsByDate := make(map[string][]weatherModel.HourlyForecast) // Key: YYYY-MM-DD.
 
 		for {
 			select {
 			case item, ok := <-dataCh:
-				if !ok { // Channel closed and empty
-					logger.Infof("Writer Goroutine: Data channel closed. Processing remaining %d records.", len(forecastsByDate))
-					// Process any remaining buffered data before exiting
-					return t.processAndUploadParquet(gCtx, concreteStorageConn, forecastsByDate)
+				if !ok { // Channel closed and all items processed.
+					logger.Infof("Writer Goroutine: Data channel closed. All data processed.")
+					return nil // Exit as all data has been written.
 				}
-				// Convert int64 (milliseconds) to time.Time and format the date.
-				recordTime := time.UnixMilli(item.Time)
-				dateStr := recordTime.Format("2006-01-02")
-				forecastsByDate[dateStr] = append(forecastsByDate[dateStr], item)
-
-				// Optional: Flush based on a certain number of records or time.
-				// For simplicity, flushing occurs only when the channel closes or context is done.
-				// In a real-world scenario, periodic or batch-size-based flushing might be desired.
-
+				// Write the item using the ParquetWriter. The ParquetWriter handles buffering and flushing.
+				if err := t.parquetWriter.Write(gCtx, []weather_entity.HourlyForecast{item}); err != nil {
+					return fmt.Errorf("failed to write item to ParquetWriter: %w", err)
+				}
 			case <-gCtx.Done(): // Context cancellation check.
-				logger.Warnf("Writer Goroutine: Context cancelled. Processing remaining %d records.", len(forecastsByDate))
-				return t.processAndUploadParquet(gCtx, concreteStorageConn, forecastsByDate) // Attempt to flush remaining data.
+				logger.Warnf("Writer Goroutine: Context cancelled. ParquetWriter will be closed by deferred call.")
+				return gCtx.Err() // The deferred ParquetWriter.Close will be called.
 			}
 		}
 	})
@@ -249,110 +268,18 @@ func (t *HourlyForecastExportTasklet) Execute(ctx context.Context, stepExecution
 	return model.ExitStatusCompleted, nil
 }
 
-// processAndUploadParquet is a helper function that processes grouped hourly forecasts
-// and uploads them as Parquet files to the configured storage.
+// NewHourlyForecastExportTaskletBuilder creates a `jsl.ComponentBuilder` function that constructs `HourlyForecastExportTasklet` instances.
+// This builder is designed for use with Fx (Dependency Injection), allowing the tasklet to be configured
+// and provided dynamically based on JSL properties.
 //
-// ctx: The context for the operation.
-// storageConn: The storage connection to use for uploading files.
-// forecastsByDate: A map of hourly forecasts grouped by date (YYYY-MM-DD).
+// Parameters:
 //
-// Returns: An error if processing or uploading fails.
-func (t *HourlyForecastExportTasklet) processAndUploadParquet(
-	ctx context.Context,
-	storageConn storage.StorageConnection,
-	forecastsByDate map[string][]weatherModel.HourlyForecast,
-) error {
-	if len(forecastsByDate) == 0 {
-		return nil // Nothing to process
-	}
-
-	for dateStr, dailyForecasts := range forecastsByDate {
-		logger.Infof("Processing %d records for date %s.", len(dailyForecasts), dateStr)
-
-		buf := new(bytes.Buffer)
-		pw, err := writer.NewParquetWriterFromWriter(buf, new(weatherModel.HourlyForecast), 1)
-		if err != nil {
-			return fmt.Errorf("failed to create parquet writer for date %s: %w", dateStr, err)
-		}
-		pw.CompressionType = parquet.CompressionCodec_SNAPPY
-
-		for _, forecast := range dailyForecasts {
-			if err = pw.Write(forecast); err != nil {
-				return fmt.Errorf("failed to write record to parquet for date %s: %w", dateStr, err)
-			}
-		}
-
-		// The ParquetWriter's WriteStop() method can panic.
-		// Use defer recover() to catch panics and convert them into errors.
-		var writeStopErr error
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					if err, ok := r.(error); ok {
-						writeStopErr = err
-					} else {
-						writeStopErr = fmt.Errorf("panic value: %v", r)
-					}
-					logger.Errorf("Caught panic during pw.WriteStop() (internal) for date %s: %v", dateStr, writeStopErr)
-				}
-			}()
-			writeStopErr = pw.WriteStop()
-		}()
-
-		if writeStopErr != nil {
-			var finalErrorMessage string
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						finalErrorMessage = fmt.Sprintf("error.Error() method panicked: %v", r)
-						logger.Errorf("Caught panic when calling Error() on writeStopErr for date %s: %v", dateStr, r)
-					}
-				}()
-				finalErrorMessage = writeStopErr.Error()
-			}()
-
-			if strings.Contains(finalErrorMessage, "runtime error: invalid memory address or nil pointer dereference") {
-				finalErrorMessage = "internal parquet writer error (possible data corruption or library issue)"
-			} else if finalErrorMessage == "" {
-				finalErrorMessage = "unknown error (Error() method returned empty string or panicked)"
-			}
-			return fmt.Errorf("failed to stop parquet writer for date %s: %s", dateStr, finalErrorMessage)
-		}
-
-		logger.Infof("Successfully converted %d records to Parquet format for date %s. Data size: %d bytes.", len(dailyForecasts), dateStr, buf.Len())
-
-		// Determine the Hive partition path (e.g., dt=YYYY-MM-DD).
-		hivePartitionPath := fmt.Sprintf("dt=%s", dateStr)
-
-		// Generate a unique filename for the Parquet file (e.g., hourly_forecast_YYYYMMDD_HHMMSS.parquet).
-		fileName := fmt.Sprintf("hourly_forecast_%s_%s.parquet",
-			strings.ReplaceAll(dateStr, "-", ""), // Use YYYYMMDD format for the filename.
-			time.Now().Format("150405"))          // HHMMSS format for uniqueness.
-		objectPath := fmt.Sprintf("%s/%s/%s", t.config.OutputBaseDir, hivePartitionPath, fileName)
-
-		// Upload the Parquet data.
-		err = storageConn.Upload(ctx, "", objectPath, buf, "application/x-parquet")
-		if err != nil {
-			// Return the error directly if upload fails.
-			return fmt.Errorf("failed to upload parquet file for date %s to '%s': %w", dateStr, objectPath, err)
-		}
-
-		logger.Infof("Successfully uploaded Parquet file for date %s to '%s' using storage connection '%s'.", dateStr, objectPath, t.config.StorageRef)
-	}
-	// Clear the map after processing to free up memory.
-	for k := range forecastsByDate {
-		delete(forecastsByDate, k)
-	}
-	return nil
-}
-
-// NewHourlyForecastExportTaskletBuilder creates a jsl.ComponentBuilder that builds HourlyForecastExportTasklet instances.
-// This function directly returns a jsl.ComponentBuilder, simplifying the Fx provision.
+//	dbConnectionResolver: The resolver for database connections, injected by Fx.
+//	storageConnectionResolver: The resolver for storage connections, injected by Fx.
 //
-// dbConnectionResolver: Resolver for database connections.
-// storageConnectionResolver: Resolver for storage connections.
+// Returns:
 //
-// Returns: A jsl.ComponentBuilder instance.
+//	A `jsl.ComponentBuilder` function.
 func NewHourlyForecastExportTaskletBuilder(
 	dbConnectionResolver database.DBConnectionResolver,
 	storageConnectionResolver storage.StorageConnectionResolver,

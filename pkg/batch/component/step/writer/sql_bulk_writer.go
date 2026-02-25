@@ -38,7 +38,8 @@ type SqlBulkWriter[T any] struct {
 //	updateColumns: The columns to update on conflict (empty for DO NOTHING).
 //
 // Returns:
-//   A new [SqlBulkWriter] instance.
+//
+//	A new [SqlBulkWriter] instance.
 func NewSqlBulkWriter[T any](name string, bulkSize int, tableName string, conflictColumns []string, updateColumns []string) *SqlBulkWriter[T] {
 	return &SqlBulkWriter[T]{
 		name:            name,
@@ -58,11 +59,13 @@ var _ port.ItemWriter[any] = (*SqlBulkWriter[any])(nil)
 // The provided [model.ExecutionContext] is stored for later retrieval.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   ec: The [model.ExecutionContext] associated with the current step.
+//
+//	ctx: The context for the operation.
+//	ec: The [model.ExecutionContext] associated with the current step.
 //
 // Returns:
-//   An error if initialization fails, otherwise nil.
+//
+//	An error if initialization fails, otherwise nil.
 func (w *SqlBulkWriter[T]) Open(ctx context.Context, ec model.ExecutionContext) error {
 	logger.Infof("SqlBulkWriter '%s': Opened.", w.name)
 	w.stepExecutionContext = ec // Store the ExecutionContext for potential use by the framework.
@@ -74,11 +77,13 @@ func (w *SqlBulkWriter[T]) Open(ctx context.Context, ec model.ExecutionContext) 
 // as it participates in an external transaction managed by the framework.
 //
 // Parameters:
-//   ctx: The context for the operation, expected to contain a [tx.Tx] instance.
-//   items: A slice of items to be written to the database.
+//
+//	ctx: The context for the operation, expected to contain a [tx.Tx] instance.
+//	items: A slice of items to be written to the database.
 //
 // Returns:
-//   An error if any part of the write operation fails, otherwise nil.
+//
+//	An error if any part of the write operation fails, otherwise nil.
 func (w *SqlBulkWriter[T]) Write(ctx context.Context, items []T) error {
 	if len(items) == 0 {
 		return nil // Do nothing if there are no items to write.
@@ -117,10 +122,12 @@ func (w *SqlBulkWriter[T]) Write(ctx context.Context, items []T) error {
 // (e.g., prepared statements) is required within this method.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 //
 // Returns:
-//   An error if resource release fails, otherwise nil.
+//
+//	An error if resource release fails, otherwise nil.
 func (w *SqlBulkWriter[T]) Close(ctx context.Context) error {
 	logger.Infof("SqlBulkWriter '%s': Closed.", w.name)
 	return nil
@@ -131,11 +138,13 @@ func (w *SqlBulkWriter[T]) Close(ctx context.Context) error {
 // the provided context for potential use by the framework.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   ec: The [model.ExecutionContext] to be set.
+//
+//	ctx: The context for the operation.
+//	ec: The [model.ExecutionContext] to be set.
 //
 // Returns:
-//   An error if the context is cancelled, otherwise nil.
+//
+//	An error if the context is cancelled, otherwise nil.
 func (w *SqlBulkWriter[T]) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
@@ -151,10 +160,12 @@ func (w *SqlBulkWriter[T]) SetExecutionContext(ctx context.Context, ec model.Exe
 // [model.ExecutionContext] that was provided during the [Open] or [SetExecutionContext] call.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 //
 // Returns:
-//   The current [model.ExecutionContext] and an error if the context is cancelled.
+//
+//	The current [model.ExecutionContext] and an error if the context is cancelled.
 func (w *SqlBulkWriter[T]) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	return w.stepExecutionContext, nil
 }
@@ -163,7 +174,8 @@ func (w *SqlBulkWriter[T]) GetExecutionContext(ctx context.Context) (model.Execu
 // This typically corresponds to the 'name' field provided during construction.
 //
 // Returns:
-//   The name of the target resource.
+//
+//	The name of the target resource.
 func (w *SqlBulkWriter[T]) GetTargetResourceName() string {
 	return w.name // Using the writer's name as the resource name
 }
@@ -172,7 +184,8 @@ func (w *SqlBulkWriter[T]) GetTargetResourceName() string {
 // For [SqlBulkWriter], this is typically the target database table name.
 //
 // Returns:
-//   The path or identifier within the target resource.
+//
+//	The path or identifier within the target resource.
 func (w *SqlBulkWriter[T]) GetResourcePath() string {
 	return w.tableName // Using the table name as the resource path
 }
