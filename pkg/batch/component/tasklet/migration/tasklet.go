@@ -135,6 +135,14 @@ func NewMigrationTasklet(
 	return t, nil
 }
 
+// Open initializes the tasklet and prepares resources.
+// For MigrationTasklet, no specific resources need to be opened at this stage.
+func (t *MigrationTasklet) Open(ctx context.Context, ec model.ExecutionContext) error {
+	logger.Debugf("MigrationTasklet Open called.")
+	// ExecutionContext is already set by SetExecutionContext before Open is called.
+	return nil
+}
+
 // Execute runs the database migration logic.
 // It resolves the database connection, migration file system, and migration table name, then executes the specified migration command ("up" or "down").
 //

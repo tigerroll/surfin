@@ -1,6 +1,4 @@
-// Package app provides the main application module for the weather batch example.
-// It sets up dependency injection for database connections, migration file systems,
-// and other core components required for the application to run.
+// Package app provides the main application module for the weather batch example, setting up core dependencies.
 package app
 
 import (
@@ -20,18 +18,16 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"github.com/mitchellh/mapstructure"
+	weatherTasklet "github.com/tigerroll/surfin/example/weather/internal/component/tasklet" // Imports application-specific tasklet modules.
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/mysql"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/postgres"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/sqlite" // GORM SQLite provider
+	"github.com/tigerroll/surfin/pkg/batch/adapter/storage"              // Imports the storage package.
+	"github.com/tigerroll/surfin/pkg/batch/adapter/storage/local"        // Imports the local storage adapter.
 	migrationfs "github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration/filesystem"
-
-	"github.com/tigerroll/surfin/example/weather/internal/step/tasklet"
-	"github.com/tigerroll/surfin/pkg/batch/adapter/storage"       // Imports the storage package.
-	"github.com/tigerroll/surfin/pkg/batch/adapter/storage/local" // Imports the local storage adapter.
-
-	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"     // Added for jsl.ComponentBuilder.
-	"github.com/tigerroll/surfin/pkg/batch/core/config/support" // Added for support.JobFactory.
+	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"     // For JSL ComponentBuilder type definition.
+	"github.com/tigerroll/surfin/pkg/batch/core/config/support" // For JobFactory type definition.
 
 	"go.uber.org/fx"
 )
@@ -43,8 +39,8 @@ func init() {
 	var _ coreAdapter.ResourceConnection // Explicitly reference a type from coreAdapter.
 }
 
-// DBProviderMap maps database type strings to functions that create database.DBProvider instances.
-// This map is used by main.go to dynamically select and register database providers.
+// DBProviderMap maps database type strings to functions that create database.DBProvider instances,
+// used for dynamic provider registration.
 var DBProviderMap = map[string]func(cfg *config.Config) database.DBProvider{
 	"postgres": postgres.NewProvider,
 	"redshift": postgres.NewProvider, // Redshift also uses PostgresProvider
@@ -52,31 +48,17 @@ var DBProviderMap = map[string]func(cfg *config.Config) database.DBProvider{
 	"sqlite":   sqlite.NewProvider,
 }
 
-// MigrationFSMapParams defines the dependencies for NewMigrationFSMap.
-//
-// Parameters:
-//
-//	fx.In: Fx-injected parameters.
-//	WeatherAppFS: The embedded file system for application-specific migrations, tagged as "weatherAppFS".
-//	FrameworkFS: The embedded file system for framework-specific migrations, tagged as "frameworkMigrationsFS".
+// MigrationFSMapParams defines the Fx-injected dependencies for NewMigrationFSMap.
 type MigrationFSMapParams struct {
 	fx.In
-	// WeatherAppFS is the embedded file system for application-specific migrations, provided by an anonymous provider within this module.
+	// WeatherAppFS is the embedded file system for application-specific migrations, tagged as "weatherAppFS".
 	WeatherAppFS fs.FS `name:"weatherAppFS"`
-	// FrameworkFS is the embedded file system for framework-specific migrations, provided by [migrationfs.Module].
+	// FrameworkFS is the embedded file system for framework-specific migrations, tagged as "frameworkMigrationsFS".
 	FrameworkFS fs.FS `name:"frameworkMigrationsFS"`
 }
 
-// NewMigrationFSMap aggregates all necessary migration file systems into a single map.
-// This map is then used by the MigrationTasklet to locate migration scripts.
-//
-// Parameters:
-//
-//	p: MigrationFSMapParams containing injected file systems.
-//
-// Returns:
-//
-//	A map where keys are logical names for migration file systems and values are fs.FS instances.
+// NewMigrationFSMap aggregates all necessary migration file systems into a single map
+// for use by `MigrationTasklet`.
 func NewMigrationFSMap(p MigrationFSMapParams) map[string]fs.FS {
 	fsMap := make(map[string]fs.FS)
 
@@ -96,9 +78,9 @@ func NewMigrationFSMap(p MigrationFSMapParams) map[string]fs.FS {
 	return fsMap
 }
 
-// DBConnectionsAndTxManagersParams defines the dependencies for NewDBConnectionsAndTxManagers.
+// DBConnectionsAndTxManagersParams defines the Fx-injected dependencies for NewDBConnectionsAndTxManagers.
 type DBConnectionsAndTxManagersParams struct {
-	fx.In                    // Fx-injected parameters.
+	fx.In
 	Lifecycle fx.Lifecycle   // The Fx lifecycle for hook registration.
 	Cfg       *config.Config // The application configuration.
 	// DBProviders is a slice of all DBProvider implementations, automatically collected by Fx due to the `group:"db_providers"` tag.
@@ -107,13 +89,8 @@ type DBConnectionsAndTxManagersParams struct {
 	TxFactory tx.TransactionManagerFactory
 }
 
-// NewDBConnectionsAndTxManagers establishes connections for all data sources defined in the configuration file,
-// using the appropriate DBProvider, and provides them as maps.
-//
-// Returns:
-//   - A map of database connections (map[string]database.DBConnection), keyed by their configuration name.
-//   - A map of database providers (map[string]database.DBProvider), keyed by their database type.
-//   - An error if any connection establishment or configuration decoding fails.
+// NewDBConnectionsAndTxManagers establishes and manages database connections for all configured data sources,
+// providing them as maps of connections and providers.
 func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 	map[string]database.DBConnection,
 	map[string]database.DBProvider,
@@ -215,7 +192,7 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 	return allConnections, allProviders, nil
 }
 
-// NewStorageConnectionsParams defines the dependencies for NewStorageConnections.
+// NewStorageConnectionsParams defines the Fx-injected dependencies for NewStorageConnections.
 type NewStorageConnectionsParams struct {
 	fx.In
 	Lifecycle fx.Lifecycle
@@ -224,7 +201,8 @@ type NewStorageConnectionsParams struct {
 	StorageProviders []storage.StorageProvider `group:"storage_providers"`
 }
 
-// NewStorageConnections establishes connections for all data sources defined in the configuration file, using the appropriate StorageProvider, and provides them as maps.
+// NewStorageConnections establishes and manages storage connections for all configured data sources,
+// providing them as maps of connections and providers.
 func NewStorageConnections(p NewStorageConnectionsParams) (
 	map[string]storage.StorageConnection,
 	map[string]storage.StorageProvider,
@@ -309,19 +287,8 @@ func NewStorageConnections(p NewStorageConnectionsParams) (
 	return allConnections, allProviders, nil
 }
 
-// NewMetadataTxManager extracts the "metadata" TransactionManager from the map.
-// This function is responsible for providing the TransactionManager specifically for metadata operations.
-//
-// Parameters:
-//
-//	p: An Fx parameter struct containing:
-//	  - AllDBConnections: A map of all established database connections.
-//	  - TxFactory: The [tx.TransactionManagerFactory] to create the [tx.TransactionManager].
-//
-// Returns:
-//   - The TransactionManager for the "metadata" connection.
-//   - An error if the "metadata" connection is not found or if TxManager creation fails.
-func NewMetadataTxManager(p struct { // Renamed parameter 'p' to 'params' for clarity.
+// NewMetadataTxManager provides the `TransactionManager` for the "metadata" database connection.
+func NewMetadataTxManager(p struct {
 	fx.In
 	// AllDBConnections is the map of all established database connections.
 	AllDBConnections map[string]database.DBConnection
@@ -336,8 +303,7 @@ func NewMetadataTxManager(p struct { // Renamed parameter 'p' to 'params' for cl
 	return p.TxFactory.NewTransactionManager(conn), nil
 }
 
-// Module defines the application's Fx module. It configures and provides various components for the batch framework,
-// including database connections, transaction managers, migration file systems, and the DB connection resolver.
+// Module defines the application's Fx module, configuring and providing core batch framework components.
 var Module = fx.Options(
 	// DB Provider Modules.
 	// [gormadapter.Module] provides [gormadapter.NewGormTransactionManagerFactory].
@@ -403,17 +369,17 @@ var Module = fx.Options(
 	fx.Provide(fx.Annotate(
 		dummy.NewDefaultDBConnectionResolver,
 	)),
-	// Add the tasklet module
-	tasklet.Module,
+	// Imports application-specific tasklet modules.
+	weatherTasklet.Module,
 
-	// Register the hourlyForecastExportTasklet builder with the JobFactory.
+	// Registers the genericParquetExportTasklet builder with the JobFactory.
 	fx.Invoke(func(p struct {
 		fx.In
 		JobFactory                         *support.JobFactory
-		HourlyForecastExportTaskletBuilder jsl.ComponentBuilder `name:"hourlyForecastExportTasklet"`
+		GenericParquetExportTaskletBuilder jsl.ComponentBuilder `name:"genericParquetExportTasklet"`
 	}) {
 		// Call JobFactory's RegisterComponentBuilder method to register the builder.
-		p.JobFactory.RegisterComponentBuilder("hourlyForecastExportTasklet", p.HourlyForecastExportTaskletBuilder)
-		logger.Debugf("Registered 'hourlyForecastExportTasklet' with JobFactory.")
+		p.JobFactory.RegisterComponentBuilder("genericParquetExportTasklet", p.GenericParquetExportTaskletBuilder)
+		logger.Debugf("Registered 'genericParquetExportTasklet' with JobFactory.")
 	}),
 )

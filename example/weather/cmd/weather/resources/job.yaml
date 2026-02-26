@@ -81,14 +81,37 @@ flow:
         - on: FAILED # If the step fails
           fail: true # Terminate the entire job as failed
           
+    #exportHourlyForecastStep:
+    #  id: exportHourlyForecastStep
+    #  tasklet:
+    #    ref: hourlyForecastExportTasklet # Reference to the tasklet builder.
+    #    properties: # Properties for the tasklet component.
+    #      dbRef: workload # Database connection name where the hourly_forecast table resides.
+    #      storageRef: local # Connection name for the local storage adapter.
+    #      outputBaseDir: "exported_weather_data" # Base directory for output files within the storage.
+    #  listeners:
+    #    - ref: loggingStepListener
+    #  transitions:
+    #    - on: COMPLETED # If the step completes successfully.
+    #      to: checkConditionDecision # Transition to checkConditionDecision.
+    #    - on: FAILED
+    #      fail: true # Terminate the entire job as failed
+
     exportHourlyForecastStep:
       id: exportHourlyForecastStep
       tasklet:
-        ref: hourlyForecastExportTasklet # Reference to the tasklet builder.
+        ref: genericParquetExportTasklet # Reference to the GenericParquetExportTasklet builder.
         properties: # Properties for the tasklet component.
-          dbRef: workload # Database connection name where the hourly_forecast table resides.
+          dbRef: workload # Database connection name where the weather_data_to_store table resides.
           storageRef: local # Connection name for the local storage adapter.
           outputBaseDir: "exported_weather_data" # Base directory for output files within the storage.
+          readBufferSize: "1000" # Number of items to read into buffer at once.
+          parquetCompressionType: "SNAPPY" # Compression type for Parquet files.
+          tableName: "hourly_forecast" # Table name to export.
+          sqlSelectColumns: "time, weather_code, temperature_2m, latitude, longitude, collected_at" # Columns to select.
+          sqlOrderBy: "time ASC" # Order by clause for the SQL query.
+          partitionKeyColumn: "Time" # Go struct field name for partitioning.
+          partitionKeyFormat: "2006-01-02" # Date format for partition key (e.g., YYYY-MM-DD).
       listeners:
         - ref: loggingStepListener
       transitions:

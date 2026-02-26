@@ -47,6 +47,14 @@ func NewRandomFailTasklet(id string, properties map[string]string) *RandomFailTa
 	}
 }
 
+// Open initializes the tasklet and prepares resources.
+// For RandomFailTasklet, no specific resources need to be opened.
+func (t *RandomFailTasklet) Open(ctx context.Context, ec model.ExecutionContext) error {
+	logger.Debugf("RandomFailTasklet '%s' Open called.", t.id)
+	// ExecutionContext is already set by SetExecutionContext before Open is called.
+	return nil
+}
+
 // Execute causes the tasklet to fail based on a configured probability or count.
 func (t *RandomFailTasklet) Execute(ctx context.Context, stepExecution *model.StepExecution) (model.ExitStatus, error) {
 	t.currentRun++
