@@ -215,6 +215,22 @@ func (a *GormDBAdapter) GetSQLDB() (*sql.DB, error) {
 	return a.sqlDB, nil
 }
 
+// ScanRowsToStruct scans the current row of a [sql.Rows] into the specified Go struct (dest).
+// It leverages GORM's [gorm.DB.ScanRows] method for this purpose.
+// The 'dest' parameter must be a pointer to a struct. This method implements the [database.DBConnection] interface.
+//
+// Parameters:
+//
+//	rows: The [sql.Rows] instance from which to scan the current row.
+//	dest: A pointer to the Go struct where the data will be scanned into.
+//
+// Returns:
+//
+//	error: An error if scanning fails, otherwise nil.
+func (a *GormDBAdapter) ScanRowsToStruct(rows *sql.Rows, dest interface{}) error {
+	return a.db.ScanRows(rows, dest)
+}
+
 // ExecuteQuery implements adapter.DBConnection.
 // This method executes a read operation using GORM's Find method.
 func (a *GormDBAdapter) ExecuteQuery(ctx context.Context, target interface{}, query map[string]interface{}) error {
@@ -393,7 +409,7 @@ func (a *GormDBAdapter) ExecuteUpsert(ctx context.Context, model interface{}, ta
 }
 
 // GormTransactionManagerFactory is the GORM implementation of tx.TransactionManagerFactory.
-type GormTransactionManagerFactory struct { // Line 388
+type GormTransactionManagerFactory struct {
 	dbResolver database.DBConnectionResolver
 }
 

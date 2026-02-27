@@ -136,8 +136,9 @@ func NewMigrationTasklet(
 }
 
 // Open initializes the tasklet and prepares resources.
-// For MigrationTasklet, no specific resources need to be opened at this stage.
-func (t *MigrationTasklet) Open(ctx context.Context, ec model.ExecutionContext) error {
+// For MigrationTasklet, no specific resources need to be opened at this stage. The stepExecution is provided for context.
+// The ExecutionContext is expected to be set via SetExecutionContext before Open is called.
+func (t *MigrationTasklet) Open(ctx context.Context, stepExecution *model.StepExecution) error {
 	logger.Debugf("MigrationTasklet Open called.")
 	// ExecutionContext is already set by SetExecutionContext before Open is called.
 	return nil
@@ -282,11 +283,10 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 // Parameters:
 //
 //	ctx: The context for the operation.
+//	stepExecution: The current StepExecution instance.
 //
-// Returns:
-//
-//	An error if any resource closing fails (always nil for this tasklet).
-func (t *MigrationTasklet) Close(ctx context.Context) error {
+// Returns: An error if any resource closing fails (always nil for this tasklet).
+func (t *MigrationTasklet) Close(ctx context.Context, stepExecution *model.StepExecution) error {
 	return nil
 }
 
@@ -294,22 +294,16 @@ func (t *MigrationTasklet) Close(ctx context.Context) error {
 //
 // Parameters:
 //
-//	ctx: The context for the operation.
 //	ec: The ExecutionContext to set.
-func (t *MigrationTasklet) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
+func (t *MigrationTasklet) SetExecutionContext(ec model.ExecutionContext) {
 	t.ec = ec
-	return nil
 }
 
-// GetExecutionContext retrieves the current `ExecutionContext` of the `MigrationTasklet`.
-//
-// Parameters:
-//
-//	ctx: The context for the operation.
+// GetExecutionContext retrieves the current [model.ExecutionContext] of the [MigrationTasklet].
 //
 // Returns:
 //
-//	The current ExecutionContext and an error if retrieval fails (always nil for this tasklet).
-func (t *MigrationTasklet) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
-	return t.ec, nil
+//	model.ExecutionContext: The current [model.ExecutionContext].
+func (t *MigrationTasklet) GetExecutionContext() model.ExecutionContext {
+	return t.ec
 }

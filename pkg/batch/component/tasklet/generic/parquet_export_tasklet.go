@@ -1,3 +1,5 @@
+// Package generic provides general-purpose tasklet implementations.
+// These tasklets are designed to be reusable across various batch jobs.
 package generic
 
 import (
@@ -6,14 +8,15 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"sync" // Add this import
+	"sync"
+
 	"time"
 
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/storage"
-	reader "github.com/tigerroll/surfin/pkg/batch/component/step/reader" // Add this import
+	reader "github.com/tigerroll/surfin/pkg/batch/component/step/reader"
 	writer "github.com/tigerroll/surfin/pkg/batch/component/step/writer"
 	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/application/port"
@@ -24,41 +27,63 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
-// GenericParquetExportTaskletConfig holds the configuration for GenericParquetExportTasklet.
+// GenericParquetExportTaskletConfig holds the configuration for [GenericParquetExportTasklet].
 type GenericParquetExportTaskletConfig struct {
-	DbRef                  string `mapstructure:"dbRef"`
-	StorageRef             string `mapstructure:"storageRef"`
-	OutputBaseDir          string `mapstructure:"outputBaseDir"`
-	ReadBufferSize         int    `mapstructure:"readBufferSize"`
+	// DbRef is the name of the database connection to use for reading data.
+	DbRef string `mapstructure:"dbRef"`
+	// StorageRef is the name of the storage connection to use for writing Parquet files.
+	StorageRef string `mapstructure:"storageRef"`
+	// OutputBaseDir is the base directory within the storage bucket for exported files (e.g., "weather/hourly_forecast").
+	OutputBaseDir string `mapstructure:"outputBaseDir"`
+	// ReadBufferSize is the number of items to read from the database and process in a single batch.
+	ReadBufferSize int `mapstructure:"readBufferSize"`
+	// ParquetCompressionType is the compression type for Parquet files (e.g., "SNAPPY", "GZIP", "NONE").
 	ParquetCompressionType string `mapstructure:"parquetCompressionType"`
-	TableName              string `mapstructure:"tableName"`
-	SQLSelectColumns       string `mapstructure:"sqlSelectColumns"`
-	SQLOrderBy             string `mapstructure:"sqlOrderBy"`
-	PartitionKeyColumn     string `mapstructure:"partitionKeyColumn"`
-	PartitionKeyFormat     string `mapstructure:"partitionKeyFormat"`
+	// TableName is the name of the database table to read from.
+	TableName string `mapstructure:"tableName"`
+	// SQLSelectColumns is a comma-separated string of columns to select from the database table.
+	SQLSelectColumns string `mapstructure:"sqlSelectColumns"`
+	// SQLOrderBy is an optional ORDER BY clause for the SQL query.
+	SQLOrderBy string `mapstructure:"sqlOrderBy"`
+	// PartitionKeyColumn is the name of the struct field to use for generating the Parquet partition key.
+	PartitionKeyColumn string `mapstructure:"partitionKeyColumn"`
+	// PartitionKeyFormat is the format string for the partition key (e.g., "2006-01-02" for time.Time, or "dt=" prefix).
+	PartitionKeyFormat string `mapstructure:"partitionKeyFormat"`
 }
 
-// GenericParquetExportTasklet implements the port.Tasklet interface for exporting data to Parquet files.
+// GenericParquetExportTasklet implements the [port.Tasklet] interface for exporting data from a database
+// to Parquet files in a specified storage location. It supports dynamic schema inference based on a
+// provided item prototype and partitioning based on a configurable column.
 type GenericParquetExportTasklet[T any] struct {
 	config                    *GenericParquetExportTaskletConfig
 	dbConnectionResolver      database.DBConnectionResolver
 	storageConnectionResolver storage.StorageConnectionResolver
 	parquetWriter             port.ItemWriter[T]
-	// scanFunc is injected by Fx and scans sql.Rows into type T.
-	scanFunc func(rows *sql.Rows) (T, error)
-	// partitionKeyFunc is dynamically generated to extract the partition key.
+	// partitionKeyFunc is dynamically generated to extract the partition key from an item of type T.
 	partitionKeyFunc func(T) (string, error)
-	// stepExecutionContext holds the tasklet's execution context.
+	// stepExecutionContext holds the tasklet's execution context, managed by the framework.
 	stepExecutionContext model.ExecutionContext
 }
 
-// NewGenericParquetExportTasklet creates a new instance of GenericParquetExportTasklet.
+// NewGenericParquetExportTasklet creates a new [GenericParquetExportTasklet] instance.
+//
+// Parameters:
+//
+//	properties: Configuration properties for the tasklet, typically from JSL.
+//	dbConnectionResolver: Resolver for database connections.
+//	storageConnectionResolver: Resolver for storage connections.
+//	itemPrototype: A pointer to a zero-value instance of the item type (T). This is used for
+//	               Parquet schema inference and for dynamically generating the partition key function.
+//
+// Returns:
+//
+//	port.Tasklet: A new instance of [GenericParquetExportTasklet].
+//	error: An error if initialization or configuration decoding fails.
 func NewGenericParquetExportTasklet[T any](
 	properties map[string]string,
 	dbConnectionResolver database.DBConnectionResolver,
 	storageConnectionResolver storage.StorageConnectionResolver,
 	itemPrototype *T, // itemPrototype is a prototype instance of the item type, injected by Fx for Parquet schema inference.
-	scanFunc func(rows *sql.Rows) (T, error), // scanFunc is the database scan function, injected by Fx.
 ) (port.Tasklet, error) {
 	var config GenericParquetExportTaskletConfig
 
@@ -212,20 +237,18 @@ func NewGenericParquetExportTasklet[T any](
 		config:                    &config,
 		dbConnectionResolver:      dbConnectionResolver,
 		storageConnectionResolver: storageConnectionResolver,
-		scanFunc:                  scanFunc,
 		parquetWriter:             pw,               // Assign the created writer
 		partitionKeyFunc:          partitionKeyFunc, // Assign the generated function
 	}, nil
 }
 
-// NewGenericParquetExportTaskletBuilder generates a function that conforms to the JSL ComponentBuilder signature.
+// NewGenericParquetExportTaskletBuilder generates a function that conforms to the JSL [configjsl.ComponentBuilder] signature.
 //
 // Parameters:
 //
 //	dbConnectionResolver: Resolver for database connections.
 //	storageConnectionResolver: Resolver for storage connections.
 //	itemPrototype: A prototype instance of the item type for schema reflection.
-//	scanFunc: A function to scan sql.Rows into type T.
 //
 // Returns:
 //
@@ -234,7 +257,6 @@ func NewGenericParquetExportTaskletBuilder[T any](
 	dbConnectionResolver database.DBConnectionResolver,
 	storageConnectionResolver storage.StorageConnectionResolver,
 	itemPrototype *T, // A pointer to a zero-value instance of the item type for schema reflection.
-	scanFunc func(rows *sql.Rows) (T, error),
 ) configjsl.ComponentBuilder { // Uses the JSL ComponentBuilder type.
 	return func(
 		cfg *coreConfig.Config, // Part of the JSL ComponentBuilder signature.
@@ -249,16 +271,25 @@ func NewGenericParquetExportTaskletBuilder[T any](
 			dbConnectionResolver,
 			storageConnectionResolver,
 			itemPrototype,
-			scanFunc,
 		)
 	}
 }
 
 // Open initializes the tasklet and prepares resources.
-func (t *GenericParquetExportTasklet[T]) Open(ctx context.Context, ec model.ExecutionContext) error {
+// It calls the [port.ItemWriter.Open] method on the internal [parquetWriter] to prepare it for writing.
+// The [model.ExecutionContext] from the [model.StepExecution] is saved for internal use.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//	stepExecution: The current [model.StepExecution] instance, containing the execution context.
+//
+// Returns:
+//
+//	error: An error if the internal [parquetWriter] fails to open.
+func (t *GenericParquetExportTasklet[T]) Open(ctx context.Context, stepExecution *model.StepExecution) error {
 	logger.Debugf("GenericParquetExportTasklet Open called.")
-	// Call Open on parquetWriter.
-	if err := t.parquetWriter.Open(ctx, ec); err != nil {
+	if err := t.parquetWriter.Open(ctx, stepExecution.ExecutionContext); err != nil {
 		return exception.NewBatchError(
 			"tasklet",
 			fmt.Sprintf("Failed to open ParquetWriter: %v", err),
@@ -267,11 +298,24 @@ func (t *GenericParquetExportTasklet[T]) Open(ctx context.Context, ec model.Exec
 			false,
 		)
 	}
-	t.stepExecutionContext = ec // Save the execution context
+	t.stepExecutionContext = stepExecution.ExecutionContext // Save the execution context
 	return nil
 }
 
 // Execute contains the core logic of the tasklet.
+// It reads data from the configured database table using a [reader.SqlCursorReader],
+// processes it, and writes it to Parquet files via the internal [parquetWriter].
+// The reading and writing operations are performed concurrently using goroutines and channels.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//	stepExecution: The current [model.StepExecution] instance.
+//
+// Returns:
+//
+//	model.ExitStatus: The exit status of the tasklet (e.g., [model.ExitStatusCompleted] or [model.ExitStatusFailed]).
+//	error: An error if any critical operation (e.g., database connection, read, write) fails.
 func (t *GenericParquetExportTasklet[T]) Execute(ctx context.Context, stepExecution *model.StepExecution) (model.ExitStatus, error) {
 	logger.Debugf("GenericParquetExportTasklet Execute called.")
 
@@ -315,12 +359,22 @@ func (t *GenericParquetExportTasklet[T]) Execute(ctx context.Context, stepExecut
 	// 9. Initialize SqlCursorReader
 	// The name for SqlCursorReader should be unique per step to ensure correct state management in ExecutionContext.
 	// We use the step name for this purpose.
+
+	// Dynamically generate scanFunc using dbConn.ScanRowsToStruct
+	scanFunc := func(rows *sql.Rows) (T, error) {
+		var item T
+		if err := dbConn.ScanRowsToStruct(rows, &item); err != nil {
+			return item, err
+		}
+		return item, nil
+	}
+
 	sqlReader := reader.NewSqlCursorReader[T](
 		sqlDB,
 		fmt.Sprintf("%s_sql_reader", stepExecution.StepName), // Unique name for the reader
 		sqlQuery,
-		nil, // No additional arguments for the query as it's fully constructed
-		t.scanFunc,
+		nil,      // No additional arguments for the query as it's fully constructed
+		scanFunc, // Use the dynamically generated scanFunc
 	)
 
 	// Open the reader
@@ -456,9 +510,19 @@ func (t *GenericParquetExportTasklet[T]) Execute(ctx context.Context, stepExecut
 }
 
 // Close releases resources used by the tasklet.
-func (t *GenericParquetExportTasklet[T]) Close(ctx context.Context) error {
+// It calls the [port.ItemWriter.Close] method on the internal [parquetWriter] to finalize any pending writes
+// and release resources held by the writer.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//	stepExecution: The current [model.StepExecution] instance.
+//
+// Returns:
+//
+//	error: An error if the internal [parquetWriter] fails to close.
+func (t *GenericParquetExportTasklet[T]) Close(ctx context.Context, stepExecution *model.StepExecution) error {
 	logger.Debugf("GenericParquetExportTasklet Close called.")
-	// Call Close on parquetWriter.
 	if err := t.parquetWriter.Close(ctx); err != nil {
 		return exception.NewBatchError(
 			"tasklet",
@@ -472,28 +536,30 @@ func (t *GenericParquetExportTasklet[T]) Close(ctx context.Context) error {
 }
 
 // SetExecutionContext sets the execution context for the tasklet.
-func (t *GenericParquetExportTasklet[T]) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
+// This method is called by the framework to provide the tasklet with its current execution context.
+// It also propagates the execution context to the internal [parquetWriter].
+//
+// Parameters:
+//
+//	ec: The [model.ExecutionContext] to set.
+func (t *GenericParquetExportTasklet[T]) SetExecutionContext(ec model.ExecutionContext) { // This method signature is for port.Tasklet
 	logger.Debugf("GenericParquetExportTasklet SetExecutionContext called.")
 	t.stepExecutionContext = ec
-	// Set ExecutionContext for ParquetWriter as well.
 	if t.parquetWriter != nil {
-		if err := t.parquetWriter.SetExecutionContext(ctx, ec); err != nil {
-			return exception.NewBatchError(
-				"tasklet",
-				fmt.Sprintf("Failed to set execution context for ParquetWriter: %v", err),
-				err,
-				false,
-				false,
-			)
+		if err := t.parquetWriter.SetExecutionContext(context.Background(), ec); err != nil {
+			logger.Warnf("Failed to set ExecutionContext for ParquetWriter: %v", err)
 		}
 	}
-	return nil
 }
 
-// GetExecutionContext retrieves the current execution context of the tasklet.
-func (t *GenericParquetExportTasklet[T]) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
+// GetExecutionContext retrieves the current [model.ExecutionContext] of the tasklet.
+//
+// Returns:
+//
+//	model.ExecutionContext: The current [model.ExecutionContext].
+func (t *GenericParquetExportTasklet[T]) GetExecutionContext() model.ExecutionContext {
 	logger.Debugf("GenericParquetExportTasklet GetExecutionContext called.")
-	return t.stepExecutionContext, nil
+	return t.stepExecutionContext
 }
 
 // Compile-time check to ensure GenericParquetExportTasklet implements port.Tasklet.

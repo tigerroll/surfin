@@ -81,6 +81,12 @@ func (d *dummyDBConnection) GetSQLDB() (*sql.DB, error) {
 	return nil, fmt.Errorf("dummyDBConnection does not have an underlying *sql.DB")
 }
 
+// ScanRowsToStruct scans the current row of *sql.Rows into the specified Go struct (dest).
+// This feature is not supported by the dummy connection, so it returns an error.
+func (d *dummyDBConnection) ScanRowsToStruct(rows *sql.Rows, dest interface{}) error {
+	return fmt.Errorf("ScanRowsToStruct is not supported by the dummy DB connection")
+}
+
 // dummyDBProvider is a dummy implementation of the database.DBProvider interface.
 // It always returns a dummy DBConnection instance.
 type dummyDBProvider struct{}

@@ -12,11 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/serialization"
-
-	"github.com/google/uuid"
 )
 
 // JobStatus represents the state of a job execution.

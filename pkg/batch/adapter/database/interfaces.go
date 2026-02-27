@@ -45,6 +45,11 @@ type DBConnection interface {
 	Config() dbconfig.DatabaseConfig
 	// GetSQLDB returns the underlying *sql.DB connection.
 	GetSQLDB() (*sql.DB, error)
+
+	// ScanRowsToStruct scans the current row of *sql.Rows into the specified Go struct (dest).
+	// This method leverages the automatic mapping capabilities of the ORM or library used internally by the adapter.
+	// 'dest' must be a pointer to a struct.
+	ScanRowsToStruct(rows *sql.Rows, dest interface{}) error
 }
 
 // DBConnectionResolver is an interface that resolves the required database connection instance based on the execution context.

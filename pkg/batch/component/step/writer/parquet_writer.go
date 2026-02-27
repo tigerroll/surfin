@@ -393,8 +393,17 @@ func (w *ParquetWriter[T]) SetExecutionContext(ctx context.Context, ec model.Exe
 	return nil
 }
 
-// GetExecutionContext retrieves the current execution context of the writer.
+// GetExecutionContext retrieves the current [model.ExecutionContext] of the writer.
 // It returns the internally stored stepExecutionContext.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//
+// Returns:
+//
+//	model.ExecutionContext: The current [model.ExecutionContext].
+//	error: An error if retrieving the context fails.
 func (w *ParquetWriter[T]) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	logger.Debugf("ParquetWriter '%s' GetExecutionContext called.", w.name)
 	return w.stepExecutionContext, nil
@@ -411,3 +420,6 @@ func (w *ParquetWriter[T]) GetTargetResourceName() string {
 func (w *ParquetWriter[T]) GetResourcePath() string {
 	return w.config.OutputBaseDir
 }
+
+// Verify that [ParquetWriter] satisfies the [port.ItemWriter] interface at compile time.
+var _ port.ItemWriter[any] = (*ParquetWriter[any])(nil)

@@ -1,3 +1,5 @@
+// Package test provides mock implementations and helper functions for testing
+// various components of the batch framework, particularly database interactions.
 package test
 
 import (
@@ -16,6 +18,18 @@ import (
 // is not required or when simulating specific database behaviors.
 type MockDBConnection struct {
 	DB *gorm.DB // The underlying GORM DB instance, primarily for internal mock logic.
+
+	// Mock functions for DBConnection interface methods.
+	// These allow specific behaviors to be defined for tests.
+	MockClose                func() error
+	MockType                 func() string
+	MockName                 func() string
+	MockIsTableNotExistError func(error) bool
+	MockRefreshConnection    func(context.Context) error
+	MockConfig               func() dbconfig.DatabaseConfig
+	MockGetSQLDB             func() (*sql.DB, error)
+	MockScanRowsToStruct     func(rows *sql.Rows, dest interface{}) error
+	// DBExecutor methods are directly implemented below, so no mock fields are needed here.
 }
 
 // NewMockDBConnection creates a new instance of MockDBConnection.
@@ -64,6 +78,17 @@ func (m *MockDBConnection) Config() dbconfig.DatabaseConfig {
 // GetSQLDB returns a nil *sql.DB and nil error, as it's a mock.
 func (m *MockDBConnection) GetSQLDB() (*sql.DB, error) {
 	return nil, nil
+}
+
+// ScanRowsToStruct implements database.DBConnection.
+// For testing purposes, this mock implementation can be configured via MockScanRowsToStruct,
+// or it defaults to returning nil.
+func (m *MockDBConnection) ScanRowsToStruct(rows *sql.Rows, dest interface{}) error {
+	if m.MockScanRowsToStruct != nil {
+		return m.MockScanRowsToStruct(rows, dest)
+	}
+	// Default mock behavior: do nothing and return nil.
+	return nil
 }
 
 // ExecuteQuery simulates a database query operation.
