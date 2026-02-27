@@ -28,6 +28,14 @@ func NewExecutionContextWriterTasklet(id string, properties map[string]string) p
 	}
 }
 
+// Open initializes the tasklet and prepares resources.
+// For ExecutionContextWriterTasklet, no specific resources need to be opened.
+func (t *ExecutionContextWriterTasklet) Open(ctx context.Context, ec model.ExecutionContext) error {
+	logger.Debugf("ExecutionContextWriterTasklet '%s' Open called.", t.id)
+	// ExecutionContext is already set by SetExecutionContext before Open is called.
+	return nil
+}
+
 // Execute writes values to the [model.ExecutionContext] based on the tasklet's properties.
 // Properties are expected to be in "key.type=value" format.
 // Example: "count.int=10", "name.string=test", "flag.bool=true".

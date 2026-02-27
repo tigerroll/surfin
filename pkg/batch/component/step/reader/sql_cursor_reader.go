@@ -72,16 +72,6 @@ func (r *SqlCursorReader[T]) Open(ctx context.Context, ec model.ExecutionContext
 	}
 	r.rows = rows
 
-	// If the cursor is empty, return io.EOF so that subsequent Read() calls can terminate immediately.
-	if !r.rows.Next() {
-		if err := r.rows.Err(); err != nil {
-			return exception.NewBatchError("reader", fmt.Sprintf("Error checking for first row in SqlCursorReader '%s'", r.name), err, false, false)
-		}
-		// If Next() returns false and there's no error, the result set is empty.
-		return io.EOF
-	}
-	// The first row has been moved to. In Read(), we will call Next() again.
-	// This design ensures that Read() always starts by advancing the cursor.
 	return nil
 }
 

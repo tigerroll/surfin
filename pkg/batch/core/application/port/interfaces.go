@@ -337,6 +337,10 @@ type ItemWriter[I any] interface {
 // Tasklet is the interface for a step that performs a single operation.
 // It corresponds to JSR352's Tasklet.
 type Tasklet interface {
+	// Open initializes the tasklet and prepares resources.
+	// It is called once at the beginning of the step execution.
+	Open(ctx context.Context, ec model.ExecutionContext) error
+
 	// Execute executes the business logic of the Tasklet.
 	// stepExecution: The current StepExecution.
 	// Returns: An ExitStatus such as ExitStatus.COMPLETED upon success.
