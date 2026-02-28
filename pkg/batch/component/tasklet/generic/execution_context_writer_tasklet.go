@@ -5,6 +5,9 @@ import (
 	"strconv"
 	"strings"
 
+	// Package generic provides general-purpose tasklet implementations.
+	// These tasklets are designed to be reusable across various batch jobs.
+
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
@@ -12,14 +15,24 @@ import (
 )
 
 // ExecutionContextWriterTasklet is a [port.Tasklet] that writes values specified in JSL properties to the [model.ExecutionContext].
-// It is primarily used for testing and debugging purposes.
+// It is primarily used for testing and debugging purposes, allowing dynamic injection of values into the execution context.
 type ExecutionContextWriterTasklet struct {
 	id         string
 	ec         model.ExecutionContext
 	properties map[string]string
 }
 
-// NewExecutionContextWriterTasklet creates a new instance of [ExecutionContextWriterTasklet].
+// NewExecutionContextWriterTasklet creates a new [ExecutionContextWriterTasklet] instance.
+//
+// Parameters:
+//
+//	id: The unique identifier for this tasklet.
+//	properties: A map of properties where keys are in "key.type" format (e.g., "count.int", "name.string")
+//	            and values are string representations to be written to the ExecutionContext.
+//
+// Returns:
+//
+//	port.Tasklet: A new instance of [ExecutionContextWriterTasklet].
 func NewExecutionContextWriterTasklet(id string, properties map[string]string) port.Tasklet {
 	return &ExecutionContextWriterTasklet{
 		id:         id,
@@ -28,17 +41,42 @@ func NewExecutionContextWriterTasklet(id string, properties map[string]string) p
 	}
 }
 
-// Open initializes the tasklet and prepares resources.
-// For ExecutionContextWriterTasklet, no specific resources need to be opened.
-func (t *ExecutionContextWriterTasklet) Open(ctx context.Context, ec model.ExecutionContext) error {
+// Open initializes the tasklet and prepares any necessary resources.
+// For [ExecutionContextWriterTasklet], no specific resources need to be opened.
+// The [model.StepExecution] is provided for context, but its ExecutionContext is expected
+// to be set via [SetExecutionContext] before [Open] is called.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//	stepExecution: The current [model.StepExecution] instance.
+//
+// Returns:
+//
+//	error: An error if initialization fails.
+func (t *ExecutionContextWriterTasklet) Open(ctx context.Context, stepExecution *model.StepExecution) error {
 	logger.Debugf("ExecutionContextWriterTasklet '%s' Open called.", t.id)
 	// ExecutionContext is already set by SetExecutionContext before Open is called.
 	return nil
 }
 
 // Execute writes values to the [model.ExecutionContext] based on the tasklet's properties.
-// Properties are expected to be in "key.type=value" format.
-// Example: "count.int=10", "name.string=test", "flag.bool=true".
+// Properties are expected to be in "key.type" format, where 'type' specifies the target data type
+// (e.g., "string", "int", "float", "bool").
+// Example properties:
+//   - "count.int": "10"
+//   - "name.string": "test"
+//   - "flag.bool": "true"
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//	stepExecution: The current [model.StepExecution] instance.
+//
+// Returns:
+//
+//	model.ExitStatus: The exit status of the tasklet (e.g., [model.ExitStatusCompleted]).
+//	error: An error if property parsing or type conversion fails.
 func (t *ExecutionContextWriterTasklet) Execute(ctx context.Context, stepExecution *model.StepExecution) (model.ExitStatus, error) {
 	logger.Infof("ExecutionContextWriterTasklet '%s' executing. Writing %d properties to ExecutionContext.", t.id, len(t.properties))
 
@@ -84,19 +122,37 @@ func (t *ExecutionContextWriterTasklet) Execute(ctx context.Context, stepExecuti
 }
 
 // Close releases any resources held by the tasklet.
-func (t *ExecutionContextWriterTasklet) Close(ctx context.Context) error {
+// For [ExecutionContextWriterTasklet], there are no specific resources to close, so it always returns nil.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//	stepExecution: The current [model.StepExecution] instance.
+//
+// Returns:
+//
+//	error: An error if closing fails (always nil for this tasklet).
+func (t *ExecutionContextWriterTasklet) Close(ctx context.Context, stepExecution *model.StepExecution) error {
 	return nil
 }
 
 // SetExecutionContext sets the [model.ExecutionContext] for the tasklet.
-func (t *ExecutionContextWriterTasklet) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
+// This method is called by the framework to provide the tasklet with its current execution context.
+//
+// Parameters:
+//
+//	ec: The [model.ExecutionContext] to set.
+func (t *ExecutionContextWriterTasklet) SetExecutionContext(ec model.ExecutionContext) {
 	t.ec = ec
-	return nil
 }
 
 // GetExecutionContext retrieves the current [model.ExecutionContext] from the tasklet.
-func (t *ExecutionContextWriterTasklet) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
-	return t.ec, nil
+//
+// Returns:
+//
+//	model.ExecutionContext: The current [model.ExecutionContext].
+func (t *ExecutionContextWriterTasklet) GetExecutionContext() model.ExecutionContext {
+	return t.ec
 }
 
 // Verify that [ExecutionContextWriterTasklet] satisfies the [port.Tasklet] interface.

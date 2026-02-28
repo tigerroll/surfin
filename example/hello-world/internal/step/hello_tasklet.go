@@ -100,31 +100,30 @@ func (t *HelloWorldTasklet) Execute(ctx context.Context, stepExecution *model.St
 
 // Open initializes any resources required by the Tasklet.
 // For HelloWorldTasklet, there are no specific resources to open.
-func (t *HelloWorldTasklet) Open(ctx context.Context, ec model.ExecutionContext) error {
+func (t *HelloWorldTasklet) Open(ctx context.Context, stepExecution *model.StepExecution) error {
 	logger.Debugf("HelloWorldTasklet: Open method called.")
 	return nil
 }
 
 // Close releases any resources held by the Tasklet.
 // For HelloWorldTasklet, there are no specific resources to close.
-func (t *HelloWorldTasklet) Close(ctx context.Context) error {
+func (t *HelloWorldTasklet) Close(ctx context.Context, stepExecution *model.StepExecution) error {
 	logger.Debugf("HelloWorldTasklet: Close method called.")
 	return nil
 }
 
 // SetExecutionContext sets the ExecutionContext for the Tasklet.
 // This method allows the framework to inject or restore the tasklet's state.
-func (t *HelloWorldTasklet) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
+func (t *HelloWorldTasklet) SetExecutionContext(ec model.ExecutionContext) {
 	logger.Debugf("HelloWorldTasklet: SetExecutionContext method called.")
 	t.executionContext = ec
-	return nil
 }
 
 // GetExecutionContext retrieves the current ExecutionContext of the Tasklet.
 // This method allows the framework to persist the tasklet's state.
-func (t *HelloWorldTasklet) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
+func (t *HelloWorldTasklet) GetExecutionContext() model.ExecutionContext {
 	logger.Debugf("HelloWorldTasklet: GetExecutionContext method called.")
-	return t.executionContext, nil
+	return t.executionContext
 }
 
 // HelloWorldTasklet confirms that it implements the port.Tasklet interface.

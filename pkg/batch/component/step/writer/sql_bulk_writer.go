@@ -156,8 +156,8 @@ func (w *SqlBulkWriter[T]) SetExecutionContext(ctx context.Context, ec model.Exe
 }
 
 // GetExecutionContext retrieves the current [model.ExecutionContext] from the writer.
-// [SqlBulkWriter] does not manage its own restartable state; it returns the
-// [model.ExecutionContext] that was provided during the [Open] or [SetExecutionContext] call.
+// [SqlBulkWriter] does not manage its own restartable state.
+// It returns the [model.ExecutionContext] provided during [Open] or [SetExecutionContext] calls.
 //
 // Parameters:
 //
@@ -165,7 +165,8 @@ func (w *SqlBulkWriter[T]) SetExecutionContext(ctx context.Context, ec model.Exe
 //
 // Returns:
 //
-//	The current [model.ExecutionContext] and an error if the context is cancelled.
+//	model.ExecutionContext: The current [model.ExecutionContext].
+//	error: An error if retrieving the context fails.
 func (w *SqlBulkWriter[T]) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	return w.stepExecutionContext, nil
 }

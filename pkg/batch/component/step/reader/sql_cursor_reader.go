@@ -124,8 +124,17 @@ func (r *SqlCursorReader[T]) Close(ctx context.Context) error {
 	return nil
 }
 
-// GetExecutionContext returns the current ExecutionContext of the reader.
+// GetExecutionContext retrieves the current [model.ExecutionContext] of the reader.
 // This is used for restartability.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//
+// Returns:
+//
+//	model.ExecutionContext: The current [model.ExecutionContext].
+//	error: An error if retrieving the context fails.
 func (r *SqlCursorReader[T]) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	if r.ec == nil {
 		return model.NewExecutionContext(), nil // Return empty if not initialized

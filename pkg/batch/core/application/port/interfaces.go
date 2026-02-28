@@ -195,11 +195,11 @@ type ExpressionResolver interface {
 // ItemReader is the interface for a data reading step.
 // O is the type of item to be read.
 type ItemReader[O any] interface {
-	// Open opens resources and restores state from ExecutionContext.
+	// Open opens resources and restores state from [model.ExecutionContext].
 	//
 	// Parameters:
 	//   ctx: The context for the operation.
-	//   ec: The ExecutionContext at the start of reading.
+	//   ec: The [model.ExecutionContext] to restore state from.
 	//
 	// Returns:
 	//   error: An error if opening fails.
@@ -221,23 +221,19 @@ type ItemReader[O any] interface {
 	// Returns:
 	//   error: An error if closing fails.
 	Close(ctx context.Context) error
-	// SetExecutionContext sets the state of the ItemReader to the ExecutionContext.
+	// SetExecutionContext sets the state of the ItemReader to the [model.ExecutionContext].
 	//
 	// Parameters:
-	//   ctx: The context for the operation.
-	//   ec: The ExecutionContext to set.
-	//
-	// Returns:
-	//   error: An error if setting fails.
+	//   ec: The [model.ExecutionContext] to set.
 	SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error
-	// GetExecutionContext retrieves the current state of the ItemReader as ExecutionContext.
+	// GetExecutionContext retrieves the current state of the ItemReader as [model.ExecutionContext].
 	//
 	// Parameters:
 	//   ctx: The context for the operation.
 	//
 	// Returns:
-	//   model.ExecutionContext: The current ExecutionContext.
-	//   error: An error if retrieval fails.
+	//   model.ExecutionContext: The current [model.ExecutionContext].
+	//   error: An error if retrieving the context fails.
 	GetExecutionContext(ctx context.Context) (model.ExecutionContext, error)
 }
 
@@ -254,43 +250,39 @@ type ItemProcessor[I, O any] interface {
 	//   O: The processed item, or nil if filtered.
 	//   error: An error if processing fails.
 	Process(ctx context.Context, item I) (O, error)
-	// SetExecutionContext sets the state of the ItemProcessor to the ExecutionContext.
+	// SetExecutionContext sets the state of the ItemProcessor to the [model.ExecutionContext].
 	//
 	// Parameters:
-	//   ctx: The context for the operation.
-	//   ec: The ExecutionContext to set.
-	//
-	// Returns:
-	//   error: An error if setting fails.
+	//   ec: The [model.ExecutionContext] to set.
 	SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error
-	// GetExecutionContext retrieves the current state of the ItemProcessor as ExecutionContext.
+	// GetExecutionContext retrieves the current state of the ItemProcessor as [model.ExecutionContext].
 	//
 	// Parameters:
 	//   ctx: The context for the operation.
 	//
 	// Returns:
-	//   model.ExecutionContext: The current ExecutionContext.
-	//   error: An error if retrieval fails.
+	//   model.ExecutionContext: The current [model.ExecutionContext].
+	//   error: An error if retrieving the context fails.
 	GetExecutionContext(ctx context.Context) (model.ExecutionContext, error)
 }
 
 // ItemWriter is the interface for a data writing step.
 // I is the type of item to be written.
 type ItemWriter[I any] interface {
-	// Open opens resources and restores state from ExecutionContext.
+	// Open opens resources and restores state from [model.ExecutionContext].
 	//
 	// Parameters:
 	//   ctx: The context for the operation.
-	//   ec: The ExecutionContext at the start of writing.
+	//   ec: The [model.ExecutionContext] to restore state from.
 	//
 	// Returns:
 	//   error: An error if opening fails.
 	Open(ctx context.Context, ec model.ExecutionContext) error
-	// Write persists a list of items.
+	// Write persists a single item.
 	//
 	// Parameters:
 	//   ctx: The context for the operation.
-	//   items: The list of items to be written.
+	//   item: The item to be written.
 	//
 	// Returns:
 	//   error: An error if writing fails.
@@ -303,23 +295,19 @@ type ItemWriter[I any] interface {
 	// Returns:
 	//   error: An error if closing fails.
 	Close(ctx context.Context) error
-	// SetExecutionContext sets the state of the ItemWriter to the ExecutionContext.
+	// SetExecutionContext sets the state of the ItemWriter to the [model.ExecutionContext].
 	//
 	// Parameters:
-	//   ctx: The context for the operation.
-	//   ec: The ExecutionContext to set.
-	//
-	// Returns:
-	//   error: An error if setting fails.
+	//   ec: The [model.ExecutionContext] to set.
 	SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error
-	// GetExecutionContext retrieves the current state of the ItemWriter as ExecutionContext.
+	// GetExecutionContext retrieves the current state of the ItemWriter as [model.ExecutionContext].
 	//
 	// Parameters:
 	//   ctx: The context for the operation.
 	//
 	// Returns:
-	//   model.ExecutionContext: The current ExecutionContext.
-	//   error: An error if retrieval fails.
+	//   model.ExecutionContext: The current [model.ExecutionContext].
+	//   error: An error if retrieving the context fails.
 	GetExecutionContext(ctx context.Context) (model.ExecutionContext, error)
 
 	// GetTargetResourceName returns the name of the target resource for this writer (e.g., "workload_db", "s3_bucket").
@@ -339,18 +327,31 @@ type ItemWriter[I any] interface {
 type Tasklet interface {
 	// Open initializes the tasklet and prepares resources.
 	// It is called once at the beginning of the step execution.
-	Open(ctx context.Context, ec model.ExecutionContext) error
+	Open(ctx context.Context, stepExecution *model.StepExecution) error
 
 	// Execute executes the business logic of the Tasklet.
 	// stepExecution: The current StepExecution.
 	// Returns: An ExitStatus such as ExitStatus.COMPLETED upon success.
 	Execute(ctx context.Context, stepExecution *model.StepExecution) (model.ExitStatus, error)
 	// Close releases resources.
-	Close(ctx context.Context) error
+	//
+	// Parameters:
+	//   ctx: The context for the operation.
+	//   stepExecution: The current StepExecution instance.
+	//
+	// Returns:
+	//   error: An error if closing fails.
+	Close(ctx context.Context, stepExecution *model.StepExecution) error
 	// SetExecutionContext sets the ExecutionContext.
-	SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error
-	// GetExecutionContext retrieves the ExecutionContext.
-	GetExecutionContext(ctx context.Context) (model.ExecutionContext, error)
+	//
+	// Parameters:
+	//   ec: The ExecutionContext to set.
+	SetExecutionContext(ec model.ExecutionContext)
+	// GetExecutionContext retrieves the [model.ExecutionContext].
+	//
+	// Returns:
+	//   model.ExecutionContext: The current [model.ExecutionContext].
+	GetExecutionContext() model.ExecutionContext
 }
 
 // NotificationListener is a dedicated listener for sending notifications after job execution completion.
@@ -441,34 +442,35 @@ type ItemWriteListener interface {
 	OnSkipInWrite(ctx context.Context, item interface{}, err error)
 }
 
-// Define context key for StepExecution propagation during chunk processing.
+// contextKey is a custom type for context keys to avoid collisions.
 type contextKey string
 
+// StepExecutionKey is the context key used to store and retrieve a [model.StepExecution] from a [context.Context].
 const StepExecutionKey contextKey = "stepExecution"
 
-// GetContextWithStepExecution stores a StepExecution in the Context.
+// GetContextWithStepExecution stores a [model.StepExecution] in the provided [context.Context].
 //
 // Parameters:
 //
-//	ctx: The context for the operation.
-//	se: The StepExecution to store.
+//	ctx: The parent context.
+//	se: The [model.StepExecution] to store.
 //
 // Returns:
 //
-//	context.Context: A new context with the StepExecution stored.
+//	context.Context: A new context containing the [model.StepExecution].
 func GetContextWithStepExecution(ctx context.Context, se *model.StepExecution) context.Context {
 	return context.WithValue(ctx, StepExecutionKey, se)
 }
 
-// GetStepExecutionFromContext retrieves a StepExecution from the Context. Returns nil if not found.
+// GetStepExecutionFromContext retrieves a [model.StepExecution] from the [context.Context].
 //
 // Parameters:
 //
-//	ctx: The context for the operation.
+//	ctx: The context from which to retrieve the [model.StepExecution].
 //
 // Returns:
 //
-//	*model.StepExecution: The retrieved StepExecution, or nil if not found.
+//	*model.StepExecution: The retrieved [model.StepExecution], or nil if not found.
 func GetStepExecutionFromContext(ctx context.Context) *model.StepExecution {
 	if se, ok := ctx.Value(StepExecutionKey).(*model.StepExecution); ok {
 		return se

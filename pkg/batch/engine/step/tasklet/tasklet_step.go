@@ -48,7 +48,7 @@ type TaskletStep struct {
 //
 // Returns:
 //
-//	A new port.Step instance.
+//	[port.Step]: A new instance of [TaskletStep] implementing the [port.Step] interface.
 func NewTaskletStep(
 	id string,
 	tasklet port.Tasklet,
@@ -77,21 +77,21 @@ func NewTaskletStep(
 }
 
 // SetMetricRecorder sets the MetricRecorder for the step.
-// This method implements the port.Step interface.
+// This method implements the [port.Step] interface.
 //
 // Parameters:
 //
-//	recorder: The MetricRecorder instance to be used.
+//	recorder: The [metrics.MetricRecorder] instance to be used.
 func (s *TaskletStep) SetMetricRecorder(recorder metrics.MetricRecorder) {
 	s.metricRecorder = recorder
 }
 
 // SetTracer sets the Tracer for the step.
-// This method implements the port.Step interface.
+// This method implements the [port.Step] interface.
 //
 // Parameters:
 //
-//	tracer: The Tracer instance to be used.
+//	tracer: The [metrics.Tracer] instance to be used.
 func (s *TaskletStep) SetTracer(tracer metrics.Tracer) {
 	s.tracer = tracer
 }
@@ -100,11 +100,11 @@ func (s *TaskletStep) SetTracer(tracer metrics.Tracer) {
 //
 // Parameters:
 //
-//	level: The string representation of the isolation level.
+//	level: The string representation of the isolation level (e.g., "READ_COMMITTED").
 //
 // Returns:
 //
-//	sql.IsolationLevel: The corresponding SQL isolation level. Defaults to sql.LevelDefault if unrecognized.
+//	sql.IsolationLevel: The corresponding SQL isolation level. Defaults to [sql.LevelDefault] if unrecognized.
 func parseIsolationLevel(level string) sql.IsolationLevel {
 	switch level {
 	case "READ_UNCOMMITTED":
@@ -124,7 +124,7 @@ func parseIsolationLevel(level string) sql.IsolationLevel {
 }
 
 // ID returns the unique identifier of the step.
-// This method implements the port.Step interface.
+// This method implements the [port.Step] interface.
 //
 // Returns:
 //
@@ -134,8 +134,8 @@ func (s *TaskletStep) ID() string {
 }
 
 // StepName returns the logical name of the step.
-// For TaskletStep, the step name is the same as its ID.
-// This method implements the port.Step interface.
+// For [TaskletStep], the step name is the same as its ID.
+// This method implements the [port.Step] interface.
 //
 // Returns:
 //
@@ -145,11 +145,11 @@ func (s *TaskletStep) StepName() string {
 }
 
 // GetTransactionOptions returns the transaction options for this step.
-// This method implements the port.Step interface.
+// This method implements the [port.Step] interface.
 //
 // Returns:
 //
-//	*sql.TxOptions: A pointer to sql.TxOptions configured with the step's isolation level.
+//	*sql.TxOptions: A pointer to [sql.TxOptions] configured with the step's isolation level.
 func (s *TaskletStep) GetTransactionOptions() *sql.TxOptions {
 	// Propagation attribute is handled by the StepExecutor, so only IsolationLevel is set in TxOptions here.
 	return &sql.TxOptions{
@@ -159,7 +159,7 @@ func (s *TaskletStep) GetTransactionOptions() *sql.TxOptions {
 }
 
 // GetPropagation returns the transaction propagation attribute.
-// This method implements the port.Step interface.
+// This method implements the [port.Step] interface.
 //
 // Returns:
 //
@@ -168,43 +168,43 @@ func (s *TaskletStep) GetPropagation() string {
 	return s.propagation
 }
 
-// notifyBeforeStep calls the BeforeStep method of all registered StepExecutionListeners.
+// notifyBeforeStep calls the BeforeStep method of all registered [port.StepExecutionListener]s.
 //
 // Parameters:
 //
 //	ctx: The context for the operation.
-//	stepExecution: The current StepExecution instance.
+//	stepExecution: The current [model.StepExecution] instance.
 func (s *TaskletStep) notifyBeforeStep(ctx context.Context, stepExecution *model.StepExecution) {
 	for _, l := range s.stepExecutionListeners {
 		l.BeforeStep(ctx, stepExecution)
 	}
 }
 
-// notifyAfterStep calls the AfterStep method of all registered StepExecutionListeners.
+// notifyAfterStep calls the AfterStep method of all registered [port.StepExecutionListener]s.
 //
 // Parameters:
 //
 //	ctx: The context for the operation.
-//	stepExecution: The current StepExecution instance.
+//	stepExecution: The current [model.StepExecution] instance.
 func (s *TaskletStep) notifyAfterStep(ctx context.Context, stepExecution *model.StepExecution) {
 	for _, l := range s.stepExecutionListeners {
 		l.AfterStep(ctx, stepExecution)
 	}
 }
 
-// Execute runs the Tasklet logic. This method manages the lifecycle of the tasklet
+// Execute runs the [port.Tasklet] logic. This method manages the lifecycle of the tasklet
 // within the step, including status updates, execution context handling, and listener notifications.
 // Transaction management is typically handled by the StepExecutor that calls this method.
 //
 // Parameters:
 //
 //	ctx: The context for the operation.
-//	jobExecution: The current JobExecution instance.
-//	stepExecution: The current StepExecution instance.
+//	jobExecution: The current [model.JobExecution] instance.
+//	stepExecution: The current [model.StepExecution] instance.
 //
 // Returns:
 //
-//	error: An error if the step execution encounters a fatal issue.
+//	error: An error if the step execution encounters a fatal issue, or if persistence fails.
 func (s *TaskletStep) Execute(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution) (err error) {
 	logger.Infof("TaskletStep '%s' executing.", s.id)
 
@@ -216,22 +216,18 @@ func (s *TaskletStep) Execute(ctx context.Context, jobExecution *model.JobExecut
 
 	// 2. Set Tasklet Execution Context.
 	// The ExecutionContext from stepExecution is passed to the tasklet.
-	if err := s.tasklet.SetExecutionContext(ctx, stepExecution.ExecutionContext); err != nil {
-		stepExecution.MarkAsFailed(err)
-		s.jobRepository.UpdateStepExecution(ctx, stepExecution)
-		return exception.NewBatchError(s.id, "Failed to set Tasklet ExecutionContext", err, false, false)
-	}
+	s.tasklet.SetExecutionContext(stepExecution.ExecutionContext)
 
 	// 3. Open the tasklet to initialize resources.
 	// This is called once at the beginning of the step.
-	if err := s.tasklet.Open(ctx, stepExecution.ExecutionContext); err != nil {
+	if err := s.tasklet.Open(ctx, stepExecution); err != nil {
 		stepExecution.MarkAsFailed(err)                         // Mark step as failed if Open fails.
 		s.jobRepository.UpdateStepExecution(ctx, stepExecution) // Persist failure.
 		return exception.NewBatchError(s.id, "Failed to open Tasklet", err, false, false)
 	}
 	// Ensure the tasklet is closed when the step execution finishes, regardless of success or failure.
 	defer func() {
-		if closeErr := s.tasklet.Close(ctx); closeErr != nil {
+		if closeErr := s.tasklet.Close(ctx, stepExecution); closeErr != nil {
 			logger.Errorf("TaskletStep '%s': Failed to close Tasklet: %v", s.id, closeErr)
 			// If Close fails, and no other error has occurred, this error might be propagated.
 			// However, the primary error should be from Execute if it failed.
@@ -248,11 +244,8 @@ func (s *TaskletStep) Execute(ctx context.Context, jobExecution *model.JobExecut
 
 	// 6. Retrieve Tasklet Execution Context and reflect it in StepExecution.
 	// This ensures any changes made by the tasklet to its context are saved.
-	if taskletEC, getErr := s.tasklet.GetExecutionContext(ctx); getErr == nil {
-		stepExecution.ExecutionContext = taskletEC
-	} else {
-		logger.Warnf("TaskletStep '%s': Failed to retrieve ExecutionContext from Tasklet: %v", s.id, getErr)
-	}
+	taskletEC := s.tasklet.GetExecutionContext()
+	stepExecution.ExecutionContext = taskletEC
 
 	// 7. Update StepExecution status based on the outcome of tasklet.Execute.
 	if err != nil {
@@ -283,11 +276,11 @@ func (s *TaskletStep) Execute(ctx context.Context, jobExecution *model.JobExecut
 }
 
 // GetExecutionContextPromotion returns the ExecutionContext promotion settings for this step.
-// This method implements the port.Step interface.
+// This method implements the [port.Step] interface.
 //
 // Returns:
 //
-//	*model.ExecutionContextPromotion: A pointer to the ExecutionContextPromotion configuration.
+//	*model.ExecutionContextPromotion: A pointer to the [model.ExecutionContextPromotion] configuration.
 func (s *TaskletStep) GetExecutionContextPromotion() *model.ExecutionContextPromotion {
 	return s.promotion
 }
