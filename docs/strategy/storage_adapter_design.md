@@ -63,7 +63,7 @@ graph LR
 *   **インターフェース**: `StorageExecutor`
     *   **目的**:
         *   `StorageExecutor` は、汎用的なストレージ操作（アップロード、ダウンロード、リスト、削除）を定義します。
-        *   `StorageAdapter` は、`coreAdapter.ResourceConnection` と `StorageExecutor` を埋め込むことで、リソース接続としての機能と具体的なストレージ操作の両方を提供します。
+        *   `StorageConnection` は、`coreAdapter.ResourceConnection` と `StorageExecutor` を埋め込むことで、リソース接続としての機能と具体的なストレージ操作の両方を提供します。
         *   `pkg/batch/core/adapter.ResourceConnection` インターフェースを埋め込むことで、汎用的なリソース接続としての機能（リソースタイプ、名前、クローズ）を提供する。
         *   これにより、具体的なストレージサービス（GCS, S3, ローカルファイルシステムなど）に依存しない形で、ファイル操作を行うことができる。
     *   **メソッド**:
@@ -77,7 +77,6 @@ graph LR
         | `Download`     | 指定されたバケットとオブジェクト名（パスを含む）からデータをダウンロードします。ダウンロードしたデータのストリームを返します。このストリームは使用後に必ずクローズする必要があります。(`StorageExecutor` から継承) |
         | `ListObjects`  | 指定されたバケットとプレフィックス内のオブジェクトをリストし、オブジェクト名をコールバック関数 `fn` に渡して逐次処理します。これにより、メモリ負荷を抑えつつ大量のオブジェクトを扱えます。(`StorageExecutor` から継承) |
         | `DeleteObject` | 指定されたバケットとオブジェクト名を削除します。(`StorageExecutor` から継承)|
-        | `Config`       | このアダプターが使用している設定（`pkg/batch/adapter/storage/config.StorageConfig`）を返します。|
 
 *   **推奨されるインターフェース定義 (Go)**:
 
@@ -103,13 +102,14 @@ graph LR
         DeleteObject(ctx context.Context, bucket, objectName string) error
     }
 
-    // StorageAdapter は汎用的なデータストレージ接続を表します。
-    // coreAdapter.ResourceConnection と StorageExecutor を埋め込み、リソース接続としての機能と具体的なストレージ操作を提供します。
-    type StorageAdapter interface {
-        coreAdapter.ResourceConnection // Close(), Type(), Name() を継承
-        StorageExecutor                // Upload(), Download(), ListObjects(), DeleteObject() を継承
+    // StorageConnection represents a generic data storage connection.
+    // It embeds coreAdapter.ResourceConnection and StorageExecutor to provide both
+    // resource connection capabilities and specific storage operations.
+    type StorageConnection interface {
+        coreAdapter.ResourceConnection // Inherits Close(), Type(), Name()
+        StorageExecutor                // Inherits Upload(), Download(), ListObjects(), DeleteObject()
 
-        Config() storageConfig.StorageConfig
+        // Config() storageConfig.StorageConfig // Removed as storageConfig is no longer imported
     }
 
     // StorageProvider はデータストレージ接続の取得と管理を行います。

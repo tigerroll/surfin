@@ -17,7 +17,7 @@ This document describes the design for adding an automatic scanning feature from
 
 ## 3. Interface Changes
 
-Add a new method `ScanRowsToStruct` to the `DBConnection` interface in `pkg/batch/adapter/database/interfaces.go`.
+`ScanRowsToStruct` メソッドは、`pkg/batch/adapter/database/interfaces.go` の `DBConnection` インターフェースにすでに追加されています。
 
 ```go
 // pkg/batch/adapter/database/interfaces.go
@@ -34,7 +34,7 @@ type DBConnection interface {
 
 ## 4. Adapter Implementation
 
-Each adapter implementing the `DBConnection` interface must implement the `ScanRowsToStruct` method.
+`DBConnection` インターフェースを実装する各アダプターは、`ScanRowsToStruct` メソッドをすでに実装しています。
 
 ### 4.1. GORM-based Adapter (e.g., `pkg/batch/adapter/database/gorm`)
 
@@ -67,7 +67,7 @@ func (d *dummyDBConnection) ScanRowsToStruct(rows *sql.Rows, dest interface{}) e
 
 ## 5. Usage in `GenericParquetExportTasklet` and `scanFunc`
 
-Within the `Execute` method of `GenericParquetExportTasklet`, after resolving the database connection, the `ScanRowsToStruct` method of the `DBConnection` instance will be used to dynamically generate `scanFunc`.
+`GenericParquetExportTasklet` の `Execute` メソッド内では、データベース接続を解決した後、`DBConnection` インスタンスの `ScanRowsToStruct` メソッドを使用して `scanFunc` が動的に生成されるようにすでに実装されています。
 
 ```go
 // pkg/batch/component/tasklet/generic/parquet_export_tasklet.go (inside Execute method)
