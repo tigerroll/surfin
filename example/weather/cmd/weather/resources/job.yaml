@@ -81,22 +81,6 @@ flow:
         - on: FAILED # If the step fails
           fail: true # Terminate the entire job as failed
           
-    #exportHourlyForecastStep:
-    #  id: exportHourlyForecastStep
-    #  tasklet:
-    #    ref: hourlyForecastExportTasklet # Reference to the tasklet builder.
-    #    properties: # Properties for the tasklet component.
-    #      dbRef: workload # Database connection name where the hourly_forecast table resides.
-    #      storageRef: local # Connection name for the local storage adapter.
-    #      outputBaseDir: "exported_weather_data" # Base directory for output files within the storage.
-    #  listeners:
-    #    - ref: loggingStepListener
-    #  transitions:
-    #    - on: COMPLETED # If the step completes successfully.
-    #      to: checkConditionDecision # Transition to checkConditionDecision.
-    #    - on: FAILED
-    #      fail: true # Terminate the entire job as failed
-
     exportHourlyForecastStep:
       id: exportHourlyForecastStep
       tasklet:
