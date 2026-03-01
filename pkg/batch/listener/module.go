@@ -45,7 +45,7 @@ var Module = fx.Options(
 //
 //	A `jsl.JobExecutionListenerBuilder` function that can create a `JobCompletionSignaler` instance.
 func NewJobCompletionSignalerBuilder(jobDoneChan chan struct{}) jsl.JobExecutionListenerBuilder {
-	return func(cfg *config.Config, properties map[string]string) (port.JobExecutionListener, error) {
+	return func(cfg *config.Config, properties map[string]interface{}) (port.JobExecutionListener, error) {
 		return NewJobCompletionSignaler(jobDoneChan), nil
 	}
 }

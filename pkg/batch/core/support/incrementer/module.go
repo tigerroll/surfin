@@ -12,9 +12,17 @@ import (
 
 // NewRunIDIncrementerComponentBuilder provides a jsl.JobParametersIncrementerBuilder for RunIDIncrementer.
 func NewRunIDIncrementerComponentBuilder() jsl.JobParametersIncrementerBuilder {
-	return func(cfg *config.Config, properties map[string]string) (port.JobParametersIncrementer, error) {
-		name, ok := properties["name"]
-		if !ok || name == "" {
+	return func(cfg *config.Config, properties map[string]interface{}) (port.JobParametersIncrementer, error) {
+		var name string
+		nameVal, ok := properties["name"]
+		if ok {
+			if s, isString := nameVal.(string); isString {
+				name = s
+			} else {
+				logger.Warnf("RunIDIncrementer: Property 'name' is not a string, using default value 'run.id'.")
+				name = "run.id"
+			}
+		} else {
 			name = "run.id" // Default value
 			logger.Warnf("RunIDIncrementer: Property 'name' is not specified, using default value '%s'.", name)
 		}
@@ -33,9 +41,17 @@ func RegisterRunIDIncrementerBuilder(
 
 // NewTimestampIncrementerComponentBuilder provides a jsl.JobParametersIncrementerBuilder for TimestampIncrementer.
 func NewTimestampIncrementerComponentBuilder() jsl.JobParametersIncrementerBuilder {
-	return func(cfg *config.Config, properties map[string]string) (port.JobParametersIncrementer, error) {
-		name, ok := properties["name"]
-		if !ok || name == "" {
+	return func(cfg *config.Config, properties map[string]interface{}) (port.JobParametersIncrementer, error) {
+		var name string
+		nameVal, ok := properties["name"]
+		if ok {
+			if s, isString := nameVal.(string); isString {
+				name = s
+			} else {
+				logger.Warnf("TimestampIncrementer: Property 'name' is not a string, using default value 'timestamp'.")
+				name = "timestamp"
+			}
+		} else {
 			name = "timestamp" // Default value
 			logger.Warnf("TimestampIncrementer: Property 'name' is not specified, using default value '%s'.", name)
 		}

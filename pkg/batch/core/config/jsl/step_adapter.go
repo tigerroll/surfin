@@ -19,8 +19,42 @@ import (
 // Package jsl provides functionality to convert JSL (Job Specification Language)
 // definitions into the internal core batch framework models.
 
+// convertMapKeysToString recursively converts map[interface{}]interface{} keys to string keys.
+// This is necessary because yaml.Unmarshal can unmarshal map keys as interface{} (e.g., string, int)
+// but mapstructure expects string keys for struct field mapping.
+func convertMapKeysToString(input interface{}) (interface{}, error) {
+	switch v := input.(type) {
+	case map[interface{}]interface{}:
+		newMap := make(map[string]interface{})
+		for key, val := range v {
+			strKey, ok := key.(string)
+			if !ok {
+				return nil, fmt.Errorf("map key is not a string: %v (type %T)", key, key)
+			}
+			convertedVal, err := convertMapKeysToString(val)
+			if err != nil {
+				return nil, err
+			}
+			newMap[strKey] = convertedVal
+		}
+		return newMap, nil
+	case []interface{}:
+		newSlice := make([]interface{}, len(v))
+		for i, val := range v {
+			convertedVal, err := convertMapKeysToString(val)
+			if err != nil {
+				return nil, err
+			}
+			newSlice[i] = convertedVal
+		}
+		return newSlice, nil
+	default:
+		return input, nil
+	}
+}
+
 // resolveComponentRefProperties resolves dynamic expressions within the ComponentRef's Properties map.
-// It resolves expressions that do not depend on JobParameters or ExecutionContext, as JobExecution/StepExecution are nil during JSL conversion.
+// It also ensures all nested map keys are strings for mapstructure compatibility.
 //
 // Parameters:
 //
@@ -31,18 +65,31 @@ import (
 //
 //	A new map with resolved properties, or the original map if no properties are present.
 //	An error if any property resolution fails.
-func resolveComponentRefProperties(resolver core.ExpressionResolver, ref *ComponentRef) (map[string]string, error) {
+func resolveComponentRefProperties(resolver core.ExpressionResolver, ref *ComponentRef) (map[string]interface{}, error) {
 	module := "jsl_converter"
 	if ref == nil || len(ref.Properties) == 0 {
 		return ref.Properties, nil
 	}
-	resolvedProps := make(map[string]string, len(ref.Properties))
+	resolvedProps := make(map[string]interface{}, len(ref.Properties))
 	for key, value := range ref.Properties {
-		resolvedValue, err := resolver.Resolve(context.Background(), value, nil, nil)
-		if err == nil {
-			resolvedProps[key] = resolvedValue
+		// First, convert any map[interface{}]interface{} to map[string]interface{} recursively.
+		// This ensures mapstructure can correctly decode nested structures.
+		convertedValue, err := convertMapKeysToString(value)
+		if err != nil {
+			return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to convert map keys to string for property '%s'", key), err, false, false)
+		}
+
+		if strVal, ok := convertedValue.(string); ok {
+			// Attempt expression resolution only if the value is a string.
+			resolvedValue, err := resolver.Resolve(context.Background(), strVal, nil, nil)
+			if err == nil {
+				resolvedProps[key] = resolvedValue
+			} else {
+				return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to resolve property '%s' for ComponentRef '%s'", key, ref.Ref), err, false, false)
+			}
 		} else {
-			return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to resolve property '%s' for ComponentRef '%s'", key, ref.Ref), err, false, false)
+			// Non-string values are copied as-is (convertedValue should already be map[string]interface{}).
+			resolvedProps[key] = convertedValue
 		}
 	}
 	return resolvedProps, nil
@@ -264,12 +311,23 @@ func ConvertJSLToCoreFlow(
 
 				// Get the TxManager used by ItemWriter (depends on ItemWriter's construction logic)
 				// Mimic WeatherItemWriter's constructor logic to get the DB name.
-				dbName, ok := resolvedWriterProps["targetDBName"]
-				if !ok || dbName == "" {
-					dbName, ok = resolvedWriterProps["database"]
-					if !ok || dbName == "" {
-						dbName = "workload" // Default value
+				dbNameVal, ok := resolvedWriterProps["targetDBName"]
+				var dbName string
+				if ok {
+					if s, isString := dbNameVal.(string); isString {
+						dbName = s
 					}
+				}
+				if dbName == "" {
+					dbNameVal, ok = resolvedWriterProps["database"]
+					if ok {
+						if s, isString := dbNameVal.(string); isString {
+							dbName = s
+						}
+					}
+				}
+				if dbName == "" {
+					dbName = "workload" // Default value
 				}
 				chunkIsolationLevel := jslStep.Chunk.IsolationLevel
 
@@ -353,7 +411,7 @@ func ConvertJSLToCoreFlow(
 				if !ok {
 					return nil, exception.NewBatchErrorf(module, "Partitioner component builder '%s' not found", resolvedPartitionerRef.Ref)
 				}
-				// PartitionerBuilder only accepts properties map[string]string
+				// PartitionerBuilder only accepts properties map[string]interface{}
 				partitionerInstance, err := partitionerBuilder(resolvedPartitionerRef.Properties)
 				if err != nil {
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Partitioner '%s'", resolvedPartitionerRef.Ref), err, false, false)

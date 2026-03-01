@@ -39,7 +39,7 @@ func NewHourlyForecastDatabaseWriterComponentBuilder(p HourlyForecastDatabaseWri
 		cfg *config.Config,
 		resolver core.ExpressionResolver, // The expression resolver for dynamic property resolution.
 		resourceProviders map[string]coreAdapter.ResourceProvider,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (interface{}, error) {
 		writer, err := NewHourlyForecastDatabaseWriter(cfg, resolver, p.DBResolver, properties)
 		if err != nil {

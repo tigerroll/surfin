@@ -65,7 +65,7 @@ func updateSlogLogger() {
 		slogLogger = slog.New(handler)
 		return
 	default:
-		slogLevel = slog.LevelInfo // Default to INFO
+		slogLevel = slog.LevelDebug // Default to DEBUG for diagnosis
 	}
 
 	handlerOptions := &slog.HandlerOptions{

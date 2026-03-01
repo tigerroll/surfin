@@ -11,7 +11,7 @@ import (
 
 // NewConditionalDecisionBuilder creates a builder for the generic ConditionalDecision.
 func NewConditionalDecisionBuilder() jsl.ConditionalDecisionBuilder {
-	return func(id string, properties map[string]string, res port.ExpressionResolver) (port.Decision, error) {
+	return func(id string, properties map[string]interface{}, res port.ExpressionResolver) (port.Decision, error) {
 		decision := flowComponent.NewConditionalDecision(id)
 		// SetResolver is not needed as the Decision implementation now holds the ExpressionResolver internally.
 		decision.SetProperties(properties)

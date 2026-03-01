@@ -14,7 +14,7 @@ import (
 func NewTracingJobListenerBuilder(tracer metrics.Tracer) jsl.JobExecutionListenerBuilder {
 	return func(
 		_ *config.Config,
-		_ map[string]string,
+		_ map[string]interface{},
 	) (port.JobExecutionListener, error) {
 		// Assumes NewTracingJobListener is defined in tracing_listeners.go
 		return NewTracingJobListener(tracer), nil
@@ -25,7 +25,7 @@ func NewTracingJobListenerBuilder(tracer metrics.Tracer) jsl.JobExecutionListene
 func NewTracingStepListenerBuilder(tracer metrics.Tracer) jsl.StepExecutionListenerBuilder {
 	return func(
 		_ *config.Config,
-		_ map[string]string,
+		_ map[string]interface{},
 	) (port.StepExecutionListener, error) {
 		// Assumes NewTracingStepListener is defined in tracing_listeners.go
 		return NewTracingStepListener(tracer), nil

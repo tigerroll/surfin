@@ -29,7 +29,7 @@ func NewExecutionContextWriterTaskletComponentBuilder() jsl.ComponentBuilder {
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
 		resourceProviders map[string]coreAdapter.ResourceProvider,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (interface{}, error) {
 		// Unused arguments are ignored for this component.
 		_ = cfg
@@ -71,7 +71,7 @@ func NewRandomFailTaskletComponentBuilder() jsl.ComponentBuilder {
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
 		resourceProviders map[string]coreAdapter.ResourceProvider,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (interface{}, error) {
 		// Unused arguments are ignored for this component.
 		_ = cfg

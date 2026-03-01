@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 	"sync"
-
 	"time"
 
 	"github.com/mitchellh/mapstructure"
@@ -45,10 +45,23 @@ type GenericParquetExportTaskletConfig struct {
 	SQLSelectColumns string `mapstructure:"sqlSelectColumns"`
 	// SQLOrderBy is an optional ORDER BY clause for the SQL query.
 	SQLOrderBy string `mapstructure:"sqlOrderBy"`
-	// PartitionKeyColumn is the name of the struct field to use for generating the Parquet partition key.
-	PartitionKeyColumn string `mapstructure:"partitionKeyColumn"`
-	// PartitionKeyFormat is the format string for the partition key (e.g., "2006-01-02" for time.Time, or "dt=" prefix).
-	PartitionKeyFormat string `mapstructure:"partitionKeyFormat"`
+	// PartitionDefinitions defines multiple partition keys and their formats.
+	// Each definition corresponds to a level in the hierarchical partition path.
+	PartitionDefinitions []PartitionDefinition `mapstructure:"partitionDefinitions"`
+}
+
+// PartitionDefinition defines a single partition key within a multi-level partitioning scheme.
+type PartitionDefinition struct {
+	// Key is the name of the struct field to use for this partition.
+	Key string `mapstructure:"key"`
+	// Format is the format string for the partition key.
+	// For time.Time fields, use Go's reference time layout (e.g., "2006-01-02", "15").
+	// For other types, it can be a format specifier for fmt.Sprintf (e.g., "dt=%s", "code=%d").
+	// If empty, the value will be converted to string using its default string representation.
+	Format string `mapstructure:"format"`
+	// Prefix is an optional prefix for the partition directory name (e.g., "dt=", "hour=").
+	// If empty, the key name will be used as prefix.
+	Prefix string `mapstructure:"prefix"`
 }
 
 // GenericParquetExportTasklet implements the [port.Tasklet] interface for exporting data from a database
@@ -80,19 +93,30 @@ type GenericParquetExportTasklet[T any] struct {
 //	port.Tasklet: A new instance of [GenericParquetExportTasklet].
 //	error: An error if initialization or configuration decoding fails.
 func NewGenericParquetExportTasklet[T any](
-	properties map[string]string,
+	properties map[string]interface{},
 	dbConnectionResolver database.DBConnectionResolver,
 	storageConnectionResolver storage.StorageConnectionResolver,
 	itemPrototype *T, // itemPrototype is a prototype instance of the item type, injected by Fx for Parquet schema inference.
 ) (port.Tasklet, error) {
 	var config GenericParquetExportTaskletConfig
+	var metadata mapstructure.Metadata
 
-	// Use mapstructure.NewDecoder to enable WeaklyTypedInput.
+	logger.Debugf("NewGenericParquetExportTasklet received properties before decode: %+v", properties)
+
+	if pd, ok := properties["partitionDefinitions"]; ok {
+		logger.Debugf("DEBUG: Type of properties[\"partitionDefinitions\"]: %T", pd)
+		if slicePd, isSlice := pd.([]interface{}); isSlice {
+			for i, item := range slicePd {
+				logger.Debugf("DEBUG:   Element %d of partitionDefinitions: Type=%T, Value=%+v", i, item, item)
+			}
+		}
+	}
+
 	decoderConfig := &mapstructure.DecoderConfig{
-		Metadata:         nil,
+		Metadata:         &metadata,
 		Result:           &config,
-		TagName:          "mapstructure", // Explicitly use the "mapstructure" tag.
-		WeaklyTypedInput: true,           // Allow converting strings to numeric types.
+		TagName:          "mapstructure",
+		WeaklyTypedInput: true,
 	}
 	decoder, err := mapstructure.NewDecoder(decoderConfig)
 	if err != nil {
@@ -106,6 +130,7 @@ func NewGenericParquetExportTasklet[T any](
 	}
 
 	if err := decoder.Decode(properties); err != nil {
+		logger.Errorf("Failed to decode GenericParquetExportTasklet properties. Input properties: %+v", properties)
 		return nil, exception.NewBatchError(
 			"tasklet",
 			fmt.Sprintf("Failed to decode GenericParquetExportTasklet properties: %v", err),
@@ -114,6 +139,12 @@ func NewGenericParquetExportTasklet[T any](
 			false,
 		)
 	}
+
+	if len(metadata.Unused) > 0 {
+		logger.Warnf("Mapstructure unused keys for GenericParquetExportTasklet: %v", metadata.Unused)
+	}
+	logger.Debugf("NewGenericParquetExportTasklet decoded config: %+v", config)
+	logger.Debugf("Decoded config.PartitionDefinitions length: %d", len(config.PartitionDefinitions))
 
 	// Validate required configurations.
 	if config.DbRef == "" {
@@ -125,17 +156,11 @@ func NewGenericParquetExportTasklet[T any](
 	if config.OutputBaseDir == "" {
 		return nil, exception.NewBatchError("tasklet", "outputBaseDir is required for GenericParquetExportTasklet", nil, false, false)
 	}
-	if config.TableName == "" { // Set default for ReadBufferSize.
+	if config.TableName == "" {
 		return nil, exception.NewBatchError("tasklet", "tableName is required for GenericParquetExportTasklet", nil, false, false)
 	}
 	if config.SQLSelectColumns == "" {
 		return nil, exception.NewBatchError("tasklet", "sqlSelectColumns is required for GenericParquetExportTasklet", nil, false, false)
-	}
-	if config.PartitionKeyColumn == "" {
-		return nil, exception.NewBatchError("tasklet", "partitionKeyColumn is required for GenericParquetExportTasklet", nil, false, false)
-	}
-	if config.PartitionKeyFormat == "" {
-		return nil, exception.NewBatchError("tasklet", "partitionKeyFormat is required for GenericParquetExportTasklet", nil, false, false)
 	}
 
 	// Set default for ReadBufferSize.
@@ -149,68 +174,124 @@ func NewGenericParquetExportTasklet[T any](
 	}
 
 	// Dynamically generate partitionKeyFunc using reflection.
-	// Based on JSL's PartitionKeyColumn and PartitionKeyFormat,
-	// it retrieves the value from the specified field of itemPrototype and formats it.
-	// The field type is expected to be time.Time or int64 (Unix milliseconds).
+	// This function now iterates through PartitionDefinitions to build a multi-level partition path.
 	partitionKeyFunc := func(item T) (string, error) {
 		val := reflect.ValueOf(item)
-		// If T is a pointer, dereference it
 		if val.Kind() == reflect.Ptr {
 			val = val.Elem()
 		}
-
 		if val.Kind() != reflect.Struct {
 			return "", exception.NewBatchError(
 				"tasklet",
-				fmt.Sprintf("PartitionKeyColumn '%s' can only be applied to struct types, got %s", config.PartitionKeyColumn, val.Kind()),
+				fmt.Sprintf("Item type must be a struct or a pointer to a struct, got %s", val.Kind()),
 				nil,
 				false,
 				false,
 			)
 		}
 
-		field := val.FieldByName(config.PartitionKeyColumn)
-		if !field.IsValid() {
-			return "", exception.NewBatchError(
-				"tasklet",
-				fmt.Sprintf("PartitionKeyColumn '%s' not found in item type %T", config.PartitionKeyColumn, item),
-				nil,
-				false,
-				false,
-			)
+		if len(config.PartitionDefinitions) == 0 {
+			// If no partition definitions are provided, return an empty string for the partition path.
+			// The writer will then write to the base directory without partitioning.
+			return "", nil
 		}
 
-		switch field.Kind() {
-		case reflect.Struct:
-			if t, ok := field.Interface().(time.Time); ok {
-				return t.Format(config.PartitionKeyFormat), nil
+		var partitionParts []string
+		for _, def := range config.PartitionDefinitions {
+			field := val.FieldByName(def.Key)
+			if !field.IsValid() {
+				return "", exception.NewBatchError(
+					"tasklet",
+					fmt.Sprintf("Partition key field '%s' not found in item type %T", def.Key, item),
+					nil,
+					false,
+					false,
+				)
 			}
-			return "", exception.NewBatchError(
-				"tasklet",
-				fmt.Sprintf("Unsupported type for PartitionKeyColumn '%s': struct (not time.Time)", config.PartitionKeyColumn),
-				nil,
-				false,
-				false,
-			)
-		case reflect.Int64:
-			// Assuming int64 is Unix milliseconds
-			unixMilli := field.Int()
-			t := time.Unix(0, unixMilli*int64(time.Millisecond))
-			return t.Format(config.PartitionKeyFormat), nil
-		default:
-			return "", exception.NewBatchError(
-				"tasklet",
-				fmt.Sprintf("Unsupported type for PartitionKeyColumn '%s': %s. Expected time.Time or int64.", config.PartitionKeyColumn, field.Kind()),
-				nil,
-				false,
-				false,
-			)
+			if !field.CanInterface() {
+				return "", exception.NewBatchError(
+					"tasklet",
+					fmt.Sprintf("Partition key field '%s' in item type %T is not exportable (unexported field)", def.Key, item),
+					nil,
+					false,
+					false,
+				)
+			}
+
+			var formattedValue string
+			switch field.Kind() {
+			case reflect.Struct:
+				if t, ok := field.Interface().(time.Time); ok {
+					if def.Format == "" {
+						// Default format for time.Time if not specified
+						formattedValue = t.Format("2006-01-02T15-04-05")
+					} else {
+						formattedValue = t.Format(def.Format)
+					}
+				} else {
+					return "", exception.NewBatchError(
+						"tasklet",
+						fmt.Sprintf("Unsupported struct type for partition key '%s': %s. Expected time.Time.", def.Key, field.Type()),
+						nil,
+						false,
+						false,
+					)
+				}
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				// Check if the type is specifically UnixMillis (e.g., from weather_entity.go)
+				if field.Type().Name() == "UnixMillis" {
+					unixMilli := field.Int()
+					t := time.Unix(0, unixMilli*int64(time.Millisecond))
+					if def.Format == "" {
+						// Default format for UnixMillis if format is empty
+						formattedValue = t.Format("2006-01-02T15-04-05")
+					} else {
+						formattedValue = t.Format(def.Format)
+					}
+				} else {
+					// For other integer types (like WeatherCode), use fmt.Sprintf
+					if def.Format == "" {
+						formattedValue = fmt.Sprintf("%v", field.Interface())
+					} else {
+						formattedValue = fmt.Sprintf(def.Format, field.Interface())
+					}
+				}
+			case reflect.Float32, reflect.Float64:
+				if def.Format == "" {
+					formattedValue = fmt.Sprintf("%v", field.Interface())
+				} else {
+					formattedValue = fmt.Sprintf(def.Format, field.Interface())
+				}
+			case reflect.String:
+				if def.Format == "" {
+					formattedValue = field.String()
+				} else {
+					// For string types, use fmt.Sprintf with the interface value
+					formattedValue = fmt.Sprintf(def.Format, field.Interface())
+				}
+			default:
+				// Fallback for other primitive types or if format is not specified
+				if def.Format == "" {
+					formattedValue = fmt.Sprintf("%v", field.Interface())
+				} else {
+					formattedValue = fmt.Sprintf(def.Format, field.Interface())
+				}
+			}
+
+			prefix := def.Prefix
+			if prefix == "" {
+				// If prefix is not specified, use the lowercased key name followed by "="
+				prefix = fmt.Sprintf("%s=", strings.ToLower(def.Key))
+			}
+			partitionParts = append(partitionParts, fmt.Sprintf("%s%s", prefix, formattedValue))
 		}
+
+		return strings.Join(partitionParts, "/"), nil
 	}
 
 	// Initialize parquetWriter.
 	// Construct properties for writer.NewParquetWriter.
-	parquetWriterProps := map[string]string{
+	parquetWriterProps := map[string]interface{}{
 		"storageRef":      config.StorageRef,
 		"outputBaseDir":   config.OutputBaseDir,
 		"compressionType": config.ParquetCompressionType,
@@ -237,8 +318,8 @@ func NewGenericParquetExportTasklet[T any](
 		config:                    &config,
 		dbConnectionResolver:      dbConnectionResolver,
 		storageConnectionResolver: storageConnectionResolver,
-		parquetWriter:             pw,               // Assign the created writer
-		partitionKeyFunc:          partitionKeyFunc, // Assign the generated function
+		parquetWriter:             pw,
+		partitionKeyFunc:          partitionKeyFunc,
 	}, nil
 }
 
@@ -262,7 +343,7 @@ func NewGenericParquetExportTaskletBuilder[T any](
 		cfg *coreConfig.Config, // Part of the JSL ComponentBuilder signature.
 		resolver port.ExpressionResolver, // Part of the JSL ComponentBuilder signature.
 		resourceProviders map[string]coreAdapter.ResourceProvider, // Part of the JSL ComponentBuilder signature.
-		properties map[string]string,
+		properties map[string]interface{},
 	) (interface{}, error) {
 		// Call NewGenericParquetExportTasklet, passing captured dependencies and provided properties.
 		// The return value is port.Tasklet, which can be returned as interface{}.

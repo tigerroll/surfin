@@ -14,7 +14,7 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
-	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 
 	"github.com/tigerroll/surfin/pkg/batch/component/tasklet/migration/drivers"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
@@ -51,7 +51,7 @@ func NewMigrationTaskletComponentBuilder(p MigrationTaskletComponentBuilderParam
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
 		resourceProviders map[string]coreAdapter.ResourceProvider,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (interface{}, error) {
 		// resourceProviders is not directly used by MigrationTasklet, but it's part of the ComponentBuilder signature.
 		_ = resourceProviders

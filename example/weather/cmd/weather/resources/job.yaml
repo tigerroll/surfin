@@ -110,8 +110,16 @@ flow:
           tableName: "hourly_forecast" # Table name to export.
           sqlSelectColumns: "time, weather_code, temperature_2m, latitude, longitude, collected_at" # Columns to select.
           sqlOrderBy: "time ASC" # Order by clause for the SQL query.
-          partitionKeyColumn: "Time" # Go struct field name for partitioning.
-          partitionKeyFormat: "2006-01-02" # Date format for partition key (e.g., YYYY-MM-DD).
+          partitionDefinitions:
+            - key: "CollectedAt" # CollectedAt field of weather_entity.WeatherDataToStore
+              format: "2006-01-02" # Extract date part using Go's reference time layout (e.g., 2023-10-27)
+              prefix: "dt=" # Prefix for the partition directory (e.g., dt=2023-10-27)
+            - key: "CollectedAt" # CollectedAt field of weather_entity.WeatherDataToStore
+              format: "15" # Extract hour part using Go's reference time layout (e.g., 10)
+              prefix: "hour=" # Prefix for the partition directory (e.g., hour=10)
+            - key: "WeatherCode" # WeatherCode field of weather_entity.WeatherDataToStore
+              format: "%d" # Use int value as is
+              prefix: "code=" # Prefix for the partition directory (e.g., code=100)
       listeners:
         - ref: loggingStepListener
       transitions:

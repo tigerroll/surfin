@@ -14,7 +14,7 @@ import (
 func NewNotificationJobListenerBuilder(notifier ports.Notifier) jsl.NotificationListenerBuilder {
 	return func(
 		_ *config.Config,
-		_ map[string]string,
+		_ map[string]interface{},
 	) (coreport.JobExecutionListener, error) {
 		listener := NewNotificationListenerImpl(notifier)
 		return &NotificationListenerAdapter{NotificationListener: listener}, nil

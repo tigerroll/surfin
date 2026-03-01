@@ -508,7 +508,7 @@ type Decision interface {
 	//
 	// Parameters:
 	//   properties: A map of properties to set.
-	SetProperties(properties map[string]string)
+	SetProperties(properties map[string]interface{})
 }
 
 // Split is the interface for a flow element that executes multiple steps in parallel.
@@ -563,4 +563,4 @@ type Partitioner interface {
 //
 //	Partitioner: The built Partitioner instance.
 //	error: An error if building fails.
-type PartitionerBuilder func(properties map[string]string) (Partitioner, error)
+type PartitionerBuilder func(properties map[string]interface{}) (Partitioner, error)

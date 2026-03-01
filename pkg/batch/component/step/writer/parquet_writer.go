@@ -67,7 +67,7 @@ type ParquetWriter[T any] struct {
 //	A port.ItemWriter instance and an error if creation fails.
 func NewParquetWriter[T any](
 	name string,
-	properties map[string]string,
+	properties map[string]interface{},
 	storageConnectionResolver storage.StorageConnectionResolver,
 	itemPrototype *T, // A pointer to a zero-value instance of the item type for schema reflection.
 	partitionKeyFunc func(T) (string, error),
@@ -134,8 +134,8 @@ func NewParquetWriterBuilder[T any](
 	storageConnectionResolver storage.StorageConnectionResolver,
 	itemPrototype *T, // A pointer to a zero-value instance of the item type for schema reflection.
 	partitionKeyFunc func(T) (string, error),
-) func(properties map[string]string) (port.ItemWriter[T], error) {
-	return func(properties map[string]string) (port.ItemWriter[T], error) {
+) func(properties map[string]interface{}) (port.ItemWriter[T], error) {
+	return func(properties map[string]interface{}) (port.ItemWriter[T], error) {
 		return NewParquetWriter(
 			"", // Temporary measure: JSL component name not resolved
 			properties,

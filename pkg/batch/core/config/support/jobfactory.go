@@ -339,7 +339,7 @@ func (f *JobFactory) CreateJob(jobName string) (port.Job, error) {
 	var jobListeners []port.JobExecutionListener
 
 	if loggingBuilder, found := f.jobListenerBuilders["loggingJobListener"]; found {
-		listenerInstance, err := loggingBuilder(f.config, map[string]string{})
+		listenerInstance, err := loggingBuilder(f.config, map[string]interface{}{})
 		if err != nil {
 			return nil, exception.NewBatchError("job_factory", "Failed to build default loggingJobListener", err, false, false)
 		}
