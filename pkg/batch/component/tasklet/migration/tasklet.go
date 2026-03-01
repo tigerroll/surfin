@@ -23,11 +23,10 @@ type MigrationTasklet struct {
 	cfg            *config.Config
 	allDBProviders map[string]database.DBProvider
 	resolver       port.ExpressionResolver
-	// dbResolver is the database connection resolver.
 	dbResolver     database.DBConnectionResolver
 	allMigrationFS map[string]fs.FS
 	// properties are the raw properties passed from JSL.
-	properties       map[string]string
+	properties       map[string]interface{}
 	migratorProvider MigratorProvider
 
 	// Configured properties from JSL.
@@ -75,7 +74,7 @@ func NewMigrationTasklet(
 	dbResolver database.DBConnectionResolver,
 	migratorProvider MigratorProvider,
 	allMigrationFS map[string]fs.FS,
-	properties map[string]string,
+	properties map[string]interface{},
 	allDBProviders map[string]database.DBProvider,
 ) (*MigrationTasklet, error) {
 
@@ -84,33 +83,71 @@ func NewMigrationTasklet(
 
 	// Required properties from JSL.
 	// Note: Using 'dbRef' for JSL compatibility, though 'dbConnectionName' is the internal field name.
-	dbConnectionName, ok := properties["dbRef"]
-	if !ok || dbConnectionName == "" {
+	dbConnectionNameVal, ok := properties["dbRef"]
+	var dbConnectionName string
+	if ok {
+		if s, isString := dbConnectionNameVal.(string); isString {
+			dbConnectionName = s
+		} else {
+			return nil, exception.NewBatchErrorf(taskletName, "Property 'dbRef' must be a string for MigrationTasklet")
+		}
+	}
+	if dbConnectionName == "" {
 		return nil, exception.NewBatchErrorf(taskletName, "Property 'dbRef' is required for MigrationTasklet")
 	}
 
 	// Note: Using 'migrationFSName' for JSL compatibility, though 'fsName' is the internal field name.
-	fsName, ok := properties["migrationFSName"]
-	if !ok || fsName == "" {
+	fsNameVal, ok := properties["migrationFSName"]
+	var fsName string
+	if ok {
+		if s, isString := fsNameVal.(string); isString {
+			fsName = s
+		} else {
+			return nil, exception.NewBatchErrorf(taskletName, "Property 'migrationFSName' must be a string for MigrationTasklet")
+		}
+	}
+	if fsName == "" {
 		return nil, exception.NewBatchErrorf(taskletName, "Property 'migrationFSName' is required for MigrationTasklet")
 	}
 
-	migrationDir, ok := properties["migrationDir"]
-	if !ok || migrationDir == "" {
+	migrationDirVal, ok := properties["migrationDir"]
+	var migrationDir string
+	if ok {
+		if s, isString := migrationDirVal.(string); isString {
+			migrationDir = s
+		} else {
+			return nil, exception.NewBatchErrorf(taskletName, "Property 'migrationDir' must be a string for MigrationTasklet")
+		}
+	}
+	if migrationDir == "" {
 		// If 'migrationDir' is empty, it will be defaulted to the database type during execution.
 		// It is recommended to explicitly specify it in JSL for clarity.
 		logger.Warnf("Property 'migrationDir' is missing. It will be defaulted to the database type during execution.")
 	}
 
-	command := properties["command"]
+	commandVal, ok := properties["command"]
+	var command string
+	if ok {
+		if s, isString := commandVal.(string); isString {
+			command = s
+		} else {
+			return nil, exception.NewBatchErrorf(taskletName, "Property 'command' must be a string for MigrationTasklet")
+		}
+	}
 	if command == "" { // Default command.
 		command = "up"
 	}
 
 	isFrameworkMigration := false
-	if isFrameworkStr, ok := properties["isFramework"]; ok {
-		if strings.ToLower(isFrameworkStr) == "true" {
-			isFrameworkMigration = true
+	if isFrameworkVal, ok := properties["isFramework"]; ok {
+		if s, isString := isFrameworkVal.(string); isString {
+			if strings.ToLower(s) == "true" {
+				isFrameworkMigration = true
+			}
+		} else if b, isBool := isFrameworkVal.(bool); isBool { // Allow boolean directly
+			isFrameworkMigration = b
+		} else {
+			return nil, exception.NewBatchErrorf(taskletName, "Property 'isFramework' must be a boolean or string 'true'/'false' for MigrationTasklet")
 		}
 	}
 
@@ -120,7 +157,7 @@ func NewMigrationTasklet(
 		resolver:             resolver,
 		dbResolver:           dbResolver,
 		allMigrationFS:       allMigrationFS,
-		properties:           properties,
+		properties:           properties, // Store the map[string]interface{} directly
 		migratorProvider:     migratorProvider,
 		dbConnectionName:     dbConnectionName,
 		fsName:               fsName,
@@ -140,7 +177,6 @@ func NewMigrationTasklet(
 // The ExecutionContext is expected to be set via SetExecutionContext before Open is called.
 func (t *MigrationTasklet) Open(ctx context.Context, stepExecution *model.StepExecution) error {
 	logger.Debugf("MigrationTasklet Open called.")
-	// ExecutionContext is already set by SetExecutionContext before Open is called.
 	return nil
 }
 

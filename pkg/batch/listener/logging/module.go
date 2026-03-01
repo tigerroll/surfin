@@ -14,7 +14,7 @@ import (
 func NewLoggingJobListenerBuilder() jsl.JobExecutionListenerBuilder {
 	return func(
 		_ *config.Config,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (port.JobExecutionListener, error) {
 		return NewLoggingJobListener(properties), nil
 	}
@@ -24,7 +24,7 @@ func NewLoggingJobListenerBuilder() jsl.JobExecutionListenerBuilder {
 func NewLoggingStepListenerBuilder() jsl.StepExecutionListenerBuilder {
 	return func(
 		_ *config.Config,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (port.StepExecutionListener, error) {
 		return NewLoggingStepListener(properties), nil
 	}
@@ -34,7 +34,7 @@ func NewLoggingStepListenerBuilder() jsl.StepExecutionListenerBuilder {
 func NewLoggingChunkListenerBuilder() jsl.ChunkListenerBuilder {
 	return func(
 		_ *config.Config,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (port.ChunkListener, error) {
 		return NewLoggingChunkListener(properties), nil
 	}
@@ -44,7 +44,7 @@ func NewLoggingChunkListenerBuilder() jsl.ChunkListenerBuilder {
 func NewLoggingItemReadListenerBuilder() jsl.ItemReadListenerBuilder {
 	return func(
 		_ *config.Config,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (port.ItemReadListener, error) {
 		return NewLoggingItemReadListener(properties), nil
 	}
@@ -54,7 +54,7 @@ func NewLoggingItemReadListenerBuilder() jsl.ItemReadListenerBuilder {
 func NewLoggingItemProcessListenerBuilder() jsl.ItemProcessListenerBuilder {
 	return func(
 		_ *config.Config,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (port.ItemProcessListener, error) {
 		return NewLoggingItemProcessListener(properties), nil
 	}
@@ -64,7 +64,7 @@ func NewLoggingItemProcessListenerBuilder() jsl.ItemProcessListenerBuilder {
 func NewLoggingItemWriteListenerBuilder() jsl.ItemWriteListenerBuilder {
 	return func(
 		_ *config.Config,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (port.ItemWriteListener, error) {
 		return NewLoggingItemWriteListener(properties), nil
 	}
@@ -74,7 +74,7 @@ func NewLoggingItemWriteListenerBuilder() jsl.ItemWriteListenerBuilder {
 func NewLoggingSkipListenerBuilder() jsl.SkipListenerBuilder {
 	return func(
 		_ *config.Config,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (port.SkipListener, error) {
 		return NewLoggingSkipListener(properties), nil
 	}
@@ -84,7 +84,7 @@ func NewLoggingSkipListenerBuilder() jsl.SkipListenerBuilder {
 func NewLoggingRetryItemListenerBuilder() jsl.LoggingRetryItemListenerBuilder {
 	return func(
 		_ *config.Config,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (port.RetryItemListener, error) {
 		return NewLoggingRetryItemListener(properties), nil
 	}

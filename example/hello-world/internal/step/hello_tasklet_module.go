@@ -29,7 +29,7 @@ func NewHelloWorldTaskletComponentBuilder() jsl.ComponentBuilder {
 		cfg *config.Config,
 		resolver core.ExpressionResolver,
 		resourceProviders map[string]coreAdapter.ResourceProvider,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (interface{}, error) {
 		// These arguments are part of the generic ComponentBuilder signature but are not
 		// utilized by the simple HelloWorldTasklet.

@@ -85,7 +85,7 @@ var Module = fx.Options(
 
 // NewNoOpPartitionerBuilder returns the JSL builder for NoOpPartitioner.
 func NewNoOpPartitionerBuilder() port.PartitionerBuilder {
-	return func(properties map[string]string) (port.Partitioner, error) {
+	return func(properties map[string]interface{}) (port.Partitioner, error) {
 		// Use component/partitioner.NewNoOpPartitioner.
 		return partitioner.NewNoOpPartitioner(), nil
 	}

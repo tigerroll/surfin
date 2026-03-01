@@ -35,17 +35,5 @@ func NewHourlyForecastExportTaskletBuilder(params NewHourlyForecastExportTasklet
 		params.DBConnectionResolver,
 		params.StorageConnectionResolver,
 		&entity.WeatherDataToStore{}, // Prototype instance for schema reflection
-		func(rows *sql.Rows) (entity.WeatherDataToStore, error) {
-			var data entity.WeatherDataToStore
-			err := rows.Scan(
-				&data.Time,
-				&data.WeatherCode,
-				&data.Temperature2M,
-				&data.Latitude,
-				&data.Longitude,
-				&data.CollectedAt,
-			)
-			return data, err
-		},
 	)
 }

@@ -13,7 +13,7 @@ import (
 // It dynamically determines the ExitStatus based on properties passed from JSL.
 type ConditionalDecision struct {
 	id            string
-	properties    map[string]string
+	properties    map[string]interface{}
 	conditionKey  string
 	expectedValue string
 	defaultStatus model.ExitStatus
@@ -24,7 +24,7 @@ type ConditionalDecision struct {
 func NewConditionalDecision(id string) *ConditionalDecision {
 	return &ConditionalDecision{
 		id:            id,
-		properties:    make(map[string]string),
+		properties:    make(map[string]interface{}),
 		defaultStatus: model.ExitStatusFailed,
 	}
 }
@@ -35,16 +35,28 @@ func (d *ConditionalDecision) SetResolver(resolver port.ExpressionResolver) {
 }
 
 // SetProperties sets the properties injected from JSL.
-func (d *ConditionalDecision) SetProperties(properties map[string]string) {
+func (d *ConditionalDecision) SetProperties(properties map[string]interface{}) {
 	d.properties = properties
 	if key, ok := properties["conditionKey"]; ok {
-		d.conditionKey = key
+		if s, isString := key.(string); isString {
+			d.conditionKey = s
+		} else {
+			logger.Warnf("ConditionalDecision '%s': 'conditionKey' property is not a string, ignoring.", d.id)
+		}
 	}
 	if val, ok := properties["expectedValue"]; ok {
-		d.expectedValue = val
+		if s, isString := val.(string); isString {
+			d.expectedValue = s
+		} else {
+			logger.Warnf("ConditionalDecision '%s': 'expectedValue' property is not a string, ignoring.", d.id)
+		}
 	}
 	if statusStr, ok := properties["defaultStatus"]; ok {
-		d.defaultStatus = model.ExitStatus(statusStr)
+		if s, isString := statusStr.(string); isString {
+			d.defaultStatus = model.ExitStatus(s)
+		} else {
+			logger.Warnf("ConditionalDecision '%s': 'defaultStatus' property is not a string, ignoring.", d.id)
+		}
 	}
 	logger.Debugf("ConditionalDecision '%s': Properties set. conditionKey='%s', expectedValue='%s', defaultStatus='%s'",
 		d.id, d.conditionKey, d.expectedValue, d.defaultStatus)
@@ -60,9 +72,13 @@ func (d *ConditionalDecision) Decide(ctx context.Context, jobExecution *model.Jo
 
 	if d.conditionKey == "" {
 		// If a static exit.status property is set, prioritize it.
-		if status, ok := d.properties["exit.status"]; ok {
-			logger.Debugf("Decision '%s' determined exit status '%s' from static property.", d.id, status)
-			return model.ExitStatus(status), nil
+		if statusVal, ok := d.properties["exit.status"]; ok {
+			if statusStr, isString := statusVal.(string); isString {
+				logger.Debugf("Decision '%s' determined exit status '%s' from static property.", d.id, statusStr)
+				return model.ExitStatus(statusStr), nil
+			} else {
+				logger.Warnf("ConditionalDecision '%s': 'exit.status' property is not a string. Returning default status '%s'.", d.id, d.defaultStatus)
+			}
 		}
 		logger.Warnf("ConditionalDecision '%s': conditionKey is not set. Returning default status '%s'.", d.id, d.defaultStatus)
 		return d.defaultStatus, nil

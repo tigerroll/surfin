@@ -15,7 +15,7 @@ import (
 func NewMetricsJobListenerBuilder(recorder metrics.MetricRecorder) jsl.JobExecutionListenerBuilder {
 	return func(
 		_ *config.Config,
-		_ map[string]string,
+		_ map[string]interface{},
 	) (port.JobExecutionListener, error) {
 		// Assumed NewMetricsJobListener is defined in metrics_listeners.go
 		return NewMetricsJobListener(recorder), nil
@@ -26,7 +26,7 @@ func NewMetricsJobListenerBuilder(recorder metrics.MetricRecorder) jsl.JobExecut
 func NewMetricsStepListenerBuilder(recorder metrics.MetricRecorder) jsl.StepExecutionListenerBuilder {
 	return func(
 		_ *config.Config,
-		_ map[string]string,
+		_ map[string]interface{},
 	) (port.StepExecutionListener, error) {
 		return NewMetricsStepListener(recorder), nil
 	}
@@ -36,7 +36,7 @@ func NewMetricsStepListenerBuilder(recorder metrics.MetricRecorder) jsl.StepExec
 func NewMetricsChunkListenerBuilder(recorder metrics.MetricRecorder) jsl.ChunkListenerBuilder {
 	return func(
 		_ *config.Config,
-		_ map[string]string,
+		_ map[string]interface{},
 	) (port.ChunkListener, error) {
 		return NewMetricsChunkListener(recorder), nil
 	}
@@ -46,7 +46,7 @@ func NewMetricsChunkListenerBuilder(recorder metrics.MetricRecorder) jsl.ChunkLi
 func NewMetricsItemReadListenerBuilder(recorder metrics.MetricRecorder) jsl.ItemReadListenerBuilder {
 	return func(
 		_ *config.Config,
-		_ map[string]string,
+		_ map[string]interface{},
 	) (port.ItemReadListener, error) {
 		return NewMetricsItemReadListener(recorder), nil
 	}
@@ -56,7 +56,7 @@ func NewMetricsItemReadListenerBuilder(recorder metrics.MetricRecorder) jsl.Item
 func NewMetricsItemProcessListenerBuilder(recorder metrics.MetricRecorder) jsl.ItemProcessListenerBuilder {
 	return func(
 		_ *config.Config,
-		_ map[string]string,
+		_ map[string]interface{},
 	) (port.ItemProcessListener, error) {
 		return NewMetricsItemProcessListener(recorder), nil
 	}
@@ -66,7 +66,7 @@ func NewMetricsItemProcessListenerBuilder(recorder metrics.MetricRecorder) jsl.I
 func NewMetricsItemWriteListenerBuilder(recorder metrics.MetricRecorder) jsl.ItemWriteListenerBuilder {
 	return func(
 		_ *config.Config,
-		_ map[string]string,
+		_ map[string]interface{},
 	) (port.ItemWriteListener, error) {
 		return NewMetricsItemWriteListener(recorder), nil
 	}
@@ -76,7 +76,7 @@ func NewMetricsItemWriteListenerBuilder(recorder metrics.MetricRecorder) jsl.Ite
 func NewMetricsSkipListenerBuilder(recorder metrics.MetricRecorder) jsl.SkipListenerBuilder {
 	return func(
 		_ *config.Config,
-		_ map[string]string,
+		_ map[string]interface{},
 	) (port.SkipListener, error) {
 		return NewMetricsSkipListener(recorder), nil
 	}
@@ -86,7 +86,7 @@ func NewMetricsSkipListenerBuilder(recorder metrics.MetricRecorder) jsl.SkipList
 func NewMetricsRetryItemListenerBuilder(recorder metrics.MetricRecorder) jsl.LoggingRetryItemListenerBuilder {
 	return func(
 		_ *config.Config,
-		_ map[string]string,
+		_ map[string]interface{},
 	) (port.RetryItemListener, error) { // Corrected return type to port.RetryItemListener
 		return NewMetricsRetryItemListener(recorder), nil
 	}

@@ -44,7 +44,7 @@ type HelloWorldTasklet struct {
 //
 //	*HelloWorldTasklet: A new instance of the tasklet.
 //	error: An error if property binding fails or required properties are missing.
-func NewHelloWorldTasklet(properties map[string]string) (*HelloWorldTasklet, error) {
+func NewHelloWorldTasklet(properties map[string]interface{}) (*HelloWorldTasklet, error) {
 	taskletCfg := &HelloWorldTaskletConfig{}
 
 	if err := configbinder.BindProperties(properties, taskletCfg); err != nil {

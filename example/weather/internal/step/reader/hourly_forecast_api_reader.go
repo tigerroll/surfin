@@ -28,29 +28,53 @@ type HourlyForecastAPIReaderConfig struct {
 }
 
 const (
+	// ModuleHourlyForecastAPIReader is the module name used for batch errors originating from this reader.
 	ModuleHourlyForecastAPIReader = "HourlyForecastAPIReader"
-	ReaderContextKey              = "reader_context"
-	ForecastDataKey               = "forecastData"
-	CurrentIndexKey               = "currentIndex"
+	// ReaderContextKey is the key used to store the reader's internal state within the Step's ExecutionContext.
+	ReaderContextKey = "reader_context"
+	// ForecastDataKey is the key used to store the fetched forecast data within the reader's state.
+	ForecastDataKey = "forecastData"
+	// CurrentIndexKey is the key used to store the current reading index within the reader's state.
+	CurrentIndexKey = "currentIndex"
 )
 
+// HourlyForecastAPIReader implements the core.ItemReader interface to fetch hourly weather forecast data
+// from an external API (e.g., Open-Meteo) and provide it item by item.
 type HourlyForecastAPIReader struct {
-	config       *HourlyForecastAPIReaderConfig
-	client       *http.Client
+	// config holds the reader's specific configuration, typically bound from JSL properties.
+	config *HourlyForecastAPIReaderConfig
+	// client is the HTTP client used to make API requests.
+	client *http.Client
+	// forecastData stores the entire fetched forecast data from the API.
 	forecastData *weather_entity.OpenMeteoForecast
+	// currentIndex tracks the current position in the forecastData for item-by-item reading.
 	currentIndex int
 
 	// stepExecutionContext holds the reference to the Step's ExecutionContext.
 	stepExecutionContext model.ExecutionContext
 	// readerState holds the reader's internal state.
 	readerState model.ExecutionContext
-	resolver    core.ExpressionResolver
+	// resolver is used to resolve expressions within JSL properties.
+	resolver core.ExpressionResolver
 }
 
+// NewHourlyForecastAPIReader creates a new instance of HourlyForecastAPIReader.
+// It initializes the reader with application configuration, an expression resolver,
+// and binds JSL properties to the reader's specific configuration.
+//
+// Parameters:
+//
+//	cfg: The application's global configuration.
+//	resolver: An ExpressionResolver for dynamic property resolution.
+//	properties: A map of properties defined in the JSL for this reader.
+//
+// Returns:
+//
+//	A new HourlyForecastAPIReader instance or an error if configuration binding or validation fails.
 func NewHourlyForecastAPIReader(
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
-	properties map[string]string,
+	properties map[string]interface{},
 ) (*HourlyForecastAPIReader, error) {
 	// 1. Define configuration struct and set default values.
 	hourlyForecastAPIReaderCfg := &HourlyForecastAPIReaderConfig{
@@ -117,8 +141,6 @@ func (r *HourlyForecastAPIReader) Read(ctx context.Context) (any, error) {
 		return nil, io.EOF
 	}
 
-	// The return type of Read method is unified to *weather_entity.OpenMeteoForecast pointer.
-	// Processor is expected to receive this pointer.
 	itemToProcess := &weather_entity.OpenMeteoForecast{
 		Latitude:  r.forecastData.Latitude,
 		Longitude: r.forecastData.Longitude,
@@ -145,7 +167,6 @@ func (r *HourlyForecastAPIReader) Close(ctx context.Context) error {
 	if err := r.saveReaderStateToExecutionContext(ctx); err != nil {
 		logger.Errorf("HourlyForecastAPIReader.Close: Failed to save internal state: %v", err)
 	}
-	// Retaining error return value to match ItemReader interface signature.
 	return nil
 }
 
@@ -177,6 +198,7 @@ func (r *HourlyForecastAPIReader) GetExecutionContext(ctx context.Context) (mode
 	return r.readerState, nil // Return the reader's own state.
 }
 
+// fetchWeatherData makes an API call to Open-Meteo to retrieve hourly weather forecast data.
 func (r *HourlyForecastAPIReader) fetchWeatherData(ctx context.Context) error {
 	logger.Infof("Fetching weather data from Open-Meteo API...")
 
@@ -220,6 +242,8 @@ func (r *HourlyForecastAPIReader) fetchWeatherData(ctx context.Context) error {
 	return nil
 }
 
+// restoreReaderStateFromExecutionContext restores the reader's internal state (currentIndex and forecastData)
+// from the provided ExecutionContext.
 func (r *HourlyForecastAPIReader) restoreReaderStateFromExecutionContext(ctx context.Context) error {
 	// Extract reader-specific context from stepExecutionContext
 	readerCtxVal, ok := r.stepExecutionContext.Get(ReaderContextKey)
@@ -263,6 +287,8 @@ func (r *HourlyForecastAPIReader) restoreReaderStateFromExecutionContext(ctx con
 	return nil
 }
 
+// saveReaderStateToExecutionContext saves the reader's current internal state (currentIndex and forecastData)
+// into the Step's ExecutionContext.
 func (r *HourlyForecastAPIReader) saveReaderStateToExecutionContext(ctx context.Context) error {
 	// Extract reader-specific context from stepExecutionContext (created if not present)
 	readerCtxVal, ok := r.stepExecutionContext.Get(ReaderContextKey)

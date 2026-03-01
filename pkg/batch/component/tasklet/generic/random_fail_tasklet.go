@@ -3,7 +3,6 @@ package generic
 import (
 	"context"
 	"math/rand"
-	"strconv"
 	"time"
 
 	// Package generic provides general-purpose tasklet implementations.
@@ -11,18 +10,24 @@ import (
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
+	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 	exception "github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
+
+// RandomFailTaskletConfig holds the configuration for RandomFailTasklet.
+type RandomFailTaskletConfig struct {
+	FailRate  float64 `yaml:"failRate"`  // Probability of failure (0.0 - 1.0)
+	FailCount int     `yaml:"failCount"` // Number of failures before stopping (0 means always probabilistic)
+}
 
 // RandomFailTasklet is a [port.Tasklet] that simulates failure based on a configured probability or count.
 // It is useful for testing and validating the retry and restart mechanisms of the batch framework.
 type RandomFailTasklet struct {
 	id         string
 	ec         model.ExecutionContext
-	failRate   float64 // Probability of failure (0.0 - 1.0)
-	failCount  int     // Number of failures before stopping (0 means always probabilistic)
-	currentRun int     // Current execution count
+	config     *RandomFailTaskletConfig // New field to hold parsed configuration
+	currentRun int                      // Current execution count
 }
 
 // NewRandomFailTasklet creates a new [RandomFailTasklet] instance.
@@ -38,26 +43,23 @@ type RandomFailTasklet struct {
 // Returns:
 //
 //	*RandomFailTasklet: A new instance of [RandomFailTasklet].
-func NewRandomFailTasklet(id string, properties map[string]string) *RandomFailTasklet {
-	failRate := 0.5 // Default 50%
-	failCount := 0  // Default 0 (always probabilistic)
-
-	if rateStr, ok := properties["failRate"]; ok {
-		if rate, err := strconv.ParseFloat(rateStr, 64); err == nil {
-			failRate = rate
-		}
+func NewRandomFailTasklet(id string, properties map[string]interface{}) *RandomFailTasklet {
+	taskletConfig := &RandomFailTaskletConfig{
+		FailRate:  0.5, // Default value
+		FailCount: 0,   // Default value
 	}
-	if countStr, ok := properties["failCount"]; ok {
-		if count, err := strconv.Atoi(countStr); err == nil {
-			failCount = count
-		}
+
+	// Bind properties from JSL to the config struct
+	if err := configbinder.BindProperties(properties, taskletConfig); err != nil {
+		// Log a warning if binding fails, but continue with default values.
+		// For a test tasklet, this is acceptable. For production, consider returning an error.
+		logger.Warnf("RandomFailTasklet '%s': Failed to bind properties: %v. Using default values.", id, err)
 	}
 
 	return &RandomFailTasklet{
 		id:         id,
 		ec:         model.NewExecutionContext(),
-		failRate:   failRate,
-		failCount:  failCount,
+		config:     taskletConfig, // Store the bound configuration
 		currentRun: 0,
 	}
 }
@@ -77,7 +79,6 @@ func NewRandomFailTasklet(id string, properties map[string]string) *RandomFailTa
 //	error: An error if initialization fails.
 func (t *RandomFailTasklet) Open(ctx context.Context, stepExecution *model.StepExecution) error {
 	logger.Debugf("RandomFailTasklet '%s' Open called.", t.id)
-	// ExecutionContext is already set by SetExecutionContext before Open is called.
 	return nil
 }
 
@@ -99,21 +100,21 @@ func (t *RandomFailTasklet) Execute(ctx context.Context, stepExecution *model.St
 
 	shouldFail := false
 
-	if t.failCount > 0 {
+	if t.config.FailCount > 0 { // Use t.config.FailCount
 		// If a specific failure count is set
-		if t.currentRun <= t.failCount {
+		if t.currentRun <= t.config.FailCount {
 			shouldFail = true
 		}
 	} else {
 		// If probabilistic failure is set
 		rand.Seed(time.Now().UnixNano())
-		if rand.Float64() < t.failRate {
+		if rand.Float64() < t.config.FailRate { // Use t.config.FailRate
 			shouldFail = true
 		}
 	}
 
 	if shouldFail {
-		logger.Errorf("RandomFailTasklet '%s' (Run %d): Intentionally failing (Rate: %.2f, Count: %d).", t.id, t.currentRun, t.failRate, t.failCount)
+		logger.Errorf("RandomFailTasklet '%s' (Run %d): Intentionally failing (Rate: %.2f, Count: %d).", t.id, t.currentRun, t.config.FailRate, t.config.FailCount)
 		// The failure is marked as not retryable and not skippable.
 		return model.ExitStatusFailed, exception.NewBatchErrorf(t.id, "Random failure occurred on run %d", t.currentRun, false, false)
 	}

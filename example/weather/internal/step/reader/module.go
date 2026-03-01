@@ -27,7 +27,7 @@ func NewHourlyForecastAPIReaderComponentBuilder() jsl.ComponentBuilder {
 		cfg *config.Config,
 		resolver core.ExpressionResolver,
 		resourceProviders map[string]coreAdapter.ResourceProvider,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
 		_ = resourceProviders // This reader does not use resource providers.

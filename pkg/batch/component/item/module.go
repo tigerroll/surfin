@@ -26,7 +26,7 @@ func NewNoOpItemReaderComponentBuilder() jsl.ComponentBuilder {
 		_ *config.Config, // Not used by NoOpItemReader
 		_ port.ExpressionResolver, // Not used by NoOpItemReader
 		resourceProviders map[string]coreAdapter.ResourceProvider,
-		_ map[string]string, // Not used by NoOpItemReader
+		_ map[string]interface{},
 	) (interface{}, error) {
 		_ = resourceProviders // This reader does not use resource providers.
 		return NewNoOpItemReader[any](), nil
@@ -46,7 +46,7 @@ func NewPassThroughItemProcessorComponentBuilder() jsl.ComponentBuilder {
 		_ *config.Config, // Not used by PassThroughItemProcessor
 		_ port.ExpressionResolver, // Not used by PassThroughItemProcessor
 		resourceProviders map[string]coreAdapter.ResourceProvider,
-		_ map[string]string, // Not used by PassThroughItemProcessor
+		_ map[string]interface{},
 	) (interface{}, error) {
 		_ = resourceProviders // This processor does not use resource providers.
 		return NewPassThroughItemProcessor[any](), nil
@@ -67,7 +67,7 @@ func NewNoOpItemWriterComponentBuilder() jsl.ComponentBuilder {
 		_ *config.Config, // Not used by NoOpItemWriter
 		_ port.ExpressionResolver, // Not used by NoOpItemReader
 		resourceProviders map[string]coreAdapter.ResourceProvider,
-		_ map[string]string, // Not used by NoOpItemWriter
+		_ map[string]interface{},
 	) (interface{}, error) {
 		_ = resourceProviders // This writer does not use resource providers.
 		return NewNoOpItemWriter[any](), nil
@@ -87,15 +87,23 @@ func NewExecutionContextItemWriterComponentBuilder() jsl.ComponentBuilder {
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
 		resourceProviders map[string]coreAdapter.ResourceProvider,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (interface{}, error) {
 		// Arguments unnecessary for this component are ignored.
 		_ = cfg               // Not used by ExecutionContextItemWriter
 		_ = resolver          // Not used by ExecutionContextItemWriter
 		_ = resourceProviders // Not used by ExecutionContextItemWriter
 
-		key, ok := properties["key"]
-		if !ok || key == "" {
+		var key string
+		keyVal, ok := properties["key"]
+		if ok {
+			if s, isString := keyVal.(string); isString {
+				key = s
+			} else {
+				logger.Warnf("ExecutionContextItemWriterBuilder: 'key' property is not a string, using default.")
+				key = "writer_context"
+			}
+		} else {
 			key = "writer_context"
 		}
 		return NewExecutionContextItemWriter[any](key), nil

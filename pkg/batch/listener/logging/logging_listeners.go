@@ -11,10 +11,10 @@ import (
 // --- Job Execution Listener ---
 
 type LoggingJobListener struct {
-	properties map[string]string
+	properties map[string]interface{}
 }
 
-func NewLoggingJobListener(properties map[string]string) port.JobExecutionListener {
+func NewLoggingJobListener(properties map[string]interface{}) port.JobExecutionListener {
 	return &LoggingJobListener{properties: properties}
 }
 
@@ -31,10 +31,10 @@ var _ port.JobExecutionListener = (*LoggingJobListener)(nil)
 // --- Step Execution Listener ---
 
 type LoggingStepListener struct {
-	properties map[string]string
+	properties map[string]interface{}
 }
 
-func NewLoggingStepListener(properties map[string]string) port.StepExecutionListener {
+func NewLoggingStepListener(properties map[string]interface{}) port.StepExecutionListener {
 	return &LoggingStepListener{properties: properties}
 }
 
@@ -51,10 +51,10 @@ var _ port.StepExecutionListener = (*LoggingStepListener)(nil)
 // --- Chunk Listener ---
 
 type LoggingChunkListener struct {
-	properties map[string]string
+	properties map[string]interface{}
 }
 
-func NewLoggingChunkListener(properties map[string]string) port.ChunkListener {
+func NewLoggingChunkListener(properties map[string]interface{}) port.ChunkListener {
 	return &LoggingChunkListener{properties: properties}
 }
 
@@ -71,10 +71,10 @@ var _ port.ChunkListener = (*LoggingChunkListener)(nil)
 // --- Item Read Listener ---
 
 type LoggingItemReadListener struct {
-	properties map[string]string
+	properties map[string]interface{}
 }
 
-func NewLoggingItemReadListener(properties map[string]string) port.ItemReadListener {
+func NewLoggingItemReadListener(properties map[string]interface{}) port.ItemReadListener {
 	return &LoggingItemReadListener{properties: properties}
 }
 
@@ -87,10 +87,10 @@ var _ port.ItemReadListener = (*LoggingItemReadListener)(nil)
 // --- Item Process Listener ---
 
 type LoggingItemProcessListener struct {
-	properties map[string]string
+	properties map[string]interface{}
 }
 
-func NewLoggingItemProcessListener(properties map[string]string) port.ItemProcessListener {
+func NewLoggingItemProcessListener(properties map[string]interface{}) port.ItemProcessListener {
 	return &LoggingItemProcessListener{properties: properties}
 }
 
@@ -107,10 +107,10 @@ var _ port.ItemProcessListener = (*LoggingItemProcessListener)(nil)
 // --- Item Write Listener ---
 
 type LoggingItemWriteListener struct {
-	properties map[string]string
+	properties map[string]interface{}
 }
 
-func NewLoggingItemWriteListener(properties map[string]string) port.ItemWriteListener {
+func NewLoggingItemWriteListener(properties map[string]interface{}) port.ItemWriteListener {
 	return &LoggingItemWriteListener{properties: properties}
 }
 
@@ -127,10 +127,10 @@ var _ port.ItemWriteListener = (*LoggingItemWriteListener)(nil)
 // --- Skip Listener ---
 
 type LoggingSkipListener struct {
-	properties map[string]string
+	properties map[string]interface{}
 }
 
-func NewLoggingSkipListener(properties map[string]string) port.SkipListener {
+func NewLoggingSkipListener(properties map[string]interface{}) port.SkipListener {
 	return &LoggingSkipListener{properties: properties}
 }
 
@@ -151,10 +151,10 @@ var _ port.SkipListener = (*LoggingSkipListener)(nil)
 // --- Retry Item Listener ---
 
 type LoggingRetryItemListener struct {
-	properties map[string]string
+	properties map[string]interface{}
 }
 
-func NewLoggingRetryItemListener(properties map[string]string) port.RetryItemListener {
+func NewLoggingRetryItemListener(properties map[string]interface{}) port.RetryItemListener {
 	return &LoggingRetryItemListener{properties: properties}
 }
 

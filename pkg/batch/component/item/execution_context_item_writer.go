@@ -155,15 +155,24 @@ func NewExecutionContextItemWriterBuilder() jsl.ComponentBuilder {
 		cfg *config.Config,
 		resolver port.ExpressionResolver,
 		resourceProviders map[string]coreAdapter.ResourceProvider,
-		properties map[string]string,
+		properties map[string]interface{},
 	) (interface{}, error) {
 		// Unused arguments are ignored for this component.
 		_ = cfg
 		_ = resolver
 		_ = resourceProviders // This writer does not interact with a database directly.
 
-		key, ok := properties["key"]
-		if !ok {
+		keyVal, ok := properties["key"]
+		var key string
+		if ok {
+			if s, isString := keyVal.(string); isString {
+				key = s
+			} else {
+				// Handle non-string type if necessary, or default
+				logger.Warnf("ExecutionContextItemWriterBuilder: 'key' property is not a string, using default.")
+				key = "writer.write_count"
+			}
+		} else {
 			key = "writer.write_count"
 		}
 		// Return as ItemWriter[any]

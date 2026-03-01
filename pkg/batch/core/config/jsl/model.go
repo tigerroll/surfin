@@ -87,7 +87,7 @@ type ComponentRef struct {
 	// Ref is the reference name of the component.
 	Ref string `yaml:"ref"`
 	// Properties is an optional map of properties injected from JSL.
-	Properties map[string]string `yaml:"properties,omitempty"`
+	Properties map[string]interface{} `yaml:"properties,omitempty"`
 }
 
 // Chunk defines the chunk-oriented processing properties for a step.
@@ -109,7 +109,7 @@ type Decision struct {
 	// Ref is the reference name of the Decision Builder.
 	Ref string `yaml:"ref"`
 	// Properties is an optional map of properties injected from JSL.
-	Properties map[string]string `yaml:"properties,omitempty"`
+	Properties map[string]interface{} `yaml:"properties,omitempty"`
 	// Transitions defines the transition rules from this Decision.
 	Transitions []Transition `yaml:"transitions"`
 }
@@ -154,7 +154,7 @@ type ComponentBuilder func(
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
 	resourceProviders map[string]coreAdapter.ResourceProvider, // Map of all registered resource providers.
-	properties map[string]string,
+	properties map[string]interface{},
 ) (interface{}, error)
 
 // JobExecutionListenerBuilder is a function type for building JobExecutionListeners.
@@ -167,7 +167,7 @@ type ComponentBuilder func(
 // Returns:
 //
 //	The constructed JobExecutionListener instance and an error.
-type JobExecutionListenerBuilder func(cfg *config.Config, properties map[string]string) (core.JobExecutionListener, error)
+type JobExecutionListenerBuilder func(cfg *config.Config, properties map[string]interface{}) (core.JobExecutionListener, error)
 
 // NotificationListenerBuilder is a function type for building notification listeners.
 //
@@ -179,7 +179,7 @@ type JobExecutionListenerBuilder func(cfg *config.Config, properties map[string]
 // Returns:
 //
 //	The constructed NotificationListener instance (which satisfies the JobExecutionListener interface) and an error.
-type NotificationListenerBuilder func(cfg *config.Config, properties map[string]string) (core.JobExecutionListener, error)
+type NotificationListenerBuilder func(cfg *config.Config, properties map[string]interface{}) (core.JobExecutionListener, error)
 
 // JobParametersIncrementerBuilder is a function type for building JobParametersIncrementers.
 //
@@ -191,7 +191,7 @@ type NotificationListenerBuilder func(cfg *config.Config, properties map[string]
 // Returns:
 //
 //	The constructed JobParametersIncrementer instance and an error.
-type JobParametersIncrementerBuilder func(cfg *config.Config, properties map[string]string) (core.JobParametersIncrementer, error)
+type JobParametersIncrementerBuilder func(cfg *config.Config, properties map[string]interface{}) (core.JobParametersIncrementer, error)
 
 // Transition defines the next element to execute based on the exit status.
 type Transition struct {
@@ -225,7 +225,7 @@ type ExecutionContextPromotion struct {
 // Returns:
 //
 //	The constructed StepExecutionListener instance and an error.
-type StepExecutionListenerBuilder func(cfg *config.Config, properties map[string]string) (core.StepExecutionListener, error)
+type StepExecutionListenerBuilder func(cfg *config.Config, properties map[string]interface{}) (core.StepExecutionListener, error)
 
 // ItemReadListenerBuilder is a function type for building ItemReadListeners.
 //
@@ -237,7 +237,7 @@ type StepExecutionListenerBuilder func(cfg *config.Config, properties map[string
 // Returns:
 //
 //	The constructed ItemReadListener instance and an error.
-type ItemReadListenerBuilder func(cfg *config.Config, properties map[string]string) (core.ItemReadListener, error)
+type ItemReadListenerBuilder func(cfg *config.Config, properties map[string]interface{}) (core.ItemReadListener, error)
 
 // ItemProcessListenerBuilder is a function type for building ItemProcessListeners.
 //
@@ -249,7 +249,7 @@ type ItemReadListenerBuilder func(cfg *config.Config, properties map[string]stri
 // Returns:
 //
 //	The constructed ItemProcessListener instance and an error.
-type ItemProcessListenerBuilder func(cfg *config.Config, properties map[string]string) (core.ItemProcessListener, error)
+type ItemProcessListenerBuilder func(cfg *config.Config, properties map[string]interface{}) (core.ItemProcessListener, error)
 
 // ItemWriteListenerBuilder is a function type for building ItemWriteListeners.
 //
@@ -261,7 +261,7 @@ type ItemProcessListenerBuilder func(cfg *config.Config, properties map[string]s
 // Returns:
 //
 //	The constructed ItemWriteListener instance and an error.
-type ItemWriteListenerBuilder func(cfg *config.Config, properties map[string]string) (core.ItemWriteListener, error)
+type ItemWriteListenerBuilder func(cfg *config.Config, properties map[string]interface{}) (core.ItemWriteListener, error)
 
 // SkipListenerBuilder is a function type for building SkipListeners.
 //
@@ -273,7 +273,7 @@ type ItemWriteListenerBuilder func(cfg *config.Config, properties map[string]str
 // Returns:
 //
 //	The constructed SkipListener instance and an error.
-type SkipListenerBuilder func(cfg *config.Config, properties map[string]string) (core.SkipListener, error)
+type SkipListenerBuilder func(cfg *config.Config, properties map[string]interface{}) (core.SkipListener, error)
 
 // LoggingRetryItemListenerBuilder is a function type for building RetryItemListeners.
 //
@@ -285,7 +285,7 @@ type SkipListenerBuilder func(cfg *config.Config, properties map[string]string) 
 // Returns:
 //
 //	The constructed RetryItemListener instance and an error.
-type LoggingRetryItemListenerBuilder func(cfg *config.Config, properties map[string]string) (core.RetryItemListener, error)
+type LoggingRetryItemListenerBuilder func(cfg *config.Config, properties map[string]interface{}) (core.RetryItemListener, error)
 
 // ChunkListenerBuilder is a function type for building ChunkListeners.
 //
@@ -297,7 +297,7 @@ type LoggingRetryItemListenerBuilder func(cfg *config.Config, properties map[str
 // Returns:
 //
 //	The constructed ChunkListener instance and an error.
-type ChunkListenerBuilder func(cfg *config.Config, properties map[string]string) (core.ChunkListener, error)
+type ChunkListenerBuilder func(cfg *config.Config, properties map[string]interface{}) (core.ChunkListener, error)
 
 // ConditionalDecisionBuilder is a function type for building core.Decision.
 //
@@ -310,7 +310,7 @@ type ChunkListenerBuilder func(cfg *config.Config, properties map[string]string)
 // Returns:
 //
 //	The constructed Decision instance and an error.
-type ConditionalDecisionBuilder func(id string, properties map[string]string, resolver core.ExpressionResolver) (core.Decision, error)
+type ConditionalDecisionBuilder func(id string, properties map[string]interface{}, resolver core.ExpressionResolver) (core.Decision, error)
 
 // SplitBuilder is a function type for building core.Split.
 //

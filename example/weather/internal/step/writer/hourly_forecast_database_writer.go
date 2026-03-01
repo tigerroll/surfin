@@ -40,27 +40,30 @@ type HourlyForecastDatabaseWriter struct {
 	// writerState holds the writer's internal state.
 	writerState model.ExecutionContext
 	resolver    port.ExpressionResolver
-	dbResolver  database.DBConnectionResolver // dbResolver is the database connection resolver.
 }
 
 // Verify that HourlyForecastDatabaseWriter implements the [port.ItemWriter[any]] interface.
 var _ port.ItemWriter[any] = (*HourlyForecastDatabaseWriter)(nil)
 
 // NewHourlyForecastDatabaseWriter creates a new [HourlyForecastDatabaseWriter] instance.
+// It initializes the writer with application configuration, an expression resolver,
+// a database connection resolver, and binds JSL properties to its specific configuration.
 //
 // Parameters:
 //
 //	cfg: The application's global configuration.
-//	allDBConnections: A map of all established database connections.
 //	resolver: An [port.ExpressionResolver] for dynamic property resolution.
 //	dbResolver: A [adapter.DBConnectionResolver] for resolving database connections.
-//
 //	properties: A map of JSL properties for this writer.
+//
+// Returns:
+//
+//	A new HourlyForecastDatabaseWriter instance or an error if configuration binding or validation fails.
 func NewHourlyForecastDatabaseWriter(
 	cfg *batch_config.Config,
 	resolver port.ExpressionResolver,
 	dbResolver database.DBConnectionResolver,
-	properties map[string]string,
+	properties map[string]interface{},
 ) (*HourlyForecastDatabaseWriter, error) {
 
 	writerCfg := &HourlyForecastDatabaseWriterConfig{}
@@ -97,11 +100,11 @@ func NewHourlyForecastDatabaseWriter(
 }
 
 // Open initializes the writer and restores its state from the provided [model.ExecutionContext].
+// It resolves the database connection and initializes the internal SqlBulkWriter.
 //
 // Parameters:
 //
 //	ctx: The context for the operation.
-//
 //	ec: The ExecutionContext to initialize the writer with.
 func (w *HourlyForecastDatabaseWriter) Open(ctx context.Context, ec model.ExecutionContext) error {
 	select {
@@ -116,13 +119,11 @@ func (w *HourlyForecastDatabaseWriter) Open(ctx context.Context, ec model.Execut
 		return fmt.Errorf("failed to resolve database connection '%s': %w", w.TargetResourceName, err)
 	}
 
-	// Determine conflict and update columns based on the connection type. (No change here)
-	dbType := conn.Type()
 	w.resolvedConflictColumns = []string{"time", "latitude", "longitude"} // Always these for weather data
 
 	// Initialize SqlBulkWriter
-	// SqlBulkWriter no longer needs *sql.DB directly. It relies on TxFromContext.
-	switch dbType { // This block was moved here to ensure dbType is used for column resolution
+	dbType := conn.Type()
+	switch dbType {
 	case "postgres", "redshift", "sqlite":
 		w.resolvedUpdateColumns = []string{} // DO NOTHING for these
 	case "mysql":
@@ -149,7 +150,8 @@ func (w *HourlyForecastDatabaseWriter) Open(ctx context.Context, ec model.Execut
 	return w.restoreWriterStateFromExecutionContext(ctx)
 }
 
-// Write persists a chunk of items to the database within the provided transaction.
+// Write persists a chunk of items to the database.
+// It converts generic items to WeatherDataToStore and delegates to the internal SqlBulkWriter.
 //
 // Parameters:
 //
@@ -186,7 +188,6 @@ func (w *HourlyForecastDatabaseWriter) Write(ctx context.Context, items []any) e
 		return exception.NewBatchError("hourly_forecast_database_writer", "SqlBulkWriter is not initialized (was Open called?)", nil, true, false)
 	}
 
-	// Execute database operations using the SqlBulkWriter.
 	err := w.sqlBulkWriter.Write(ctx, finalDataToStore)
 	if err != nil {
 		return exception.NewBatchError("hourly_forecast_database_writer", "failed to bulk insert weather data via SqlBulkWriter", err, true, true)
@@ -196,7 +197,8 @@ func (w *HourlyForecastDatabaseWriter) Write(ctx context.Context, items []any) e
 	return nil
 }
 
-// Close releases any resources held by the writer.
+// Close releases any resources held by the writer, including the internal SqlBulkWriter.
+// It also saves the writer's internal state to the ExecutionContext.
 //
 // Parameters:
 //
@@ -208,7 +210,6 @@ func (w *HourlyForecastDatabaseWriter) Close(ctx context.Context) error {
 	default:
 	}
 	logger.Debugf("HourlyForecastDatabaseWriter.Close is called.")
-	// Save internal state to the Step's ExecutionContext.
 	if err := w.saveWriterStateToExecutionContext(ctx); err != nil {
 		logger.Errorf("HourlyForecastDatabaseWriter.Close: failed to save internal state: %v", err)
 	}
@@ -239,12 +240,15 @@ func (w *HourlyForecastDatabaseWriter) SetExecutionContext(ctx context.Context, 
 }
 
 // GetExecutionContext retrieves the current ExecutionContext from the writer.
+// It saves the writer's internal state before returning the context.
 //
 // Parameters:
 //
 //	ctx: The context for the operation.
 //
-// Returns: The current ExecutionContext and an error if retrieval fails.
+// Returns:
+//
+//	The current ExecutionContext and an error if retrieval or state saving fails.
 func (w *HourlyForecastDatabaseWriter) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	select {
 	case <-ctx.Done():
@@ -253,7 +257,6 @@ func (w *HourlyForecastDatabaseWriter) GetExecutionContext(ctx context.Context) 
 	}
 	logger.Debugf("HourlyForecastDatabaseWriter.GetExecutionContext is called.")
 
-	// Save internal state to "writer_context" in the Step ExecutionContext.
 	if err := w.saveWriterStateToExecutionContext(ctx); err != nil {
 		return nil, err
 	}
@@ -272,14 +275,13 @@ func (w *HourlyForecastDatabaseWriter) GetResourcePath() string {
 }
 
 // restoreWriterStateFromExecutionContext extracts writer-specific state from the step's ExecutionContext.
+// It initializes or restores the writer's internal state (e.g., writerState).
 func (w *HourlyForecastDatabaseWriter) restoreWriterStateFromExecutionContext(ctx context.Context) error {
-	// Extract writer-specific context from stepExecutionContext.
 	writerCtxVal, ok := w.stepExecutionContext.Get("writer_context")
 	var writerCtx model.ExecutionContext
 	if !ok || writerCtxVal == nil {
 		writerCtx = model.NewExecutionContext()
 		w.stepExecutionContext.Put("writer_context", writerCtx)
-		logger.Debugf("HourlyForecastDatabaseWriter: Initialized new Writer ExecutionContext.")
 	} else if rcv, isEC := writerCtxVal.(model.ExecutionContext); isEC {
 		writerCtx = rcv
 	} else {
@@ -290,13 +292,12 @@ func (w *HourlyForecastDatabaseWriter) restoreWriterStateFromExecutionContext(ct
 
 	// The writer currently holds no special internal state, but copies writerState.
 	w.writerState = writerCtx.Copy()
-	logger.Debugf("HourlyForecastDatabaseWriter: Internal state restored.")
 	return nil
 }
 
 // saveWriterStateToExecutionContext saves the writer's internal state to the step's ExecutionContext.
+// This includes setting the "decision.condition" key for job flow control.
 func (w *HourlyForecastDatabaseWriter) saveWriterStateToExecutionContext(ctx context.Context) error {
-	// Extract writer-specific context from stepExecutionContext (created if not present)
 	writerCtxVal, ok := w.stepExecutionContext.Get("writer_context")
 	var writerCtx model.ExecutionContext
 	if !ok || writerCtxVal == nil {
@@ -310,16 +311,8 @@ func (w *HourlyForecastDatabaseWriter) saveWriterStateToExecutionContext(ctx con
 		w.stepExecutionContext.Put("writer_context", writerCtx)
 	}
 
-	// Save internal state to writerCtx.
-	// Currently, there is no writer-specific internal state to save to writerCtx.
-	// Add it here if needed in the future.
-
-	// Set the decision.condition for the job flow directly on the stepExecutionContext.
-	// This key will be promoted to JobExecutionContext by the framework if configured in JSL.
-	// IMPORTANT: Also set it on w.writerState so that GetExecutionContext returns it.
 	writerCtx.Put("decision.condition", "true")
 	w.writerState.Put("decision.condition", "true")
 
-	logger.Debugf("HourlyForecastDatabaseWriter: Internal state saved to ExecutionContext.")
 	return nil
 }

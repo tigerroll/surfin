@@ -19,7 +19,7 @@ import (
 type ExecutionContextWriterTasklet struct {
 	id         string
 	ec         model.ExecutionContext
-	properties map[string]string
+	properties map[string]interface{}
 }
 
 // NewExecutionContextWriterTasklet creates a new [ExecutionContextWriterTasklet] instance.
@@ -33,7 +33,7 @@ type ExecutionContextWriterTasklet struct {
 // Returns:
 //
 //	port.Tasklet: A new instance of [ExecutionContextWriterTasklet].
-func NewExecutionContextWriterTasklet(id string, properties map[string]string) port.Tasklet {
+func NewExecutionContextWriterTasklet(id string, properties map[string]interface{}) port.Tasklet {
 	return &ExecutionContextWriterTasklet{
 		id:         id,
 		ec:         model.NewExecutionContext(),
@@ -56,7 +56,6 @@ func NewExecutionContextWriterTasklet(id string, properties map[string]string) p
 //	error: An error if initialization fails.
 func (t *ExecutionContextWriterTasklet) Open(ctx context.Context, stepExecution *model.StepExecution) error {
 	logger.Debugf("ExecutionContextWriterTasklet '%s' Open called.", t.id)
-	// ExecutionContext is already set by SetExecutionContext before Open is called.
 	return nil
 }
 
@@ -80,7 +79,7 @@ func (t *ExecutionContextWriterTasklet) Open(ctx context.Context, stepExecution 
 func (t *ExecutionContextWriterTasklet) Execute(ctx context.Context, stepExecution *model.StepExecution) (model.ExitStatus, error) {
 	logger.Infof("ExecutionContextWriterTasklet '%s' executing. Writing %d properties to ExecutionContext.", t.id, len(t.properties))
 
-	for keyWithType, valueStr := range t.properties {
+	for keyWithType, value := range t.properties {
 		parts := strings.SplitN(keyWithType, ".", 2)
 		if len(parts) != 2 {
 			logger.Warnf("Property key '%s' is not in 'key.type' format. Skipping.", keyWithType)
@@ -90,29 +89,36 @@ func (t *ExecutionContextWriterTasklet) Execute(ctx context.Context, stepExecuti
 		key := parts[0]
 		typeStr := strings.ToLower(parts[1])
 
-		var value interface{}
+		var convertedValue interface{}
 		var err error
+
+		valueStr, isString := value.(string)
+		if !isString {
+			logger.Warnf("Value for key '%s' is not a string (%T). Skipping type conversion and treating as is.", keyWithType, value)
+			t.ec.Put(key, value)
+			continue
+		}
 
 		switch typeStr {
 		case "string":
-			value = valueStr
+			convertedValue = valueStr
 		case "int":
-			value, err = strconv.Atoi(valueStr)
+			convertedValue, err = strconv.Atoi(valueStr)
 		case "float", "float64":
-			value, err = strconv.ParseFloat(valueStr, 64)
+			convertedValue, err = strconv.ParseFloat(valueStr, 64)
 		case "bool":
-			value, err = strconv.ParseBool(valueStr)
+			convertedValue, err = strconv.ParseBool(valueStr)
 		default:
 			logger.Warnf("Unknown type '%s' for key '%s'. Treating as string.", typeStr, key)
-			value = valueStr
+			convertedValue = valueStr
 		}
 
 		if err != nil {
 			return model.ExitStatusFailed, exception.NewBatchErrorf(t.id, "Failed to convert value '%s' to type '%s' for key '%s': %w", valueStr, typeStr, key, err)
 		}
 
-		t.ec.Put(key, value)
-		logger.Debugf("Wrote to EC: %s = %v (Type: %s)", key, value, typeStr)
+		t.ec.Put(key, convertedValue)
+		logger.Debugf("Wrote to EC: %s = %v (Type: %s)", key, convertedValue, typeStr)
 	}
 
 	// Reflect the contents of the ExecutionContext to the StepExecution.
