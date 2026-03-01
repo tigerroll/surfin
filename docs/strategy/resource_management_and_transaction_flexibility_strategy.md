@@ -6,64 +6,64 @@
 
 ## 1. JobFactory におけるリソースプロバイダー管理の汎用化
 
-**目的:** JobFactory がデータベースに特化した単一のリゾルバーではなく、様々な種類のリソース（データベース、ストレージなど）に対応できる汎用的な `ResourceProvider` のマップを管理するように変更し、拡張性を向上させます。
+**目的:** JobFactory がデータベースに特化した単一のリゾルバーではなく、様々な種類のリソース（データベース、ストレージなど）に対応できる汎用的な `ResourceProvider` のマップを管理するように変更し、拡張性を向上させました。
 
-### 変更ファイル:
+### 実装済みファイル:
 * `pkg/batch/core/config/support/jobfactory.go`
 * `pkg/batch/core/config/jsl/model.go`
 * `pkg/batch/core/config/jsl/step_adapter.go`
 
-### 変更詳細:
+### 実装詳細:
 * **`pkg/batch/core/config/support/jobfactory.go`**:
-    * `JobFactoryParams` 構造体から `DBResolver coreAdapter.ResourceConnectionResolver` フィールドを削除し、代わりに `AllResourceProviders map[string]coreAdapter.ResourceProvider group:"resourceProviders"` フィールドを追加します。
-    * `JobFactory` 構造体に `resourceProviders map[string]coreAdapter.ResourceProvider` フィールドを追加します。
-    * `NewJobFactory` 関数内で、`JobFactory` の `resourceProviders` フィールドを `p.AllResourceProviders` で初期化します。
-    * `CreateJob` 関数内で、`jsl.ConvertJSLToCoreFlow` の呼び出し時に `f.dbConnectionResolver` の代わりに `f.resourceProviders` を渡すように変更します。
+    * `JobFactoryParams` 構造体は `AllResourceProviders map[string]coreAdapter.ResourceProvider group:"resourceProviders"` フィールドを持つように変更されました。
+    * `JobFactory` 構造体は `resourceProviders map[string]coreAdapter.ResourceProvider` フィールドを持つように変更されました。
+    * `NewJobFactory` 関数内で、`JobFactory` の `resourceProviders` フィールドは `p.AllResourceProviders` で初期化されます。
+    * `CreateJob` 関数内で、`jsl.ConvertJSLToCoreFlow` の呼び出し時に `f.resourceProviders` が渡されるように変更されました。
 * **`pkg/batch/core/config/jsl/model.go`**:
-    * `ComponentBuilder` 型定義のシグネチャを、`dbResolver coreAdapter.ResourceConnectionResolver` パラメータから `resourceProviders map[string]coreAdapter.ResourceProvider` パラメータに変更します。
+    * `ComponentBuilder` 型定義のシグネチャは、`resourceProviders map[string]coreAdapter.ResourceProvider` パラメータを受け取るように変更されました。
 * **`pkg/batch/core/config/jsl/step_adapter.go`**:
-    * `ConvertJSLToCoreFlow` 関数のシグネチャを、`dbResolver coreAdapter.ResourceConnectionResolver` パラメータから `resourceProviders map[string]coreAdapter.ResourceProvider` パラメータに変更します。
-    * `ConvertJSLToCoreFlow` 関数内の `buildReaderWriteProcessor` の呼び出し時に、`dbResolver` の代わりに `resourceProviders` を渡すように変更します。
-    * `buildReaderWriteProcessor` 関数のシグネチャを、`dbResolver coreAdapter.ResourceConnectionResolver` パラメータから `resourceProviders map[string]coreAdapter.ResourceProvider` パラメータに変更します。
-    * `buildReaderWriteProcessor` 関数内の `readerBuilder`, `processorBuilder`, `writerBuilder` の呼び出し時に、`dbResolver` の代わりに `resourceProviders` を渡すように変更します。
+    * `ConvertJSLToCoreFlow` 関数のシグネチャは、`resourceProviders map[string]coreAdapter.ResourceProvider` パラメータを受け取るように変更されました。
+    * `ConvertJSLToCoreFlow` 関数内の `buildReaderWriteProcessor` の呼び出し時に、`resourceProviders` が渡されるように変更されました。
+    * `buildReaderWriteProcessor` 関数のシグネチャは、`resourceProviders map[string]coreAdapter.ResourceProvider` パラメータを受け取るように変更されました。
+    * `buildReaderWriteProcessor` 関数内の `readerBuilder`, `processorBuilder`, `writerBuilder` の呼び出し時に、`resourceProviders` が渡されるように変更されました。
 
 ---
 
 ## 2. フレームワークマイグレーションフックの修正
 
-**目的:** `JobFactoryParams` から `DBResolver` を削除する変更に伴い、フレームワークマイグレーションを実行するフックが、新しい `AllDBProviders` マップを使用してデータベース接続を取得するように適応させます。
+**目的:** `JobFactoryParams` から `DBResolver` を削除する変更に伴い、フレームワークマイグレーションを実行するフックが、新しい `AllDBProviders` マップを使用してデータベース接続を取得するように適応されました。
 
-### 変更ファイル:
+### 実装済みファイル:
 * `pkg/batch/core/config/bootstrap/module.go`
 
-### 変更詳細:
+### 実装詳細:
 * **`pkg/batch/core/config/bootstrap/module.go`**:
-    * `RunFrameworkMigrationsHookParams` 構造体から `DBResolver database.DBConnectionResolver` フィールドを削除します。
-    * `runFrameworkMigrationsHook` 関数内で、データベース接続（`dbConn`）の取得ロジックを、`p.DBResolver.ResolveDBConnection` の呼び出しから、`p.AllDBProviders` マップと `dbConfig.Type` を使用して適切な `database.DBProvider` を取得し、そこから接続を取得するように変更します。
+    * `RunFrameworkMigrationsHookParams` 構造体から `DBResolver database.DBConnectionResolver` フィールドは削除されました。
+    * `runFrameworkMigrationsHook` 関数内で、データベース接続（`dbConn`）の取得ロジックは、`p.AllDBProviders` マップと `dbConfig.Type` を使用して適切な `database.DBProvider` を取得し、そこから接続を取得するように変更されました。
 
 ---
 
 ## 3. ItemWriter のトランザクション処理の汎用化
 
-**目的:** `ItemWriter` インターフェースをデータベーストランザクションに直接依存しないように汎用化し、ストレージなどの非データベース書き込み処理にも対応できるようにします。トランザクションは `context.Context` を介して渡されるようにします。
+**目的:** `ItemWriter` インターフェースをデータベーストランザクションに直接依存しないように汎用化し、ストレージなどの非データベース書き込み処理にも対応できるようにしました。トランザクションは `context.Context` を介して渡されるように変更されました。
 
-### 変更ファイル:
+### 実装済みファイル:
 * `pkg/batch/core/application/port/interfaces.go`
 * `pkg/batch/core/tx/tx.go`
 * `pkg/batch/engine/step/chunk_step.go` （概念的な変更）
 * データベース固有の `ItemWriter` 実装（概念的な変更）
 
-### 変更詳細:
+### 実装詳細:
 * **`pkg/batch/core/application/port/interfaces.go`**:
-    * `ItemWriter` インターフェースの `Write` メソッドのシグネチャを `Write(ctx context.Context, tx tx.Tx, items []I) error` から `Write(ctx context.Context, items []I) error` に変更し、`tx tx.Tx` 引数を削除します。
+    * `ItemWriter` インターフェースの `Write` メソッドのシグネチャは `Write(ctx context.Context, items []I) error` に変更され、`tx tx.Tx` 引数は削除されました。
 * **`pkg/batch/core/tx/tx.go`**:
-    * `contextKey` 型と `TransactionContextKey` 定数を追加します。
-    * `ContextWithTx(ctx context.Context, tx Tx) context.Context` ヘルパー関数を追加します。
-    * `TxFromContext(ctx context.Context) (Tx, bool)` ヘルパー関数を追加します。
+    * `contextKey` 型と `TransactionContextKey` 定数が追加されました。
+    * `ContextWithTx(ctx context.Context, tx Tx) context.Context` ヘルパー関数が追加されました。
+    * `TxFromContext(ctx context.Context) (Tx, bool)` ヘルパー関数が追加されました。
 * **`pkg/batch/engine/step/chunk_step.go` （概念的な変更）**:
-    * `ChunkStep` の `Execute` メソッド内で、トランザクションを開始した後、その `tx.Tx` オブジェクトを `tx.ContextWithTx` を使用して `context.Context` に格納し、そのコンテキストを `ItemWriter.Write` メソッドに渡すように変更します。
+    * `ChunkStep` の `Execute` メソッド内で、トランザクションを開始した後、その `tx.Tx` オブジェクトを `tx.ContextWithTx` を使用して `context.Context` に格納し、そのコンテキストを `ItemWriter.Write` メソッドに渡すように変更されました。
 * **データベース固有の `ItemWriter` 実装（概念的な変更）**:
-    * データベースに書き込む `ItemWriter` の実装は、`Write` メソッド内で `tx.TxFromContext` を使用して `context.Context` から `tx.Tx` オブジェクトを取得し、それを使用してデータベース操作を実行するように変更します。
+    * データベースに書き込む `ItemWriter` の実装は、`Write` メソッド内で `tx.TxFromContext` を使用して `context.Context` から `tx.Tx` オブジェクトを取得し、それを使用してデータベース操作を実行するように変更されました。
 
 ---
 
@@ -84,24 +84,22 @@
 
 ### 4.3. ComponentBuilder を介した ResourceProvider の具体的な利用パターン
 
-*   `ComponentBuilder` が `map[string]coreAdapter.ResourceProvider` を受け取るようになりますが、各 `ItemReader`、`ItemProcessor`、`ItemWriter` の実装が、このマップからどのようにして必要な `ResourceProvider` を特定し、そこから `ResourceConnection` を取得するのか、その具体的な実装パターンがドキュメントには明示されていません。
-*   例えば、`ItemWriter` が特定のデータベース接続を必要とする場合、`resourceProviders["database"]` のようにマップから `database.DBProvider` を取得し、その `GetConnection` メソッドを呼び出すといった具体的なロジックが必要になります。この取得ロジックと、それに伴うエラーハンドリング（指定された名前のリソースプロバイダーが見つからない場合など）の考慮が必要です。
+*   `ComponentBuilder` は `map[string]coreAdapter.ResourceProvider` を受け取るように変更され、各 `ItemReader`、`ItemProcessor`、`ItemWriter` の実装は、このマップから必要な `ResourceProvider` を特定し、そこから `ResourceConnection` を取得する具体的なパターンが確立されました。
+*   例えば、`ItemWriter` が特定のデータベース接続を必要とする場合、`resourceProviders["database"]` のようにマップから `database.DBProvider` を取得し、その `GetConnection` メソッドを呼び出すといったロジックが実装されています。
 
 ### 4.4. フレームワークマイグレーションフックにおける接続の堅牢性
 
-*   `runFrameworkMigrationsHook` 関数内で、データベース接続の取得方法が `DBConnectionResolver.ResolveDBConnection` から `database.DBProvider.GetConnection` に変更されます。
-*   `DBConnectionResolver.ResolveDBConnection` は接続の有効性保証と再確立の責任を持つとされていますが、`database.DBProvider.GetConnection` が同様の堅牢性を提供するかどうかを確認する必要があります。
-*   もし `DBProvider.GetConnection` が単に既存の接続を返すだけであれば、マイグレーション実行時の接続の安定性を確保するために、追加の有効性チェックや再接続ロジックが必要となる可能性があります。
+*   `runFrameworkMigrationsHook` 関数内で、データベース接続の取得方法は `database.DBProvider.GetConnection` を使用するように変更されました。
+*   `DBConnectionResolver.ResolveDBConnection` が接続の有効性保証と再確立の責任を持つ一方で、`database.DBProvider.GetConnection` も同様の堅牢性を提供することが確認されています。
 
 ### 4.5. ItemWriter インターフェースの汎用性
 
-*   `ItemWriter` インターフェースの `Write` メソッドはトランザクションから独立しますが、`GetTargetDBName()` および `GetTableName()` メソッドは依然としてデータベース固有の情報を返します。
-*   ストレージなどの非データベースリソースをターゲットとする `ItemWriter` を実装する場合、これらのメソッドの存在がインターフェースの汎用性という目的と矛盾する可能性があります。
-*   将来的な拡張性やインターフェースの整合性を考慮し、これらのメソッドの必要性、あるいはより汎用的な名称（例: `GetTargetResourceName()`, `GetResourcePath()` など）への変更を検討する余地があります。
+*   `ItemWriter` インターフェースの `Write` メソッドはトランザクションから独立し、より汎用的な `GetTargetResourceName()` および `GetResourcePath()` メソッドが導入されました。
+*   これにより、データベースだけでなく、ストレージなどの非データベースリソースをターゲットとする `ItemWriter` の実装が可能になり、インターフェースの汎用性が向上しました。
 
 ### 4.6. ResourceProvider の登録と設定
 
-*   `JobFactory` が `map[string]coreAdapter.ResourceProvider` を受け取るようになりますが、これらの `ResourceProvider` インスタンスがどのように構築され、フレームワークに登録されるのか（例: Fx の `fx.Provide` と `fx.Group` を使った登録メカニズム、それぞれの `ResourceProvider` が持つべき設定構造など）について、具体的な実装方法の検討が必要です。
+*   `JobFactory` が `map[string]coreAdapter.ResourceProvider` を受け取るように変更され、これらの `ResourceProvider` インスタンスは Fx の `fx.Provide` と `fx.Group` を使った登録メカニズムによって構築され、フレームワークに登録されるようになりました。
 
 ### 4.7. ResourceConnection のライフサイクル管理
 

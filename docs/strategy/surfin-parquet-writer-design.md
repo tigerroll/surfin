@@ -52,7 +52,7 @@ type ParquetWriter[T any] struct {
 ```go
 func NewParquetWriter[T any](
 	name string,
-	properties map[string]string,
+	properties map[string]interface{},
 	storageConnectionResolver storage.StorageConnectionResolver,
 	itemPrototype T,
 	partitionKeyFunc func(T) (string, error),
@@ -77,7 +77,7 @@ func NewParquetWriterBuilder[T any](
 	storageConnectionResolver storage.StorageConnectionResolver,
 	itemPrototype T,
 	partitionKeyFunc func(T) (string, error),
-) func(properties map[string]string) (port.ItemWriter[T], error) {
+) func(properties map[string]interface{}) (port.ItemWriter[T], error) {
 	// NewParquetWriter を呼び出すクロージャを返す
 }
 ```
