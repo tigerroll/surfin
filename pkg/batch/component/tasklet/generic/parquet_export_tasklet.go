@@ -96,7 +96,7 @@ func NewGenericParquetExportTasklet[T any](
 	properties map[string]interface{},
 	dbConnectionResolver database.DBConnectionResolver,
 	storageConnectionResolver storage.StorageConnectionResolver,
-	itemPrototype *T, // itemPrototype is a prototype instance of the item type, injected by Fx for Parquet schema inference.
+	itemPrototype *T,
 ) (port.Tasklet, error) {
 	var config GenericParquetExportTaskletConfig
 	var metadata mapstructure.Metadata
@@ -219,62 +219,126 @@ func NewGenericParquetExportTasklet[T any](
 			}
 
 			var formattedValue string
-			switch field.Kind() {
-			case reflect.Struct:
-				if t, ok := field.Interface().(time.Time); ok {
-					if def.Format == "" {
-						// Default format for time.Time if not specified
-						formattedValue = t.Format("2006-01-02T15-04-05")
-					} else {
-						formattedValue = t.Format(def.Format)
-					}
+			// Handle pointer types first.
+			if field.Kind() == reflect.Ptr {
+				// If nil pointer, use empty string as partition value.
+				if field.IsNil() {
+					formattedValue = ""
 				} else {
-					return "", exception.NewBatchError(
-						"tasklet",
-						fmt.Sprintf("Unsupported struct type for partition key '%s': %s. Expected time.Time.", def.Key, field.Type()),
-						nil,
-						false,
-						false,
-					)
+					// Dereference the pointer and evaluate the underlying type.
+					elemField := field.Elem()
+					switch elemField.Kind() {
+					case reflect.Struct:
+						if t, ok := elemField.Interface().(time.Time); ok {
+							if def.Format == "" {
+								formattedValue = t.Format("2006-01-02T15-04-05")
+							} else {
+								formattedValue = t.Format(def.Format)
+							}
+						} else {
+							return "", exception.NewBatchError(
+								"tasklet",
+								fmt.Sprintf("Unsupported struct type for partition key '%s' (pointed to): %s. Expected *time.Time.", def.Key, elemField.Type()),
+								nil,
+								false,
+								false,
+							)
+						}
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						// For UnixMillis type.
+						if elemField.Type().Name() == "UnixMillis" {
+							unixMilli := elemField.Int()
+							t := time.Unix(0, unixMilli*int64(time.Millisecond))
+							if def.Format == "" {
+								formattedValue = t.Format("2006-01-02T15-04-05")
+							} else {
+								formattedValue = t.Format(def.Format)
+							}
+						} else {
+							// For other integer types.
+							if def.Format == "" {
+								formattedValue = fmt.Sprintf("%v", elemField.Interface())
+							} else {
+								formattedValue = fmt.Sprintf(def.Format, elemField.Interface())
+							}
+						}
+					case reflect.Float32, reflect.Float64:
+						if def.Format == "" {
+							formattedValue = fmt.Sprintf("%v", elemField.Interface())
+						} else {
+							formattedValue = fmt.Sprintf(def.Format, elemField.Interface())
+						}
+					case reflect.String:
+						if def.Format == "" {
+							formattedValue = elemField.String()
+						} else {
+							formattedValue = fmt.Sprintf(def.Format, elemField.Interface())
+						}
+					default:
+						// Fallback for other primitive types or if no format is specified.
+						if def.Format == "" {
+							formattedValue = fmt.Sprintf("%v", elemField.Interface())
+						} else {
+							formattedValue = fmt.Sprintf(def.Format, elemField.Interface())
+						}
+					}
 				}
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				// Check if the type is specifically UnixMillis (e.g., from weather_entity.go)
-				if field.Type().Name() == "UnixMillis" {
-					unixMilli := field.Int()
-					t := time.Unix(0, unixMilli*int64(time.Millisecond))
-					if def.Format == "" {
-						// Default format for UnixMillis if format is empty
-						formattedValue = t.Format("2006-01-02T15-04-05")
+			} else {
+				// Existing logic for non-pointer types.
+				switch field.Kind() {
+				case reflect.Struct:
+					if t, ok := field.Interface().(time.Time); ok {
+						if def.Format == "" {
+							formattedValue = t.Format("2006-01-02T15-04-05")
+						} else {
+							formattedValue = t.Format(def.Format)
+						}
 					} else {
-						formattedValue = t.Format(def.Format)
+						return "", exception.NewBatchError(
+							"tasklet",
+							fmt.Sprintf("Unsupported struct type for partition key '%s': %s. Expected time.Time.", def.Key, field.Type()), // Original error message
+							nil,
+							false,
+							false,
+						)
 					}
-				} else {
-					// For other integer types (like WeatherCode), use fmt.Sprintf
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+					// For UnixMillis type.
+					if field.Type().Name() == "UnixMillis" {
+						unixMilli := field.Int()
+						t := time.Unix(0, unixMilli*int64(time.Millisecond))
+						if def.Format == "" {
+							formattedValue = t.Format("2006-01-02T15-04-05")
+						} else {
+							formattedValue = t.Format(def.Format)
+						}
+					} else {
+						// For other integer types.
+						if def.Format == "" {
+							formattedValue = fmt.Sprintf("%v", field.Interface())
+						} else {
+							formattedValue = fmt.Sprintf(def.Format, field.Interface())
+						}
+					}
+				case reflect.Float32, reflect.Float64:
 					if def.Format == "" {
 						formattedValue = fmt.Sprintf("%v", field.Interface())
 					} else {
 						formattedValue = fmt.Sprintf(def.Format, field.Interface())
 					}
-				}
-			case reflect.Float32, reflect.Float64:
-				if def.Format == "" {
-					formattedValue = fmt.Sprintf("%v", field.Interface())
-				} else {
-					formattedValue = fmt.Sprintf(def.Format, field.Interface())
-				}
-			case reflect.String:
-				if def.Format == "" {
-					formattedValue = field.String()
-				} else {
-					// For string types, use fmt.Sprintf with the interface value
-					formattedValue = fmt.Sprintf(def.Format, field.Interface())
-				}
-			default:
-				// Fallback for other primitive types or if format is not specified
-				if def.Format == "" {
-					formattedValue = fmt.Sprintf("%v", field.Interface())
-				} else {
-					formattedValue = fmt.Sprintf(def.Format, field.Interface())
+				case reflect.String:
+					if def.Format == "" {
+						formattedValue = field.String()
+					} else {
+						formattedValue = fmt.Sprintf(def.Format, field.Interface())
+					}
+				default:
+					// Fallback for other primitive types or if no format is specified.
+					if def.Format == "" {
+						formattedValue = fmt.Sprintf("%v", field.Interface())
+					} else {
+						formattedValue = fmt.Sprintf(def.Format, field.Interface())
+					}
 				}
 			}
 
@@ -301,7 +365,7 @@ func NewGenericParquetExportTasklet[T any](
 		"genericParquetExportTaskletWriter", // Name for the writer
 		parquetWriterProps,
 		storageConnectionResolver,
-		itemPrototype,
+		itemPrototype,    // Pass the pointer type *T for schema inference
 		partitionKeyFunc, // Use the dynamically generated function
 	)
 	if err != nil {
@@ -329,7 +393,7 @@ func NewGenericParquetExportTasklet[T any](
 //
 //	dbConnectionResolver: Resolver for database connections.
 //	storageConnectionResolver: Resolver for storage connections.
-//	itemPrototype: A prototype instance of the item type for schema reflection.
+//	itemPrototype: A pointer to a zero-value instance of the item type for schema reflection.
 //
 // Returns:
 //
@@ -337,12 +401,12 @@ func NewGenericParquetExportTasklet[T any](
 func NewGenericParquetExportTaskletBuilder[T any](
 	dbConnectionResolver database.DBConnectionResolver,
 	storageConnectionResolver storage.StorageConnectionResolver,
-	itemPrototype *T, // A pointer to a zero-value instance of the item type for schema reflection.
+	itemPrototype *T,
 ) configjsl.ComponentBuilder { // Uses the JSL ComponentBuilder type.
 	return func(
-		cfg *coreConfig.Config, // Part of the JSL ComponentBuilder signature.
-		resolver port.ExpressionResolver, // Part of the JSL ComponentBuilder signature.
-		resourceProviders map[string]coreAdapter.ResourceProvider, // Part of the JSL ComponentBuilder signature.
+		cfg *coreConfig.Config,
+		resolver port.ExpressionResolver,
+		resourceProviders map[string]coreAdapter.ResourceProvider,
 		properties map[string]interface{},
 	) (interface{}, error) {
 		// Call NewGenericParquetExportTasklet, passing captured dependencies and provided properties.
@@ -454,8 +518,8 @@ func (t *GenericParquetExportTasklet[T]) Execute(ctx context.Context, stepExecut
 		sqlDB,
 		fmt.Sprintf("%s_sql_reader", stepExecution.StepName), // Unique name for the reader
 		sqlQuery,
-		nil,      // No additional arguments for the query as it's fully constructed
-		scanFunc, // Use the dynamically generated scanFunc
+		nil,
+		scanFunc,
 	)
 
 	// Open the reader
@@ -534,6 +598,7 @@ func (t *GenericParquetExportTasklet[T]) Execute(ctx context.Context, stepExecut
 
 		for item := range itemsChan { // Loop until itemsChan is closed
 			batch = append(batch, item)
+
 			if len(batch) >= t.config.ReadBufferSize {
 				if err := t.parquetWriter.Write(ctx, batch); err != nil {
 					select {
@@ -623,7 +688,7 @@ func (t *GenericParquetExportTasklet[T]) Close(ctx context.Context, stepExecutio
 // Parameters:
 //
 //	ec: The [model.ExecutionContext] to set.
-func (t *GenericParquetExportTasklet[T]) SetExecutionContext(ec model.ExecutionContext) { // This method signature is for port.Tasklet
+func (t *GenericParquetExportTasklet[T]) SetExecutionContext(ec model.ExecutionContext) {
 	logger.Debugf("GenericParquetExportTasklet SetExecutionContext called.")
 	t.stepExecutionContext = ec
 	if t.parquetWriter != nil {
@@ -644,4 +709,4 @@ func (t *GenericParquetExportTasklet[T]) GetExecutionContext() model.ExecutionCo
 }
 
 // Compile-time check to ensure GenericParquetExportTasklet implements port.Tasklet.
-var _ port.Tasklet = (*GenericParquetExportTasklet[any])(nil)
+var _ port.Tasklet = (*GenericParquetExportTasklet[any])(nil) // Verify that GenericParquetExportTasklet satisfies the port.Tasklet interface at compile time.
