@@ -48,6 +48,9 @@ type GenericParquetExportTaskletConfig struct {
 	// PartitionDefinitions defines multiple partition keys and their formats.
 	// Each definition corresponds to a level in the hierarchical partition path.
 	PartitionDefinitions []PartitionDefinition `mapstructure:"partitionDefinitions"`
+	// OutputFileNameFormat is the format pattern for the output Parquet file name, passed to the ParquetWriter.
+	// Supported placeholders: #{tablename}, #{timestamp}, #{uuid}, #{random}, #{sequence}.
+	OutputFileNameFormat string `mapstructure:"outputFileNameFormat"`
 }
 
 // PartitionDefinition defines a single partition key within a multi-level partitioning scheme.
@@ -101,16 +104,16 @@ func NewGenericParquetExportTasklet[T any](
 	var config GenericParquetExportTaskletConfig
 	var metadata mapstructure.Metadata
 
-	logger.Debugf("NewGenericParquetExportTasklet received properties before decode: %+v", properties)
-
-	if pd, ok := properties["partitionDefinitions"]; ok {
-		logger.Debugf("DEBUG: Type of properties[\"partitionDefinitions\"]: %T", pd)
-		if slicePd, isSlice := pd.([]interface{}); isSlice {
-			for i, item := range slicePd {
-				logger.Debugf("DEBUG:   Element %d of partitionDefinitions: Type=%T, Value=%+v", i, item, item)
-			}
-		}
-	}
+	// Debug logs are for development and should not be part of GoDoc comments.
+	// logger.Debugf("NewGenericParquetExportTasklet received properties before decode: %+v", properties)
+	// if pd, ok := properties["partitionDefinitions"]; ok {
+	// 	logger.Debugf("DEBUG: Type of properties[\"partitionDefinitions\"]: %T", pd)
+	// 	if slicePd, isSlice := pd.([]interface{}); isSlice {
+	// 		for i, item := range slicePd {
+	// 			logger.Debugf("DEBUG:   Element %d of partitionDefinitions: Type=%T, Value=%+v", i, item, item)
+	// 		}
+	// 	}
+	// }
 
 	decoderConfig := &mapstructure.DecoderConfig{
 		Metadata:         &metadata,
@@ -359,6 +362,8 @@ func NewGenericParquetExportTasklet[T any](
 		"storageRef":      config.StorageRef,
 		"outputBaseDir":   config.OutputBaseDir,
 		"compressionType": config.ParquetCompressionType,
+		"fileNameFormat":  config.OutputFileNameFormat,
+		"tableName":       config.TableName,
 	}
 
 	pw, err := writer.NewParquetWriter[T](
@@ -388,21 +393,20 @@ func NewGenericParquetExportTasklet[T any](
 }
 
 // NewGenericParquetExportTaskletBuilder generates a function that conforms to the JSL [configjsl.ComponentBuilder] signature.
+// This builder function allows the batch framework to dynamically create [GenericParquetExportTasklet] instances.
 //
 // Parameters:
-//
-//	dbConnectionResolver: Resolver for database connections.
-//	storageConnectionResolver: Resolver for storage connections.
-//	itemPrototype: A pointer to a zero-value instance of the item type for schema reflection.
+//   dbConnectionResolver: Resolver for database connections.
+//   storageConnectionResolver: Resolver for storage connections.
+//   itemPrototype: A pointer to a zero-value instance of the item type for schema reflection.
 //
 // Returns:
-//
-//	A function that can create a GenericParquetExportTasklet instance based on properties.
+//   A function that can create a [GenericParquetExportTasklet] instance based on properties.
 func NewGenericParquetExportTaskletBuilder[T any](
 	dbConnectionResolver database.DBConnectionResolver,
 	storageConnectionResolver storage.StorageConnectionResolver,
 	itemPrototype *T,
-) configjsl.ComponentBuilder { // Uses the JSL ComponentBuilder type.
+) configjsl.ComponentBuilder {
 	return func(
 		cfg *coreConfig.Config,
 		resolver port.ExpressionResolver,
@@ -692,6 +696,10 @@ func (t *GenericParquetExportTasklet[T]) SetExecutionContext(ec model.ExecutionC
 	logger.Debugf("GenericParquetExportTasklet SetExecutionContext called.")
 	t.stepExecutionContext = ec
 	if t.parquetWriter != nil {
+		// The context passed to SetExecutionContext for the writer is context.Background()
+		// because the framework's SetExecutionContext method does not provide a context.
+		// This is acceptable as SetExecutionContext is typically for state propagation,
+		// not for long-running operations that require cancellation.
 		if err := t.parquetWriter.SetExecutionContext(context.Background(), ec); err != nil {
 			logger.Warnf("Failed to set ExecutionContext for ParquetWriter: %v", err)
 		}

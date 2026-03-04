@@ -21,9 +21,9 @@ Parquetファイル出力において、ファイル名のフォーマットをJ
     // pkg/batch/component/step/writer/parquet_writer.go
     type ParquetWriterConfig struct {
     	// ... 既存のフィールド ...
-    	// FileNameFormat is the format pattern for the output Parquet file name (e.g., "data_#{tableName}_#{timestamp}_#{random}.parquet").
-    	// Supported placeholders: #{tableName}, #{timestamp}, #{uuid}, #{random}, #{sequence}.
-    	FileNameFormat string `mapstructure:"fileNameFormat"` // ファイル名のフォーマットパターン (例: "data_#{tableName}_#{timestamp}_#{random}_#{sequence}.parquet")
+    	// FileNameFormat is the format pattern for the output Parquet file name (e.g., "data_#{tablename}_#{timestamp}_#{random}.parquet").
+    	// Supported placeholders: #{tablename}, #{timestamp}, #{uuid}, #{random}, #{sequence}.
+    	FileNameFormat string `mapstructure:"fileNameFormat"` // ファイル名のフォーマットパターン (例: "data_#{tablename}_#{timestamp}_#{random}_#{sequence}.parquet")
     	TableName      string `mapstructure:"tableName"`      // ファイル名に含めるテーブル名
     }
     ```
@@ -67,7 +67,7 @@ Parquetファイル出力において、ファイル名のフォーマットをJ
 *   **`Close` メソッド内のファイル名生成ロジックの変更**:
     *   現在ハードコードされているファイル名生成ロジックを、`w.config.FileNameFormat` を使用したプレースホルダー置換方式に変更する。
     *   サポートするプレースホルダーは以下の通りとする:
-        *   `#{tableName}`: `w.config.TableName` の値に置換。
+        *   `#{tablename}`: `w.config.TableName` の値に置換。
         *   `#{timestamp}`: 現在時刻を `YYYYMMDDhhmmss` 形式（例: `20060102150405`）の文字列にフォーマットして置換。
         *   `#{uuid}`: 新しいUUID（`uuid.New().String()`）を生成して置換。
         *   `#{random}`: 既存の `generateRandomString` 関数で生成されるランダム文字列に置換。
@@ -109,7 +109,7 @@ Parquetファイル出力において、ファイル名のフォーマットをJ
     type GenericParquetExportTaskletConfig struct {
     	// ... 既存のフィールド ...
     	// OutputFileNameFormat is the format pattern for the output Parquet file name, passed to the ParquetWriter.
-    	OutputFileNameFormat string `mapstructure:"outputFileNameFormat"` // Parquetファイル名のパターン (例: "data-#{tableName}-#{timestamp}-#{sequence}.parquet")
+    	OutputFileNameFormat string `mapstructure:"outputFileNameFormat"` // Parquetファイル名のパターン (例: "data-#{tablename}-#{timestamp}-#{sequence}.parquet")
     }
     ```
 
@@ -172,7 +172,7 @@ steps:
         outputBaseDir: "weather/hourly_forecast"
         tableName: "hourly_forecast_data" # ファイル名に含めるテーブル名
         outputFileNameFormat: "hourly_forecast_#{timestamp}_#{uuid}_#{sequence}.parquet" # 新しいファイル名フォーマット
-        # 例: outputFileNameFormat: "#{tableName}_part_#{sequence}_#{random}.parquet"
+        # 例: outputFileNameFormat: "#{tablename}_part_#{sequence}_#{random}.parquet"
         # 例: outputFileNameFormat: "my_custom_data.parquet" (プレースホルダーなしも可能)
         # 例: outputFileNameFormat: "data_#{timestamp}.parquet"
         # ... その他の設定 ...
