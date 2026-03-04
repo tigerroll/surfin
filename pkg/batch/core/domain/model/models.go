@@ -18,6 +18,79 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/support/util/serialization"
 )
 
+// ToUnixMillisPtr converts a time.Time to a pointer to UnixMillis.
+// If the input time is a zero value, it returns nil.
+func ToUnixMillisPtr(t time.Time) *UnixMillis {
+	if t.IsZero() {
+		return nil
+	}
+	um := UnixMillis(t.UnixMilli())
+	return &um
+}
+
+// UnixMillis is a custom type for storing Unix timestamps in milliseconds.
+// It implements the sql.Scanner and driver.Valuer interfaces to handle conversions
+// between time.Time (from database) and int64 (for Parquet/internal representation).
+type UnixMillis int64
+
+// Scan implements the sql.Scanner interface.
+// It converts a value read from the database into a UnixMillis type.
+func (um *UnixMillis) Scan(value interface{}) error {
+	if value == nil {
+		*um = 0 // Represent NULL as 0 for optional int64.
+		return nil
+	}
+
+	switch v := value.(type) {
+	case time.Time:
+		*um = UnixMillis(v.UnixMilli())
+		return nil
+	case int64: // If the database already returns int64
+		*um = UnixMillis(v)
+		return nil
+	case string: // Handle cases where SQLite might return string for INTEGER column
+		// Attempt to parse the string as a time.Time, then convert to UnixMillis
+		// This assumes the string format is one of the expected date formats.
+
+		// 1. Try parsing with timezone offset (e.g., "2019-02-11 09:00:00+09:00")
+		parsedTime, err := time.Parse("2006-01-02 15:04:05-07:00", v)
+		if err == nil {
+			*um = UnixMillis(parsedTime.UnixMilli())
+			return nil
+		}
+
+		// 2. If that fails, try parsing without timezone offset (e.g., "2019-02-11 09:00:00")
+		parsedTime, err = time.Parse("2006-01-02 15:04:05", v)
+		if err == nil {
+			*um = UnixMillis(parsedTime.UnixMilli())
+			return nil
+		}
+
+		// 3. If that also fails, try parsing date only (e.g., "2019-02-11")
+		parsedTime, err = time.Parse("2006-01-02", v)
+		if err == nil {
+			*um = UnixMillis(parsedTime.UnixMilli())
+			return nil
+		}
+
+		// If all parsing fails, return an error
+		return fmt.Errorf("cannot scan string '%s' into UnixMillis: failed to parse with known layouts", v)
+
+	default:
+		return fmt.Errorf("cannot scan type %T into UnixMillis", v)
+	}
+}
+
+// Value implements the driver.Valuer interface.
+// It converts a UnixMillis value into a driver.Value for writing to the database.
+// If the UnixMillis value is 0, it returns time.UnixMilli(0) (epoch start) instead of nil,
+// to satisfy NOT NULL constraints in the database.
+func (um UnixMillis) Value() (driver.Value, error) {
+	// If um is 0, return the Unix epoch start time (1970-01-01 00:00:00 UTC)
+	// instead of nil, to satisfy NOT NULL constraints.
+	return time.UnixMilli(int64(um)), nil
+}
+
 // JobStatus represents the state of a job execution.
 type JobStatus string
 
