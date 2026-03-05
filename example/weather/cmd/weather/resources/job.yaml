@@ -89,6 +89,7 @@ flow:
           dbRef: workload # Database connection name where the weather_data_to_store table resides.
           storageRef: local # Connection name for the local storage adapter.
           outputBaseDir: "exported_weather_data" # Base directory for output files within the storage.
+          outputFileNameFormat: "#{tablename}_#{timestamp}_#{uuid}_#{sequence}.parquet"
           readBufferSize: "1000" # Number of items to read into buffer at once.
           parquetCompressionType: "SNAPPY" # Compression type for Parquet files.
           tableName: "hourly_forecast" # Table name to export.
