@@ -3,7 +3,6 @@ package gcs
 import (
 	"go.uber.org/fx"
 
-	// coreConfig "github.com/tigerroll/surfin/pkg/batch/core/config" // Removed: unused.
 	storageAdapter "github.com/tigerroll/surfin/pkg/batch/adapter/storage"
 )
 
@@ -15,11 +14,4 @@ var Module = fx.Options(
 		fx.As(new(storageAdapter.StorageProvider)),
 		fx.ResultTags(`group:"storage_providers"`),
 	)),
-	// The provision of GCSConnectionResolver is removed.
-	// StorageConnectionResolver should be provided centrally by local.NewLocalConnectionResolver (or a more generic NewStorageConnectionResolver).
-	// fx.Provide(fx.Annotate(
-	// 	NewGCSConnectionResolver,
-	// 	fx.As(new(storageAdapter.StorageConnectionResolver)),
-	// 	fx.ParamTags(`group:"storage_providers"`),
-	// )),
 )
