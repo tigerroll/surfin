@@ -15,6 +15,7 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/mysql"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/postgres"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/sqlite"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/storage/gcs" // Imports the GCS module.
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -77,16 +78,17 @@ func main() {
 	}
 
 	// Define Fx options for database providers. All GORM-based providers are included here.
-	dbProviderOptions := []fx.Option{
+	adapterProviderOptions := []fx.Option{
 		// gormmodule.Module is removed as NewGormTransactionManagerFactory is already provided in internal/app/module.go.
 		mysql.Module,
 		postgres.Module,
 		sqlite.Module, // SQLite module
+		gcs.Module,    // Adds the GCS storage adapter module.
 	}
 
 	// Run the application.
 	// Cast embeddedConfig and embeddedJSL to their respective type aliases and add jobDoneChan.
-	app.RunApplication(ctx, envFilePath, config.EmbeddedConfig(embeddedConfig), jsl.JSLDefinitionBytes(embeddedJSL), applicationMigrationsFS, dbProviderOptions, jobDoneChan)
+	app.RunApplication(ctx, envFilePath, config.EmbeddedConfig(embeddedConfig), jsl.JSLDefinitionBytes(embeddedJSL), applicationMigrationsFS, adapterProviderOptions, jobDoneChan)
 	// Exit the process with exit code 0 after application execution completes.
 	os.Exit(0)
 }

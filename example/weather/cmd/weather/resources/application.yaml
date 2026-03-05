@@ -62,6 +62,10 @@ surfin:
       local: 
         type: "local"
         base_dir: "/tmp/surfin_batch_data"
+      gcs:
+        type: "gcs"
+        bucket_name: "${GCS_BUCKET_NAME}"
+        credentials_file: ""
 
   # Batch framework settings
   batch:

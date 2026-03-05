@@ -102,14 +102,13 @@ graph LR
         DeleteObject(ctx context.Context, bucket, objectName string) error
     }
 
-    // StorageConnection represents a generic data storage connection.
-    // It embeds coreAdapter.ResourceConnection and StorageExecutor to provide both
-    // resource connection capabilities and specific storage operations.
-    type StorageConnection interface {
+    // StorageAdapter は汎用的なデータストレージ接続を表します。
+    // coreAdapter.ResourceConnection と StorageExecutor を埋め込み、リソース接続としての機能と具体的なストレージ操作を提供します。
+    type StorageAdapter interface {
         coreAdapter.ResourceConnection // Inherits Close(), Type(), Name()
         StorageExecutor                // Inherits Upload(), Download(), ListObjects(), DeleteObject()
 
-        // Config() storageConfig.StorageConfig // Removed as storageConfig is no longer imported
+        Config() storageConfig.StorageConfig
     }
 
     // StorageProvider はデータストレージ接続の取得と管理を行います。
@@ -260,51 +259,84 @@ type StorageConfig struct {
 type DatasourcesConfig map[string]StorageConfig
 ```
 
-**YAML設定例:**
+**YAML設定例 (`application.yaml`):**
 ```yaml
 surfin:
-  # ... その他のフレームワーク共通設定
-  adapter: # アダプターの設定
-    storage: # データストレージアダプターの設定
-      local_storage: # ★変更: ローカルストレージアダプターの設定名を local_storage に変更
-        type: "local" # タイプを"local"に設定
-        base_dir: "/tmp/surfin_batch_data" # ローカルファイルが保存されるディレクトリのパス
+  # バッチ処理に関する設定
+  batch:
+    polling_interval_seconds: 3600
+    api_endpoint: "https://api.open-meteo.com/v1"
+    api_key: ""
+    job_name: "weatherJob"
+    retry:
+      max_attempts: 3
+      initial_interval: 1
+      max_interval: 10
+      factor: 2
+      circuit_breaker_threshold: 3
+      circuit_breaker_reset_interval: 60
+    item_retry:
+      max_attempts: 3
+      retryable_exceptions: ["io.EOF", "net.OpError"]
+    item_skip:
+      skip_limit: 5
+      skippable_exceptions: ["json.UnmarshalTypeError"]
+    chunk_size: 50
 
-    # Batch framework settings
-    batch:
-      polling_interval_seconds: 3600 # Polling interval (seconds)
-      api_endpoint: "https://api.open-meteo.com/v1" # Open-Meteo API base URL
-      api_key: ""
-      job_name: "weatherJob"
-      # Step-level retry settings (for the entire chunk process)
-      retry:
-        max_attempts: 3
-        initial_interval: 1
-        max_interval: 10
-        factor: 2
-        circuit_breaker_threshold: 3
-        circuit_breaker_reset_interval: 60
-      # Item-level retry settings
-      item_retry:
-        max_attempts: 3
-        retryable_exceptions: ["io.EOF", "net.OpError"]
-      # Item-level skip settings
-      item_skip:
-        skip_limit: 5
-        skippable_exceptions: ["json.UnmarshalTypeError"]
-      chunk_size: 50 # Default chunk size.
-
-    # System-wide settings
-    system:
-      timezone: "Asia/Tokyo"
-      logging:
-        level: "DEBUG"
-        format: "json" # Default log format is JSON.
+  # システム全体の設定
+  system:
+    timezone: "Asia/Tokyo"
+    logging:
+      level: "DEBUG"
+      format: "json"
       
-    # Infrastructure settings
-    infrastructure:
-      job_repository_db_ref: "metadata" # DB connection name used by JobRepository
+  # インフラストラクチャ関連の設定
+  infrastructure:
+    job_repository_db_ref: "metadata"
+
+  # セキュリティ関連の設定
+  security:
+    masked_parameter_keys: ["password", "secret"]
+
+  # 各種アダプターの設定
+  adapter:
+    # ストレージアダプターの設定
+    storage:
+      # GCSストレージ接続 'gcs_storage' の設定
+      gcs_storage:
+        type: "gcs"                  # ストレージのタイプ。GCSアダプターを使用する場合は "gcs" を指定。
+        bucket_name: "your-gcs-bucket-name" # デフォルトで操作するGCSバケット名。
+        credentials_file: ""         # サービスアカウントキーファイルへのパス。
+                                     # 空文字列の場合、Google Cloud SDKのデフォルト認証メカニズム（環境変数、GCP環境のサービスアカウントなど）を使用。
+                                     # 例: "/path/to/your/service-account-key.json"
+      # ローカルファイルシステム接続 'local_storage' の設定
+      local_storage:
+        type: "local"                # ストレージのタイプ。ローカルファイルシステムアダプターを使用する場合は "local" を指定。
+        base_dir: "/tmp/surfin_batch_data" # ローカルファイルが保存されるベースディレクトリのパス。
+                                     # このディレクトリ以下でファイル操作が行われる。
+
+    # データベースアダプターの設定 (例: metadata, workload)
+    database:
+      # ... 既存のデータベース設定 ...
 ```
+
+**設定項目の解説:**
+
+`surfin.adapter.storage` 以下に、名前付きのストレージ接続を複数定義できます。各接続は `pkg/batch/adapter/storage/config.StorageConfig` 構造体として解釈されます。
+
+*   **`<connection_name>`**: ストレージ接続の一意な名前（例: `gcs_storage`, `local_storage`）。この名前は、アプリケーションコード内で特定のストレージ接続を要求する際に使用されます。
+    *   **`type`**:
+        *   **`gcs`**: Google Cloud Storage アダプターを使用することを示します。
+        *   **`local`**: ローカルファイルシステムアダプターを使用することを示します。
+        *   将来的に `s3`, `azure_blob` などが追加される可能性があります。
+    *   **`bucket_name`**:
+        *   GCSアダプターの場合: デフォルトで操作対象となるGCSバケットの名前を指定します。`Upload` や `Download` メソッドでバケット名が明示的に指定されない場合、この値が使用されます。
+        *   ローカルアダプターの場合: オプションです。指定された場合、`base_dir` の直下にこの名前のディレクトリが作成され、その中でファイル操作が行われます。
+    *   **`credentials_file`**:
+        *   GCSアダプターの場合: Google Cloud サービスアカウントキー（JSON形式）のファイルパスを指定します。このファイルに記載された認証情報を使用してGCSにアクセスします。
+        *   **空文字列 (`""`) の場合**: Google Cloud SDKのデフォルト認証メカニズムが使用されます。これは、`GOOGLE_APPLICATION_CREDENTIALS` 環境変数、`gcloud auth application-default login` で設定された認証情報、またはGCP環境（Cloud Run, GKEなど）に紐付けられたサービスアカウントの権限が自動的に利用されることを意味します。本番環境ではこのデフォルト認証が推奨されます。
+    *   **`base_dir`**:
+        *   ローカルアダプターの場合: ローカルファイルシステム上でファイル操作を行う際のルートディレクトリのパスを指定します。このパス以下でのみファイルへのアクセスが許可されます。
 
 ## 8. 考慮事項
 

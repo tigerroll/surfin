@@ -24,13 +24,13 @@
     	"io"
 
     	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
-    	storageConfig "github.com/tigerroll/surfin/pkg/batch/adapter/storage/config"
+    	storageConfig "github.com/tigerroll/surfin/pkg/batch/adapter/storage/config" // 追加: storageConfig をインポート
     )
 
     // StorageExecutor は汎用的なストレージ操作を定義します。
     // StorageAdapter に埋め込まれ、具体的なストレージ操作を提供します。
     type StorageExecutor interface {
-    	Upload(ctx context.Context, bucket, objectName string, data io.Reader, contentType string) error
+    	Upload(ctx context.Context, bucket, objectName string, data io.Reader, contentType string) error // 変更なし
     	Download(ctx context.Context, bucket, objectName string) (io.ReadCloser, error)
     	ListObjects(ctx context.Context, bucket, prefix string, fn func(objectName string) error) error
     	DeleteObject(ctx context.Context, bucket, objectName string) error
@@ -40,8 +40,8 @@
     // coreAdapter.ResourceConnection と StorageExecutor を埋め込み、リソース接続としての機能と具体的なストレージ操作を提供します。
     type StorageAdapter interface {
     	coreAdapter.ResourceConnection // Close(), Type(), Name() を継承
-    	StorageExecutor                // Upload(), Download(), ListObjects(), DeleteObject() を継承
-
+    	StorageExecutor                // Inherits Upload(), Download(), ListObjects(), DeleteObject()
+    
     	Config() storageConfig.StorageConfig
     }
 
@@ -69,7 +69,7 @@
     	// ResolveStorageConnection は指定された名前の StorageAdapter 接続インスタンスを解決します。
     	// 返される接続が有効であり、必要に応じて再確立されることを保証します。
     	ResolveStorageConnection(ctx context.Context, name string) (StorageAdapter, error)
-
+    
     	// ResolveStorageConnectionName は実行コンテキストに基づいてデータストレージ接続の名前を解決します。
     	// jobExecution と stepExecution はモデルパッケージとの循環依存を避けるため interface{} として渡されます。
     	ResolveStorageConnectionName(ctx context.Context, jobExecution interface{}, stepExecution interface{}, defaultName string) (string, error)
@@ -466,7 +466,15 @@
         var tempCfg struct {
             Type string `yaml:"type"`
         }
-        if err := mapstructure.Decode(namedConfig, &tempCfg); err != nil {
+        decoderConfig := &mapstructure.DecoderConfig{
+            Result:  &tempCfg,
+            TagName: "yaml",
+        }
+        decoder, err := mapstructure.NewDecoder(decoderConfig)
+        if err != nil {
+            return nil, fmt.Errorf("failed to create decoder for storage type: %w", err)
+        }
+        if err := decoder.Decode(namedConfig); err != nil {
             return nil, fmt.Errorf("failed to decode storage type for '%s': %w", name, err)
         }
 
@@ -508,13 +516,18 @@
 
     // Module は GCS ストレージアダプターの Fx モジュールです。
     var Module = fx.Options(
-        fx.Provide(NewGCSProvider),
-        fx.Provide(func(providers []storageAdapter.StorageProvider, cfg *coreConfig.Config) storageAdapter.StorageConnectionResolver {
-            return NewGCSConnectionResolver(providers, cfg)
-        }),
-        fx.Provide(func(p *GCSProvider) storageAdapter.StorageProvider {
-            return p // GCSProviderをStorageProviderとして提供
-        }),
+        // GCSProviderをStorageProviderとして提供し、storage_providersグループに含める
+        fx.Provide(fx.Annotate( // 変更: fx.Annotate を使用
+            NewGCSProvider,
+            fx.As(new(storageAdapter.StorageProvider)), // StorageProviderインターフェースとして提供
+            fx.ResultTags(`group:"storage_providers"`), // Fxが[]storage.StorageProviderに収集するためのタグ
+        )),
+        // GCSConnectionResolverを提供し、storage_providersグループのプロバイダを注入する
+        fx.Provide(fx.Annotate( // 変更: fx.Annotate を使用
+            NewGCSConnectionResolver,
+            fx.As(new(storageAdapter.StorageConnectionResolver)), // StorageConnectionResolverインターフェースとして提供
+            fx.ParamTags(`group:"storage_providers"`), // グループ内の全てのプロバイダを注入
+        )),
     )
     ```
 *   **テスト方法**:
@@ -559,8 +572,7 @@
     // ... (省略) ...
 
     // Define Fx options for database providers. All GORM-based providers are included here.
-    // [ここから変更]
-    adapterProviderOptions := []fx.Option{ // 変数名を変更
+    adapterProviderOptions := []fx.Option{
         // gormmodule.Module is removed as NewGormTransactionManagerFactory is already provided in internal/app/module.go.
         mysql.Module,
         postgres.Module,
@@ -571,7 +583,6 @@
     // Run the application.
     // Cast embeddedConfig and embeddedJSL to their respective type aliases and add jobDoneChan.
     app.RunApplication(ctx, envFilePath, config.EmbeddedConfig(embeddedConfig), jsl.JSLDefinitionBytes(embeddedJSL), applicationMigrationsFS, adapterProviderOptions, jobDoneChan)
-    // [ここまで変更]
     // Exit the process with exit code 0 after application execution completes.
     os.Exit(0)
     ```
