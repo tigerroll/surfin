@@ -396,12 +396,14 @@ func NewGenericParquetExportTasklet[T any](
 // This builder function allows the batch framework to dynamically create [GenericParquetExportTasklet] instances.
 //
 // Parameters:
-//   dbConnectionResolver: Resolver for database connections.
-//   storageConnectionResolver: Resolver for storage connections.
-//   itemPrototype: A pointer to a zero-value instance of the item type for schema reflection.
+//
+//	dbConnectionResolver: Resolver for database connections.
+//	storageConnectionResolver: Resolver for storage connections.
+//	itemPrototype: A pointer to a zero-value instance of the item type for schema reflection.
 //
 // Returns:
-//   A function that can create a [GenericParquetExportTasklet] instance based on properties.
+//
+//	A function that can create a [GenericParquetExportTasklet] instance based on properties.
 func NewGenericParquetExportTaskletBuilder[T any](
 	dbConnectionResolver database.DBConnectionResolver,
 	storageConnectionResolver storage.StorageConnectionResolver,

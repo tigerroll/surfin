@@ -204,11 +204,11 @@ type NewStorageConnectionsParams struct {
 // NewStorageConnections establishes and manages storage connections for all configured data sources,
 // providing them as maps of connections and providers.
 func NewStorageConnections(p NewStorageConnectionsParams) (
-	map[string]storage.StorageConnection,
+	map[string]storage.StorageAdapter,
 	map[string]storage.StorageProvider,
 	error,
 ) {
-	allConnections := make(map[string]storage.StorageConnection)
+	allConnections := make(map[string]storage.StorageAdapter)
 	allProviders := make(map[string]storage.StorageProvider)
 
 	// Map providers by Storage type

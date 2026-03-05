@@ -31,12 +31,12 @@ type localAdapter struct {
 	name string
 }
 
-// Verify that localAdapter implements the storage.StorageConnection interface.
-var _ storageAdapter.StorageConnection = (*localAdapter)(nil)
+// Verify that localAdapter implements the storage.StorageAdapter interface.
+var _ storageAdapter.StorageAdapter = (*localAdapter)(nil)
 
 // NewLocalAdapter creates a new localAdapter instance.
 // It validates the BaseDir configuration and attempts to create it if it doesn't exist.
-func NewLocalAdapter(cfg storageConfig.StorageConfig, name string) (storageAdapter.StorageConnection, error) {
+func NewLocalAdapter(cfg storageConfig.StorageConfig, name string) (storageAdapter.StorageAdapter, error) {
 	if cfg.BaseDir == "" {
 		return nil, fmt.Errorf("local storage adapter '%s': BaseDir must be specified in configuration", name)
 	}
@@ -234,7 +234,7 @@ func (a *localAdapter) resolvePath(bucket, objectName string) (string, error) {
 // LocalProvider implements the storage.StorageProvider interface for managing local file system connections.
 type LocalProvider struct {
 	cfg         *coreConfig.Config
-	connections map[string]storageAdapter.StorageConnection
+	connections map[string]storageAdapter.StorageAdapter
 	mu          sync.RWMutex
 }
 
@@ -242,13 +242,13 @@ type LocalProvider struct {
 func NewLocalProvider(cfg *coreConfig.Config) storageAdapter.StorageProvider {
 	return &LocalProvider{
 		cfg:         cfg,
-		connections: make(map[string]storageAdapter.StorageConnection),
+		connections: make(map[string]storageAdapter.StorageAdapter),
 	}
 }
 
-// GetConnection retrieves a StorageConnection connection by the given name.
+// GetConnection retrieves a StorageAdapter connection by the given name.
 // It creates a new connection if one does not already exist for the given name.
-func (p *LocalProvider) GetConnection(name string) (storageAdapter.StorageConnection, error) {
+func (p *LocalProvider) GetConnection(name string) (storageAdapter.StorageAdapter, error) {
 	p.mu.RLock()
 	conn, ok := p.connections[name]
 	p.mu.RUnlock()
@@ -334,7 +334,7 @@ func (p *LocalProvider) Type() string {
 }
 
 // ForceReconnect forces the closure and re-establishment of an existing connection with the specified name.
-func (p *LocalProvider) ForceReconnect(name string) (storageAdapter.StorageConnection, error) {
+func (p *LocalProvider) ForceReconnect(name string) (storageAdapter.StorageAdapter, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -378,9 +378,9 @@ func (r *LocalConnectionResolver) ResolveConnectionName(ctx context.Context, job
 	return defaultName, nil
 }
 
-// ResolveStorageConnection resolves a StorageConnection connection instance by the given name.
+// ResolveStorageConnection resolves a StorageAdapter connection instance by the given name.
 // This method is responsible for ensuring that the returned connection is valid and re-established if necessary.
-func (r *LocalConnectionResolver) ResolveStorageConnection(ctx context.Context, name string) (storageAdapter.StorageConnection, error) {
+func (r *LocalConnectionResolver) ResolveStorageConnection(ctx context.Context, name string) (storageAdapter.StorageAdapter, error) {
 	// Determine the connection type from the configuration.
 	// The AdapterConfigs field is an interface{}, so type assertion is needed.
 	rawAdapterConfig, ok := r.cfg.Surfin.AdapterConfigs.(map[string]interface{})
@@ -399,7 +399,15 @@ func (r *LocalConnectionResolver) ResolveStorageConnection(ctx context.Context, 
 	var tempCfg struct {
 		Type string `yaml:"type"` // Use yaml tag for decoding.
 	}
-	if err := mapstructure.Decode(namedConfig, &tempCfg); err != nil {
+	decoderConfig := &mapstructure.DecoderConfig{
+		Result:  &tempCfg,
+		TagName: "yaml",
+	}
+	decoder, err := mapstructure.NewDecoder(decoderConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create decoder for storage type: %w", err)
+	}
+	if err := decoder.Decode(namedConfig); err != nil {
 		return nil, fmt.Errorf("failed to decode storage type for '%s': %w", name, err)
 	}
 
