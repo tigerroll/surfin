@@ -57,8 +57,6 @@ type ParquetWriter[T any] struct {
 	storageConn storage.StorageAdapter
 	// bufferedItems stores items in memory, grouped by their partition key. The map key is the partition key (e.g., "dt=YYYY-MM-DD"), and the value is a slice of items belonging to that partition.
 	bufferedItems map[string][]T
-	// totalRecordsBuffered tracks the total number of items currently held in the buffer across all partitions.
-	totalRecordsBuffered int64
 	// stepExecutionContext holds the current execution context for the step, provided by the framework.
 	// It can be used to store and retrieve state relevant to the step's execution.
 	stepExecutionContext model.ExecutionContext
@@ -133,7 +131,6 @@ func NewParquetWriter[T any](
 		itemPrototype:             itemPrototype,
 		partitionKeyFunc:          partitionKeyFunc,
 		bufferedItems:             make(map[string][]T), // Initialize
-		totalRecordsBuffered:      0,                    // Initialize
 		partitionSequence:         make(map[string]int), // Initialize
 	}, nil
 }
@@ -200,7 +197,6 @@ func (w *ParquetWriter[T]) Open(ctx context.Context, ec model.ExecutionContext) 
 
 	// Initialize/clear internal buffers for item accumulation.
 	w.bufferedItems = make(map[string][]T)
-	w.totalRecordsBuffered = 0
 
 	logger.Infof("ParquetWriter '%s': Opened successfully. Target storage: '%s', Base directory: '%s'", w.name, w.config.StorageRef, w.config.OutputBaseDir)
 	return nil
@@ -239,19 +235,16 @@ func (w *ParquetWriter[T]) Write(ctx context.Context, items []T) error {
 
 		// Add the item to the internal bufferedItems map, grouped by partition key.
 		w.bufferedItems[partitionKey] = append(w.bufferedItems[partitionKey], item)
-
-		// Increment the total count of buffered records.
-		w.totalRecordsBuffered++
 	}
 
-	logger.Debugf("ParquetWriter '%s': Buffered %d items. Total buffered: %d.", w.name, len(items), w.totalRecordsBuffered)
+	logger.Debugf("ParquetWriter '%s': Buffered %d items.", w.name, len(items))
 	// No actual Parquet file writing or storage upload occurs in this method; items are just buffered.
 	return nil
 }
 
-// Close finalizes the writing process by converting all buffered data into Parquet files and uploading them to the configured storage.
-// It iterates through each partition, creates a Parquet file for the items in that partition, and then uploads the file.
-// Any errors encountered during this process are aggregated and returned as a single [multierror.Error].
+// Flush writes all currently buffered items to Parquet files in the configured storage.
+// This method is typically called periodically to control memory usage and ensure data is written
+// to the output destination before the final [Close].
 //
 // Parameters:
 //
@@ -259,26 +252,14 @@ func (w *ParquetWriter[T]) Write(ctx context.Context, items []T) error {
 //
 // Returns:
 //
-//	error: An error if any part of the finalization or upload process fails. This can be a [multierror.Error]
+//	error: An error if any part of the flushing or upload process fails. This can be a [multierror.Error]
 //	       if multiple errors occur across different partitions.
-func (w *ParquetWriter[T]) Close(ctx context.Context) error {
-	logger.Debugf("ParquetWriter '%s' Close called. Total records buffered: %d.", w.name, w.totalRecordsBuffered)
+func (w *ParquetWriter[T]) Flush(ctx context.Context) error {
+	logger.Debugf("ParquetWriter '%s' Flush called. Items in buffer: %d.", w.name, len(w.bufferedItems))
 
 	// Skip processing if no records are buffered.
-	if w.totalRecordsBuffered == 0 {
-		logger.Infof("ParquetWriter '%s': No records buffered, skipping Parquet file generation.", w.name)
-		// If a storage connection was established in Open, close it here.
-		if w.storageConn != nil {
-			if err := w.storageConn.Close(); err != nil { // Ensure the connection is closed even if no data was written.
-				return exception.NewBatchError(
-					"writer",
-					fmt.Sprintf("Failed to close storage connection for ParquetWriter '%s': %v", w.name, err),
-					err,
-					false,
-					false,
-				)
-			}
-		}
+	if len(w.bufferedItems) == 0 {
+		logger.Debugf("ParquetWriter '%s': No items buffered, skipping Parquet file generation during Flush.", w.name)
 		return nil
 	}
 
@@ -434,24 +415,54 @@ outerLoop: // Label for the outer loop, allowing to continue to the next partiti
 		}
 	}
 
-	// After processing all partitions, clear the internal buffer and reset the record count.
+	// After processing all partitions, clear the internal buffer.
 	w.bufferedItems = make(map[string][]T)
-	w.totalRecordsBuffered = 0
 
+	return multiErr
+}
+
+// Close finalizes the writing process by converting all buffered data into Parquet files and uploading them to the configured storage.
+// It iterates through each partition, creates a Parquet file for the items in that partition, and then uploads the file.
+// Any errors encountered during this process are aggregated and returned as a single [multierror.Error].
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//
+// Returns:
+//
+//	error: An error if any part of the finalization or upload process fails. This can be a [multierror.Error]
+//	       if multiple errors occur across different partitions.
+func (w *ParquetWriter[T]) Close(ctx context.Context) error {
+	logger.Debugf("ParquetWriter '%s' Close called.", w.name)
+
+	// Flush any remaining buffered items before closing.
+	// This ensures that any items accumulated since the last explicit Flush call are written.
+	var flushErr error
+	if err := w.Flush(ctx); err != nil {
+		flushErr = err
+		logger.Errorf("ParquetWriter '%s': Error during final Flush in Close: %v", w.name, err)
+	}
+
+	var closeErr error
 	// Finally, close the resolved storage connection.
 	if w.storageConn != nil {
 		if err := w.storageConn.Close(); err != nil {
-			multiErr = multierror.Append(multiErr, exception.NewBatchError(
+			closeErr = exception.NewBatchError(
 				"writer",
 				fmt.Sprintf("Failed to close storage connection for ParquetWriter '%s': %v", w.name, err),
 				err,
 				false,
 				false,
-			))
+			)
 		}
 	}
 
-	return multiErr
+	// Prioritize flush errors over close errors.
+	if flushErr != nil {
+		return flushErr
+	}
+	return closeErr
 }
 
 // getCompressionCodec converts a string representation of a compression type (e.g., "SNAPPY", "GZIP", "NONE")
@@ -552,5 +563,8 @@ func (w *ParquetWriter[T]) GetResourcePath() string {
 	return w.config.OutputBaseDir
 }
 
-// Verify that ParquetWriter satisfies the port.ItemWriter interface at compile time.
+// Verify that [ParquetWriter] satisfies the [port.ItemWriter] interface at compile time.
 var _ port.ItemWriter[any] = (*ParquetWriter[any])(nil)
+
+// Verify that [ParquetWriter] satisfies the [port.ItemFlusher] interface at compile time.
+var _ port.ItemFlusher = (*ParquetWriter[any])(nil)
