@@ -322,6 +322,19 @@ type ItemWriter[I any] interface {
 	GetResourcePath() string
 }
 
+// ItemFlusher is an interface that provides the capability to flush a write buffer.
+type ItemFlusher interface {
+	// Flush writes all currently buffered data to the underlying output destination,
+	// thereby releasing memory.
+	//
+	// Parameters:
+	//   ctx: The context for the operation.
+	//
+	// Returns:
+	//   error: An error if flushing fails.
+	Flush(ctx context.Context) error
+}
+
 // Tasklet is the interface for a step that performs a single operation.
 // It corresponds to JSR352's Tasklet.
 type Tasklet interface {

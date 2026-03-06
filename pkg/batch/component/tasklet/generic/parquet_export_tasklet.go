@@ -620,6 +620,26 @@ func (t *GenericParquetExportTasklet[T]) Execute(ctx context.Context, stepExecut
 					return // Error occurred, stop writing
 				}
 				batch = make([]T, 0, t.config.ReadBufferSize) // Reset batch
+
+				// Explicitly flush the ParquetWriter after each batch is written.
+				// This helps control memory usage by writing buffered data to storage.
+				if flusher, ok := t.parquetWriter.(port.ItemFlusher); ok {
+					if err := flusher.Flush(ctx); err != nil {
+						select {
+						case errChan <- exception.NewBatchError(
+							"tasklet",
+							fmt.Sprintf("Failed to flush ParquetWriter for step '%s': %v", stepExecution.StepName, err),
+							err,
+							false,
+							false,
+						):
+						case <-ctx.Done():
+						}
+						return // Error occurred, stop writing
+					}
+				} else {
+					logger.Warnf("ParquetWriter for step '%s' does not implement ItemFlusher. Memory usage might be high.", stepExecution.StepName)
+				}
 			}
 		}
 
@@ -637,6 +657,23 @@ func (t *GenericParquetExportTasklet[T]) Execute(ctx context.Context, stepExecut
 				case <-ctx.Done():
 				}
 				return
+			}
+			// After writing the final batch, ensure it's flushed.
+			// This ensures all remaining data is written to storage.
+			if flusher, ok := t.parquetWriter.(port.ItemFlusher); ok {
+				if err := flusher.Flush(ctx); err != nil {
+					select {
+					case errChan <- exception.NewBatchError(
+						"tasklet",
+						fmt.Sprintf("Failed to flush final batch from ParquetWriter for step '%s': %v", stepExecution.StepName, err),
+						err,
+						false,
+						false,
+					):
+					case <-ctx.Done():
+					}
+					return
+				}
 			}
 		}
 		logger.Debugf("ParquetWriter for step '%s' finished writing all items.", stepExecution.StepName)
