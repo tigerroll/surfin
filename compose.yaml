@@ -1,7 +1,7 @@
 services:
   surfin:
     container_name: surfin
-    build: container/development
+    build: container/development/surfin
     platform: linux/amd64
     ports:
       - "4000:4000"
@@ -56,6 +56,19 @@ services:
       POSTGRES_SSLMODE: disable
       TZ: 'Asia/Tokyo'
     restart: always
+    networks:
+      - surfin-network
+
+  wiremock:
+    container_name: wiremock
+    image: "wiremock/wiremock:latest"
+    ports:
+      - "8080:8080"
+    privileged: true
+    volumes:
+      - type: bind
+        source: container/development/wiremock/mappings
+        target: /home/wiremock/mappings
     networks:
       - surfin-network
 

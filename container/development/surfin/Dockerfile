@@ -56,6 +56,7 @@ RUN pyenv install 3.11.9 && \
 # Create a virtual environment and install aider-chat into it
 RUN eval "$(pyenv init -)" && \
     python -m venv /opt/venv && \
+    /opt/venv/bin/pip config --global set global.index-url https://pypi.flatt.tech/simple/ && \
     /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
     /opt/venv/bin/pip install aider-chat
 
@@ -110,6 +111,9 @@ RUN echo 'eval "$(pyenv init -)"' >> /etc/profile.d/pyenv.sh
 
 # Configure goenv to initialize automatically for login shells for convenience
 RUN echo 'eval "$(goenv init -)"' >> /etc/profile.d/goenv.sh
+
+# Use Takumi Guard as a security proxy to prevent PyPI supply chain attacks.
+RUN /opt/venv/bin/pip config --global set global.index-url https://pypi.flatt.tech/simple/
 
 WORKDIR /opt/go_project
 
