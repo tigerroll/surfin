@@ -1,7 +1,7 @@
 surfin:
   adapter:
     database:
-      # Framework metadata database (Postgres)
+      # Configuration for the framework metadata database (Postgres)
       metadata:
         type: "postgres"
         host: "postgres"
@@ -17,7 +17,7 @@ surfin:
           max_idle_conns: 5
           conn_max_lifetime_minutes: 5
 
-      # Application workload database (Postgres)
+      # Configuration for the application workload database (Postgres)
       workload:
         type: "postgres"
         host: "postgres"
@@ -33,7 +33,7 @@ surfin:
           max_idle_conns: 5
           conn_max_lifetime_minutes: 5
 
-      # Application workload database (MySQL)
+      # Configuration for the application workload database (MySQL)
       mysql:
         type: "mysql"
         host: "mysql"
@@ -49,10 +49,10 @@ surfin:
           max_idle_conns: 5
           conn_max_lifetime_minutes: 5
 
-      # SQLite database for local development/testing
+      # Configuration for the SQLite database (local development/testing)
       sqlite:
         type: "sqlite"
-        database: "surfin.db" # File path
+        database: "surfin.db" # File path for the SQLite database.
         pool:
           max_open_conns: 1
           max_idle_conns: 1
@@ -67,13 +67,16 @@ surfin:
         bucket_name: "${GCS_BUCKET_NAME}"
         credentials_file: ""
 
+    webproxy:
+      openmeteo:
+        type: "NONE" # Type of authentication for the web proxy. "NONE" means no authentication is applied.
+        api_endpoint: "https://api.open-meteo.com/v1"
+
   # Batch framework settings
   batch:
-    polling_interval_seconds: 3600 # Polling interval (seconds)
-    api_endpoint: "https://api.open-meteo.com/v1" # Open-Meteo API base URL
-    api_key: ""
+    polling_interval_seconds: 3600 # Polling interval for job status (in seconds).
     job_name: "weatherJob"
-    # Step-level retry settings (for the entire chunk process)
+    # Step-level retry settings (applies to the entire chunk process).
     retry:
       max_attempts: 3
       initial_interval: 1
@@ -81,23 +84,23 @@ surfin:
       factor: 2
       circuit_breaker_threshold: 3
       circuit_breaker_reset_interval: 60
-    # Item-level retry settings
+    # Item-level retry settings.
     item_retry:
       max_attempts: 3
       retryable_exceptions: ["io.EOF", "net.OpError"]
-    # Item-level skip settings
+    # Item-level skip settings.
     item_skip:
       skip_limit: 5
       skippable_exceptions: ["json.UnmarshalTypeError"]
-    chunk_size: 50 # Default chunk size.
+    chunk_size: 50 # Default chunk size for chunk-oriented steps.
 
-  # System-wide settings
+  # System-wide settings.
   system:
     timezone: "Asia/Tokyo"
     logging:
       level: "DEBUG"
-      format: "json" # Default log format is JSON.
+      format: "json" # Default log format (e.g., "json", "text").
       
-  # Infrastructure settings
+  # Infrastructure settings.
   infrastructure:
-    job_repository_db_ref: "metadata" # DB connection name used by JobRepository
+    job_repository_db_ref: "metadata" # Database connection name used by the JobRepository.

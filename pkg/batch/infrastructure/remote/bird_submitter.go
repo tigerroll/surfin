@@ -42,7 +42,6 @@ func NewBirdClientSubmitter(p BirdClientSubmitterParams) port.RemoteJobSubmitter
 	}
 
 	return &BirdClientSubmitter{
-		apiEndpoint:     batchConfig.APIEndpoint,
 		jobRepository:   p.JobRepository,
 		pollingInterval: pollingInterval,
 	}

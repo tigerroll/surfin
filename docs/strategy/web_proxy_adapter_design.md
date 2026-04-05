@@ -72,7 +72,7 @@
 
 // WebProxyConfig は Web Proxy の設定を定義します。
 type WebProxyConfig struct {
-	Type         string `yaml:"type"`             // 認証タイプ (例: "HMAC", "OAUTH2", "APIKEY")
+	Type         string `yaml:"type"`             // 認証タイプ (例: "HMAC", "OAUTH2", "APIKEY", "MOCK_SERVER", "NONE")
 	Algorithm    string `yaml:"algorithm,omitempty"` // HMAC の署名アルゴリズム (例: "RSASSA-PSS")
 	PrivateKey   string `yaml:"private_key,omitempty"` // HMAC の秘密鍵 (環境変数から読み込む)
 	PublicKeyId  string `yaml:"public_key_id,omitempty"` // HMAC の公開鍵ID
@@ -81,10 +81,12 @@ type WebProxyConfig struct {
 	ClientId     string `yaml:"client_id,omitempty"` // OAuth2 のクライアントID
 	ClientSecret string `yaml:"client_secret,omitempty"` // OAuth2 のクライアントシークレット
 	TokenUrl     string `yaml:"token_url,omitempty"` // OAuth2 のトークンエンドポイントURL
-	Key          string `yaml:"key,omitempty"` // API Key の値
-	Placement    string `yaml:"placement,omitempty"` // API Key の配置場所 ("header", "query", or "auth_header")
-	KeyName      string `yaml:"key_name,omitempty"` // API Key のヘッダー名またはクエリパラメータ名
-	// その他の認証方式や共通設定を追加可能
+	Key          string `yaml:"key,omitempty"`           // API Key の値
+	Placement    string `yaml:"placement,omitempty"`     // API Key の配置場所 ("header", "query", or "auth_header")
+	KeyName      string `yaml:"key_name,omitempty"`      // API Key のヘッダー名またはクエリパラメータ名
+	APIEndpoint  string `yaml:"api_endpoint,omitempty"`  // プロキシするAPIのエンドポイントURL
+	MockResponse string `yaml:"mock_response,omitempty"` // MOCK_SERVER 用の固定レスポンスボディ
+	MockStatus   int    `yaml:"mock_status,omitempty"`   // MOCK_SERVER 用の固定HTTPステータスコード
 }
 
 // pkg/batch/core/config/config.go
