@@ -69,7 +69,7 @@ func NewWebProxyProviderFromConfig(cfg *config.Config) (*WebProxyProvider, error
 
 			// Verify that the Type field of WebProxyConfig is a recognized Web Proxy authentication type.
 			// This distinguishes it from other adapter configurations.
-			if wpCfg.Type == "HMAC" || wpCfg.Type == "OAUTH2" || wpCfg.Type == "APIKEY" || wpCfg.Type == "MOCK_SERVER" || wpCfg.Type == "NONE" {
+			if wpCfg.Type == "HMAC" || wpCfg.Type == "OAUTH2" || wpCfg.Type == "APIKEY" || wpCfg.Type == "NONE" {
 				webProxyConfigs[name] = wpCfg
 			} else {
 				logger.Warnf("webproxy: Unknown or unsupported WebProxyConfig type '%s' for '%s'. Skipping.", wpCfg.Type, name)
