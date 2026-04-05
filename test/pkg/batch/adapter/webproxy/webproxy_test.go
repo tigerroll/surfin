@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/webproxy"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/webproxy/config"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 )
 
 // MockRoundTripper is a mock implementation of http.RoundTripper.

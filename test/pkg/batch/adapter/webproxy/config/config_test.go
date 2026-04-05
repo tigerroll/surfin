@@ -83,4 +83,3 @@ region: "us-east-1"
 	assert.Equal(t, "key-123", cfg.PublicKeyId)
 	assert.Equal(t, "us-east-1", cfg.Region)
 }
-

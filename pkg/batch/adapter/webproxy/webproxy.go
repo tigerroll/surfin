@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/webproxy/config"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 )
 
 // ContextKeySignaturePayload is the key used to store the payload for HMAC signing in context.Context.
@@ -45,12 +45,14 @@ type WebProxyConnection struct {
 // NewWebProxyConnection creates a new WebProxyConnection.
 //
 // Parameters:
-//   name: The name of the connection.
-//   cfg: The WebProxyConfig for this connection.
+//
+//	name: The name of the connection.
+//	cfg: The WebProxyConfig for this connection.
 //
 // Returns:
-//   A new WebProxyConnection instance.
-//   An error if private key parsing or configuration validation fails.
+//
+//	A new WebProxyConnection instance.
+//	An error if private key parsing or configuration validation fails.
 func NewWebProxyConnection(name string, cfg config.WebProxyConfig) (*WebProxyConnection, error) {
 	var privateKey *rsa.PrivateKey
 	if cfg.Type == "HMAC" && cfg.PrivateKey != "" {
@@ -105,7 +107,8 @@ func NewWebProxyConnection(name string, cfg config.WebProxyConfig) (*WebProxyCon
 // Type returns the type of the resource.
 //
 // Returns:
-//   The string "webproxy".
+//
+//	The string "webproxy".
 func (c *WebProxyConnection) Type() string {
 	return "webproxy"
 }
@@ -113,7 +116,8 @@ func (c *WebProxyConnection) Type() string {
 // Name returns the connection name.
 //
 // Returns:
-//   The name of the connection.
+//
+//	The name of the connection.
 func (c *WebProxyConnection) Name() string {
 	return c.name
 }
@@ -121,7 +125,8 @@ func (c *WebProxyConnection) Name() string {
 // Close closes the connection.
 //
 // Returns:
-//   An error if closing idle connections fails.
+//
+//	An error if closing idle connections fails.
 func (c *WebProxyConnection) Close() error {
 	// Close idle connections of the HTTP client.
 	if c.client != nil && c.client.Transport != nil {
@@ -135,7 +140,8 @@ func (c *WebProxyConnection) Close() error {
 // GetClient returns the http.Client associated with this connection.
 //
 // Returns:
-//   The *http.Client instance.
+//
+//	The *http.Client instance.
 func (c *WebProxyConnection) GetClient() *http.Client {
 	return c.client
 }
@@ -147,9 +153,9 @@ type WebProxyRoundTripper struct {
 	cfg  config.WebProxyConfig
 
 	// OAuth2-related fields
-	oauth2Token    string
+	oauth2Token     string
 	oauth2ExpiresAt time.Time
-	oauth2Mutex    sync.Mutex // Mutex to prevent race conditions during token acquisition.
+	oauth2Mutex     sync.Mutex // Mutex to prevent race conditions during token acquisition.
 
 	// HMAC-related fields
 	hmacPrivateKey *rsa.PrivateKey // Parsed private key.
@@ -158,11 +164,13 @@ type WebProxyRoundTripper struct {
 // RoundTrip processes the request and adds authentication information.
 //
 // Parameters:
-//   req: The HTTP request to process.
+//
+//	req: The HTTP request to process.
 //
 // Returns:
-//   The HTTP response.
-//   An error if authentication fails or the request cannot be sent.
+//
+//	The HTTP response.
+//	An error if authentication fails or the request cannot be sent.
 func (t *WebProxyRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Copy the request to avoid modifying the original.
 	// This is an http.RoundTripper best practice.
@@ -291,10 +299,12 @@ func (t *WebProxyRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 // It safely handles concurrent calls from multiple goroutines.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 //
 // Returns:
-//   An error if token acquisition or refresh fails.
+//
+//	An error if token acquisition or refresh fails.
 func (t *WebProxyRoundTripper) refreshOAuth2Token(ctx context.Context) error {
 	t.oauth2Mutex.Lock()
 	defer t.oauth2Mutex.Unlock()
@@ -367,10 +377,12 @@ type WebProxyProvider struct {
 // This function accepts a map of WebProxyConfig parsed by the Fx module.
 //
 // Parameters:
-//   configs: A map of WebProxyConfig instances, keyed by connection name.
+//
+//	configs: A map of WebProxyConfig instances, keyed by connection name.
 //
 // Returns:
-//   A new WebProxyProvider instance.
+//
+//	A new WebProxyProvider instance.
 func NewWebProxyProvider(configs map[string]config.WebProxyConfig) *WebProxyProvider {
 	return &WebProxyProvider{
 		name:        "webproxy", // Fixed name for the provider.
@@ -382,11 +394,13 @@ func NewWebProxyProvider(configs map[string]config.WebProxyConfig) *WebProxyProv
 // GetConnection retrieves a WebProxyConnection with the specified name.
 //
 // Parameters:
-//   name: The name of the connection to retrieve.
+//
+//	name: The name of the connection to retrieve.
 //
 // Returns:
-//   The ResourceConnection instance.
-//   An error if the configuration for the connection is not found or connection creation fails.
+//
+//	The ResourceConnection instance.
+//	An error if the configuration for the connection is not found or connection creation fails.
 func (p *WebProxyProvider) GetConnection(name string) (coreAdapter.ResourceConnection, error) {
 	p.mu.RLock()
 	conn, ok := p.connections[name]
@@ -421,7 +435,8 @@ func (p *WebProxyProvider) GetConnection(name string) (coreAdapter.ResourceConne
 // CloseAll closes all connections managed by this provider.
 //
 // Returns:
-//   An error if any connection fails to close.
+//
+//	An error if any connection fails to close.
 func (p *WebProxyProvider) CloseAll() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -442,7 +457,8 @@ func (p *WebProxyProvider) CloseAll() error {
 // Type returns the type of the provider.
 //
 // Returns:
-//   The string "webproxy".
+//
+//	The string "webproxy".
 func (p *WebProxyProvider) Type() string {
 	return "webproxy"
 }
@@ -450,7 +466,8 @@ func (p *WebProxyProvider) Type() string {
 // Name returns the name of the provider.
 //
 // Returns:
-//   The name of the provider.
+//
+//	The name of the provider.
 func (p *WebProxyProvider) Name() string {
 	return p.name
 }
@@ -458,10 +475,12 @@ func (p *WebProxyProvider) Name() string {
 // Sha256Sum hashes a byte slice with SHA256.
 //
 // Parameters:
-//   data: The byte slice to hash.
+//
+//	data: The byte slice to hash.
 //
 // Returns:
-//   The 32-byte SHA256 hash.
+//
+//	The 32-byte SHA256 hash.
 func Sha256Sum(data []byte) [32]byte {
 	return sha256.Sum256(data)
 }
@@ -469,7 +488,8 @@ func Sha256Sum(data []byte) [32]byte {
 // CryptoSHA256 returns crypto.SHA256.
 //
 // Returns:
-//   The crypto.Hash value for SHA256.
+//
+//	The crypto.Hash value for SHA256.
 func CryptoSHA256() crypto.Hash {
 	return crypto.SHA256
 }
