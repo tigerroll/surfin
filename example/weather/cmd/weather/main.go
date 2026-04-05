@@ -22,6 +22,7 @@ import (
 
 	"go.uber.org/fx"
 	"gopkg.in/yaml.v3" // yaml package
+	"github.com/tigerroll/surfin/pkg/batch/adapter/webproxy"
 )
 
 // embeddedConfig embeds the content of the application's YAML configuration file (application.yaml).
@@ -84,6 +85,7 @@ func main() {
 		postgres.Module,
 		sqlite.Module, // SQLite module
 		gcs.Module,    // Adds the GCS storage adapter module.
+		webproxy.Module, // WebProxy adapter module
 	}
 
 	// Run the application.

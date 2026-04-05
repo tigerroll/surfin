@@ -19,12 +19,14 @@ import (
 	weather_entity "github.com/tigerroll/surfin/example/weather/internal/domain/entity"
 
 	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
+
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/webproxy"
 )
 
 // HourlyForecastAPIReaderConfig is a configuration struct specific to the Reader (for JSL property binding).
 type HourlyForecastAPIReaderConfig struct {
-	APIEndpoint string `yaml:"apiEndpoint"`
-	APIKey      string `yaml:"apiKey"`
+	WebProxyRef string `yaml:"webProxyRef,omitempty"`
 }
 
 const (
@@ -43,8 +45,8 @@ const (
 type HourlyForecastAPIReader struct {
 	// config holds the reader's specific configuration, typically bound from JSL properties.
 	config *HourlyForecastAPIReaderConfig
-	// client is the HTTP client used to make API requests.
-	client *http.Client
+	// webProxyConn is the WebProxyConnection instance used to make API requests.
+	webProxyConn *webproxy.WebProxyConnection
 	// forecastData stores the entire fetched forecast data from the API.
 	forecastData *weather_entity.OpenMeteoForecast
 	// currentIndex tracks the current position in the forecastData for item-by-item reading.
@@ -63,39 +65,48 @@ type HourlyForecastAPIReader struct {
 // and binds JSL properties to the reader's specific configuration.
 //
 // Parameters:
-//
-//	cfg: The application's global configuration.
-//	resolver: An ExpressionResolver for dynamic property resolution.
-//	properties: A map of properties defined in the JSL for this reader.
+//   cfg: The application's global configuration.
+//   resolver: An ExpressionResolver for dynamic property resolution.
+//   resourceProviders: A map of resource providers for external connections (e.g., webproxy).
+//   properties: A map of properties defined in the JSL for this reader.
 //
 // Returns:
-//
-//	A new HourlyForecastAPIReader instance or an error if configuration binding or validation fails.
+//   A new HourlyForecastAPIReader instance or an error if configuration binding or validation fails.
 func NewHourlyForecastAPIReader(
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
+	resourceProviders map[string]coreAdapter.ResourceProvider,
 	properties map[string]interface{},
 ) (*HourlyForecastAPIReader, error) {
 	// 1. Define configuration struct and set default values.
-	hourlyForecastAPIReaderCfg := &HourlyForecastAPIReaderConfig{
-		APIEndpoint: cfg.Surfin.Batch.APIEndpoint,
-		APIKey:      cfg.Surfin.Batch.APIKey,
-	}
+	hourlyForecastAPIReaderCfg := &HourlyForecastAPIReaderConfig{}
 
 	// 2. Automatic binding of JSL properties.
 	if err := configbinder.BindProperties(properties, hourlyForecastAPIReaderCfg); err != nil {
 		return nil, exception.NewBatchError(ModuleHourlyForecastAPIReader, "Failed to bind properties", err, false, false)
 	}
 
-	// 3. Validation
-	if hourlyForecastAPIReaderCfg.APIEndpoint == "" {
-		return nil, fmt.Errorf("HourlyForecastAPIReaderConfig.APIEndpoint is not configured")
+	var webProxyConn *webproxy.WebProxyConnection
+	if hourlyForecastAPIReaderCfg.WebProxyRef != "" {
+		provider, ok := resourceProviders["webproxy"]
+		if !ok {
+			return nil, exception.NewBatchError(ModuleHourlyForecastAPIReader, fmt.Sprintf("WebProxyProvider not found for ref '%s'", hourlyForecastAPIReaderCfg.WebProxyRef), nil, false, false)
+		}
+		conn, err := provider.GetConnection(hourlyForecastAPIReaderCfg.WebProxyRef)
+		if err != nil {
+			return nil, exception.NewBatchError(ModuleHourlyForecastAPIReader, fmt.Sprintf("Failed to get WebProxyConnection for ref '%s'", hourlyForecastAPIReaderCfg.WebProxyRef), err, false, false)
+		}
+		wpConn, ok := conn.(*webproxy.WebProxyConnection)
+		if !ok {
+			return nil, exception.NewBatchError(ModuleHourlyForecastAPIReader, fmt.Sprintf("Resolved connection for ref '%s' is not a WebProxyConnection", hourlyForecastAPIReaderCfg.WebProxyRef), nil, false, false)
+		}
+		webProxyConn = wpConn
 	}
 
 	return &HourlyForecastAPIReader{
-		config:   hourlyForecastAPIReaderCfg,
-		client:   &http.Client{Timeout: 10 * time.Second},
-		resolver: resolver,
+		config:       hourlyForecastAPIReaderCfg,
+		webProxyConn: webProxyConn,
+		resolver:     resolver,
 		// stepExecutionContext is set during Open.
 		stepExecutionContext: model.NewExecutionContext(), // Initialized (will be overwritten later)
 		readerState:          model.NewExecutionContext(), // Initialize EC for reader-specific state
@@ -103,6 +114,13 @@ func NewHourlyForecastAPIReader(
 }
 
 // Open opens resources and restores state from ExecutionContext.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//   ec: The ExecutionContext to restore state from.
+//
+// Returns:
+//   An error if opening fails.
 func (r *HourlyForecastAPIReader) Open(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
@@ -124,6 +142,13 @@ func (r *HourlyForecastAPIReader) Open(ctx context.Context, ec model.ExecutionCo
 }
 
 // Read reads the next item from the data source.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//
+// Returns:
+//   The next item from the data source, or io.EOF if no more items are available.
+//   An error if reading fails.
 func (r *HourlyForecastAPIReader) Read(ctx context.Context) (any, error) {
 	select {
 	case <-ctx.Done():
@@ -156,6 +181,12 @@ func (r *HourlyForecastAPIReader) Read(ctx context.Context) (any, error) {
 }
 
 // Close releases resources.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//
+// Returns:
+//   An error if closing fails.
 func (r *HourlyForecastAPIReader) Close(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -171,17 +202,31 @@ func (r *HourlyForecastAPIReader) Close(ctx context.Context) error {
 }
 
 // SetExecutionContext sets the ExecutionContext and restores the reader's state.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//   ec: The ExecutionContext to set.
+//
+// Returns:
+//   An error if setting the context or restoring state fails.
 func (r *HourlyForecastAPIReader) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
-	r.stepExecutionContext = ec                          // Set the Step's ExecutionContext
-	return r.restoreReaderStateFromExecutionContext(ctx) // Restore reader state from EC
+	r.stepExecutionContext = ec
+	return r.restoreReaderStateFromExecutionContext(ctx)
 }
 
 // GetExecutionContext retrieves the reader's ExecutionContext state.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//
+// Returns:
+//   The reader's ExecutionContext state.
+//   An error if retrieving or saving state fails.
 func (r *HourlyForecastAPIReader) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	select {
 	case <-ctx.Done():
@@ -195,28 +240,40 @@ func (r *HourlyForecastAPIReader) GetExecutionContext(ctx context.Context) (mode
 		return nil, err
 	}
 
-	return r.readerState, nil // Return the reader's own state.
+	return r.readerState, nil
 }
 
 // fetchWeatherData makes an API call to Open-Meteo to retrieve hourly weather forecast data.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//
+// Returns:
+//   An error if the API call or data processing fails.
 func (r *HourlyForecastAPIReader) fetchWeatherData(ctx context.Context) error {
 	logger.Infof("Fetching weather data from Open-Meteo API...")
 
 	latitude := 35.6586
 	longitude := 139.7454
 
-	url := fmt.Sprintf("%s/forecast?latitude=%f&longitude=%f&hourly=temperature_2m,weather_code&timezone=Asia/Tokyo&forecast_days=3",
-		r.config.APIEndpoint, latitude, longitude)
-	if r.config.APIKey != "" {
-		url = fmt.Sprintf("%s&apikey=%s", url, r.config.APIKey)
-	}
+	// Construct the URL using a relative path.
+	url := fmt.Sprintf("/forecast?latitude=%f&longitude=%f&hourly=temperature_2m,weather_code&timezone=Asia/Tokyo&forecast_days=3",
+		latitude, longitude)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return exception.NewBatchError(ModuleHourlyForecastAPIReader, "Failed to create API request", err, false, false)
 	}
 
-	resp, err := r.client.Do(req)
+	var httpClient *http.Client
+	if r.webProxyConn != nil {
+		httpClient = r.webProxyConn.GetClient()
+	} else {
+		// Use a default HTTP client if no WebProxy is configured.
+		httpClient = &http.Client{Timeout: 10 * time.Second}
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return exception.NewBatchError(ModuleHourlyForecastAPIReader, "API call failed", err, true, false)
 	}
@@ -244,6 +301,12 @@ func (r *HourlyForecastAPIReader) fetchWeatherData(ctx context.Context) error {
 
 // restoreReaderStateFromExecutionContext restores the reader's internal state (currentIndex and forecastData)
 // from the provided ExecutionContext.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//
+// Returns:
+//   An error if state restoration fails.
 func (r *HourlyForecastAPIReader) restoreReaderStateFromExecutionContext(ctx context.Context) error {
 	// Extract reader-specific context from stepExecutionContext
 	readerCtxVal, ok := r.stepExecutionContext.Get(ReaderContextKey)
@@ -289,6 +352,12 @@ func (r *HourlyForecastAPIReader) restoreReaderStateFromExecutionContext(ctx con
 
 // saveReaderStateToExecutionContext saves the reader's current internal state (currentIndex and forecastData)
 // into the Step's ExecutionContext.
+//
+// Parameters:
+//   ctx: The context for the operation.
+//
+// Returns:
+//   An error if state saving fails.
 func (r *HourlyForecastAPIReader) saveReaderStateToExecutionContext(ctx context.Context) error {
 	// Extract reader-specific context from stepExecutionContext (created if not present)
 	readerCtxVal, ok := r.stepExecutionContext.Get(ReaderContextKey)

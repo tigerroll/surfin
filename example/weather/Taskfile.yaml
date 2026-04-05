@@ -32,7 +32,7 @@ tasks:
       - cd ../../ && ./dist/{{.APP_BINARY_NAME}}
     env:
       BATCH_LOG_LEVEL: DEBUG
-      # ENV_FILE_PATH: .env
+      ENV_FILE_PATH: .env
 
   clean:
     desc: "Remove build artifacts for weather app."

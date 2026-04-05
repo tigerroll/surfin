@@ -53,10 +53,6 @@ type SecurityConfig struct {
 type BatchConfig struct {
 	// PollingIntervalSeconds is the interval for polling job status.
 	PollingIntervalSeconds int `yaml:"polling_interval_seconds"`
-	// APIEndpoint is a general API endpoint (e.g., for external services).
-	APIEndpoint string `yaml:"api_endpoint"`
-	// APIKey is a general API key.
-	APIKey string `yaml:"api_key"`
 	// JobName is the default job name if not specified elsewhere.
 	JobName string `yaml:"job_name"`
 	// Retry is the general retry configuration.

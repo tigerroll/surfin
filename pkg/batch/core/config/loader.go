@@ -189,12 +189,6 @@ func mergeSurfinConfig(dest, source *SurfinConfig) {
 	if source.Batch.PollingIntervalSeconds != 0 {
 		dest.Batch.PollingIntervalSeconds = source.Batch.PollingIntervalSeconds
 	}
-	if source.Batch.APIEndpoint != "" {
-		dest.Batch.APIEndpoint = source.Batch.APIEndpoint
-	}
-	if source.Batch.APIKey != "" {
-		dest.Batch.APIKey = source.Batch.APIKey
-	}
 	if source.Batch.JobName != "" {
 		dest.Batch.JobName = source.Batch.JobName
 	}
