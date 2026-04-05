@@ -20,9 +20,9 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
+	"github.com/tigerroll/surfin/pkg/batch/adapter/webproxy"
 	"go.uber.org/fx"
 	"gopkg.in/yaml.v3" // yaml package
-	"github.com/tigerroll/surfin/pkg/batch/adapter/webproxy"
 )
 
 // embeddedConfig embeds the content of the application's YAML configuration file (application.yaml).
@@ -83,8 +83,8 @@ func main() {
 		// gormmodule.Module is removed as NewGormTransactionManagerFactory is already provided in internal/app/module.go.
 		mysql.Module,
 		postgres.Module,
-		sqlite.Module, // SQLite module
-		gcs.Module,    // Adds the GCS storage adapter module.
+		sqlite.Module,   // SQLite module
+		gcs.Module,      // Adds the GCS storage adapter module.
 		webproxy.Module, // WebProxy adapter module
 	}
 

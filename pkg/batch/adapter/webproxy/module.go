@@ -6,9 +6,9 @@ import (
 
 	"go.uber.org/fx"
 
+	webproxyconfig "github.com/tigerroll/surfin/pkg/batch/adapter/webproxy/config"
 	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
-	webproxyconfig "github.com/tigerroll/surfin/pkg/batch/adapter/webproxy/config"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
@@ -16,11 +16,13 @@ import (
 // It extracts WebProxyConfig settings from Config.Surfin.AdapterConfigs and passes them to the WebProxyProvider.
 //
 // Parameters:
-//   cfg: The application's global configuration.
+//
+//	cfg: The application's global configuration.
 //
 // Returns:
-//   A new WebProxyProvider instance.
-//   An error if configuration parsing fails.
+//
+//	A new WebProxyProvider instance.
+//	An error if configuration parsing fails.
 func NewWebProxyProviderFromConfig(cfg *config.Config) (*WebProxyProvider, error) {
 	// AdapterConfigs is of type interface{}, so assert it to map[string]interface{}.
 	adapterConfigs, ok := cfg.Surfin.AdapterConfigs.(map[string]interface{})

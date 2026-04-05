@@ -20,8 +20,8 @@ import (
 
 	configbinder "github.com/tigerroll/surfin/pkg/batch/support/util/configbinder"
 
-	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/webproxy"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 )
 
 // HourlyForecastAPIReaderConfig is a configuration struct specific to the Reader (for JSL property binding).
@@ -65,13 +65,15 @@ type HourlyForecastAPIReader struct {
 // and binds JSL properties to the reader's specific configuration.
 //
 // Parameters:
-//   cfg: The application's global configuration.
-//   resolver: An ExpressionResolver for dynamic property resolution.
-//   resourceProviders: A map of resource providers for external connections (e.g., webproxy).
-//   properties: A map of properties defined in the JSL for this reader.
+//
+//	cfg: The application's global configuration.
+//	resolver: An ExpressionResolver for dynamic property resolution.
+//	resourceProviders: A map of resource providers for external connections (e.g., webproxy).
+//	properties: A map of properties defined in the JSL for this reader.
 //
 // Returns:
-//   A new HourlyForecastAPIReader instance or an error if configuration binding or validation fails.
+//
+//	A new HourlyForecastAPIReader instance or an error if configuration binding or validation fails.
 func NewHourlyForecastAPIReader(
 	cfg *config.Config,
 	resolver core.ExpressionResolver,
@@ -116,11 +118,13 @@ func NewHourlyForecastAPIReader(
 // Open opens resources and restores state from ExecutionContext.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   ec: The ExecutionContext to restore state from.
+//
+//	ctx: The context for the operation.
+//	ec: The ExecutionContext to restore state from.
 //
 // Returns:
-//   An error if opening fails.
+//
+//	An error if opening fails.
 func (r *HourlyForecastAPIReader) Open(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
@@ -144,11 +148,13 @@ func (r *HourlyForecastAPIReader) Open(ctx context.Context, ec model.ExecutionCo
 // Read reads the next item from the data source.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 //
 // Returns:
-//   The next item from the data source, or io.EOF if no more items are available.
-//   An error if reading fails.
+//
+//	The next item from the data source, or io.EOF if no more items are available.
+//	An error if reading fails.
 func (r *HourlyForecastAPIReader) Read(ctx context.Context) (any, error) {
 	select {
 	case <-ctx.Done():
@@ -183,10 +189,12 @@ func (r *HourlyForecastAPIReader) Read(ctx context.Context) (any, error) {
 // Close releases resources.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 //
 // Returns:
-//   An error if closing fails.
+//
+//	An error if closing fails.
 func (r *HourlyForecastAPIReader) Close(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -204,11 +212,13 @@ func (r *HourlyForecastAPIReader) Close(ctx context.Context) error {
 // SetExecutionContext sets the ExecutionContext and restores the reader's state.
 //
 // Parameters:
-//   ctx: The context for the operation.
-//   ec: The ExecutionContext to set.
+//
+//	ctx: The context for the operation.
+//	ec: The ExecutionContext to set.
 //
 // Returns:
-//   An error if setting the context or restoring state fails.
+//
+//	An error if setting the context or restoring state fails.
 func (r *HourlyForecastAPIReader) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
 	select {
 	case <-ctx.Done():
@@ -222,11 +232,13 @@ func (r *HourlyForecastAPIReader) SetExecutionContext(ctx context.Context, ec mo
 // GetExecutionContext retrieves the reader's ExecutionContext state.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 //
 // Returns:
-//   The reader's ExecutionContext state.
-//   An error if retrieving or saving state fails.
+//
+//	The reader's ExecutionContext state.
+//	An error if retrieving or saving state fails.
 func (r *HourlyForecastAPIReader) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
 	select {
 	case <-ctx.Done():
@@ -246,10 +258,12 @@ func (r *HourlyForecastAPIReader) GetExecutionContext(ctx context.Context) (mode
 // fetchWeatherData makes an API call to Open-Meteo to retrieve hourly weather forecast data.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 //
 // Returns:
-//   An error if the API call or data processing fails.
+//
+//	An error if the API call or data processing fails.
 func (r *HourlyForecastAPIReader) fetchWeatherData(ctx context.Context) error {
 	logger.Infof("Fetching weather data from Open-Meteo API...")
 
@@ -303,10 +317,12 @@ func (r *HourlyForecastAPIReader) fetchWeatherData(ctx context.Context) error {
 // from the provided ExecutionContext.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 //
 // Returns:
-//   An error if state restoration fails.
+//
+//	An error if state restoration fails.
 func (r *HourlyForecastAPIReader) restoreReaderStateFromExecutionContext(ctx context.Context) error {
 	// Extract reader-specific context from stepExecutionContext
 	readerCtxVal, ok := r.stepExecutionContext.Get(ReaderContextKey)
@@ -354,10 +370,12 @@ func (r *HourlyForecastAPIReader) restoreReaderStateFromExecutionContext(ctx con
 // into the Step's ExecutionContext.
 //
 // Parameters:
-//   ctx: The context for the operation.
+//
+//	ctx: The context for the operation.
 //
 // Returns:
-//   An error if state saving fails.
+//
+//	An error if state saving fails.
 func (r *HourlyForecastAPIReader) saveReaderStateToExecutionContext(ctx context.Context) error {
 	// Extract reader-specific context from stepExecutionContext (created if not present)
 	readerCtxVal, ok := r.stepExecutionContext.Get(ReaderContextKey)
