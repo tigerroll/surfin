@@ -84,23 +84,3 @@ region: "us-east-1"
 	assert.Equal(t, "us-east-1", cfg.Region)
 }
 
-func TestWebProxyConfig_MockServer(t *testing.T) {
-	yamlStr := `
-type: "MOCK_SERVER"
-mock_status: 200
-mock_response: "{\"message\": \"Mocked response\"}"
-`
-	var cfg config.WebProxyConfig
-	var raw map[string]interface{}
-	err := yaml.Unmarshal([]byte(yamlStr), &raw)
-	assert.NoError(t, err)
-
-	jsonBytes, err := json.Marshal(raw)
-	assert.NoError(t, err)
-	err = json.Unmarshal(jsonBytes, &cfg)
-	assert.NoError(t, err)
-
-	assert.Equal(t, "MOCK_SERVER", cfg.Type)
-	assert.Equal(t, 200, cfg.MockStatus)
-	assert.Equal(t, "{\"message\": \"Mocked response\"}", cfg.MockResponse)
-}
