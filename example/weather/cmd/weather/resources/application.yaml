@@ -68,8 +68,14 @@ surfin:
         credentials_file: ""
 
     webproxy:
-      openmeteo:
-        type: "NONE" # Type of authentication for the web proxy. "NONE" means no authentication is applied.
+      openmeteo-none:
+        type: "NONE"
+        api_endpoint: "http://wiremock:8080/v1"
+      openmeteo-apikey:
+        type: "APIKEY"
+        key: "test"
+        placement: "header"
+        key_name: "X-API-Key"
         api_endpoint: "http://wiremock:8080/v1"
 
   # Batch framework settings

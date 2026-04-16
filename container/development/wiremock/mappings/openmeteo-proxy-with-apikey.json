@@ -1,0 +1,14 @@
+{
+  "request": {
+    "method": "ANY",
+    "urlPattern": "/v1/.*",
+    "headers": {
+      "X-API-Key": {
+        "equalTo": "test"
+      }
+    }
+  },
+  "response": {
+    "proxyBaseUrl": "https://api.open-meteo.com"
+  }
+}
