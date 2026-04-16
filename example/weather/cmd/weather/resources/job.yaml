@@ -49,7 +49,7 @@ flow:
       reader:
         ref: weatherItemReader
         properties: # Properties for the reader component.
-          webProxyRef: "openmeteo" # Reference to the WebProxyConnection name defined in application.yaml.
+          webProxyRef: "openmeteo-apikey" # Reference to the WebProxyConnection name defined in application.yaml.
       processor:
         ref: weatherItemProcessor
       writer: # Write to database.
