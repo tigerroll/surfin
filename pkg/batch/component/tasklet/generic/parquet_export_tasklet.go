@@ -168,7 +168,7 @@ func NewGenericParquetExportTasklet[T any](
 
 	// Set default for ReadBufferSize.
 	if config.ReadBufferSize == 0 {
-		config.ReadBufferSize = 1000 // Default value.
+		config.ReadBufferSize = 50 // Default value.
 	}
 
 	// Set default for ParquetCompressionType.
