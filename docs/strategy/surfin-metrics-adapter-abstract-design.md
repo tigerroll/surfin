@@ -72,3 +72,118 @@ graph LR
 *   **設定の複雑性**: 各メトリクスバックエンドの設定項目は多岐にわたるため、ユーザーが容易に設定できるよう、必要な項目を厳選し、デフォルト値を適切に設定します。
 *   **エラーハンドリング**: メトリクスエクスポート時のエラー（ネットワーク障害など）が発生した場合でも、アプリケーションの主要な処理が中断されないよう、堅牢なエラーハンドリングを実装します。
 *   **既存のメトリクス実装との共存**: 既存の Prometheus 向けメトリクス収集機能（`pkg/batch/infrastructure/metrics/prometheus_recorder.go`）や簡易的なロガーベースの実装（`pkg/batch/listener/metrics/recorder.go`）との切り替えや共存を考慮し、Fx の依存性注入メカニズムを最大限に活用します。
+
+## 8. 設定例
+
+* `application.yaml` における `surfin.adapter.metrics` の設定例を以下に示します。
+* これにより、複数のメトリクスバックエンドへの送信や、異なるプロトコルでの連携が可能になります。
+
+```yaml
+surfin:
+  adapter:
+    metrics:
+      # DataDog Agentへのメトリクス送信設定 (OTLP経由) http 形式のケース
+      datadog-agent:
+        type: otlp # OpenTelemetry Protocolを使用
+        enabled: true # このメトリクスアダプターを有効にするか
+        host: localhost # DataDog Agentが動作するホスト (またはAgentのIP)
+        port: 4318 # DataDog AgentのOTLP HTTP レシーバーのポート (Agentの設定による: grpc 設定もある)
+        protocols: http # HTTP/protobufプロトコルを使用
+        timeout: 2s # エクスポートのタイムアウト時間
+        compression: gzip # 圧縮方式 (gzip, snappy, none)
+        insecure: true # 開発環境やローカルAgentへの接続のためTLSを無効にする場合
+
+      # ローカルのOpenTelemetry Collectorへのメトリクス送信設定
+      otel-collector:
+        type: otlp # OpenTelemetry Protocolを使用
+        enabled: true # このメトリクスアダプターを有効にするか
+        host: localhost # otel-collectorが動作するホスト
+        port: 4317 # OTLP gRPCレシーバーのポート
+        protocols: grpc # gRPCプロトコルを使用
+        timeout: 2s # エクスポートのタイムアウト時間
+        compression: none # 圧縮方式 (gzip, snappy, none)
+        insecure: true # 開発環境のためTLSを無効にする
+```
+
+## 9. 構想段階の設定（議論の余地あり）
+
+otel-collector があれば以下の実装不要と言える。
+
+### Direct sending for Datadog Cloud.
+
+```yaml
+surfin:
+  adapter:
+    metrics:
+      # DataDogへのメトリクス送信設定 (直接OTLP取り込み)
+      datadog-direct:
+        type: otlp # OpenTelemetry Protocolを使用
+        enabled: true # このメトリクスアダプターを有効にするか
+        host: intake.opentelemetry.datadoghq.com # DataDogのOTLPインテークエンドポイントの例
+        port: 443 # HTTPSポート
+        protocols: http # HTTP/protobufプロトコルを使用
+        headers: # 認証情報などの追加ヘッダー
+          api-key: ${DATADOG_API_KEY} # 環境変数から取得
+        timeout: 5s # エクスポートのタイムアウト時間
+        compression: gzip # 圧縮方式 (gzip, snappy, none)
+        # insecure: false # TLSを使用するかどうか (本番環境では通常false)
+```
+
+### Sending for Prometeus push gateway.
+
+```yaml
+surfin:
+  adapter:
+    metrics:
+      # Prometheus Pushgatewayへのメトリクス送信設定
+      prometheus-pushgateway:
+        type: prometheus_pushgateway # Prometheus Pushgatewayを使用
+        enabled: true # このメトリクスアダプターを有効にするか
+        host: localhost # Prometheus Pushgatewayが動作するホスト
+        port: 9091 # Prometheus Pushgatewayのポート
+        job_name: "surfin_batch_job" # Pushgatewayに送信するジョブ名
+        instance_name: "${HOSTNAME}" # Pushgatewayに送信するインスタンス名 (環境変数などから取得)
+        # basic_auth_username: "user" # 認証が必要な場合
+        # basic_auth_password: "password" # 認証が必要な場合
+        timeout: 5s # エクスポートのタイムアウト時間
+```
+
+### Sending for Google Cloud Monitoring.
+
+```yaml
+surfin:
+  adapter:
+    metrics:
+      # Google Cloud Monitoringへのメトリクス送信設定 (OTLP直接取り込み)
+      google-cloud-monitoring:
+        type: otlp # OpenTelemetry Protocolを使用
+        enabled: true # このメトリクスアダプターを有効にするか
+        host: monitoring.googleapis.com # Google Cloud MonitoringのOTLPインテークエンドポイント
+        port: 443 # HTTPSポート
+        protocols: grpc # gRPCプロトコルを使用 (OTLP/gRPCが推奨)
+        headers: # 認証情報などの追加ヘッダー (例: Bearerトークンなど)
+          # Authorization: Bearer ${GCP_ACCESS_TOKEN} # サービスアカウントキーなどから取得
+        timeout: 10s # エクスポートのタイムアウト時間
+        compression: gzip # 圧縮方式
+        # insecure: false # TLSを使用するかどうか (本番環境では通常false)
+```
+
+### Sending for AWS CloudWatch.
+
+```yaml
+surfin:
+  adapter:
+    metrics:
+      # AWS CloudWatchへのメトリクス送信設定 (OTLP直接取り込み)
+      aws-cloudwatch:
+        type: otlp # OpenTelemetry Protocolを使用
+        enabled: true # このメトリクスアダプターを有効にするか
+        host: otlp.metrics.ap-northeast-1.amazonaws.com # AWS CloudWatchのOTLPインテークエンドポイントの例 (リージョンは適宜変更)
+        port: 443 # HTTPSポート
+        protocols: grpc # gRPCプロトコルを使用 (OTLP/gRPCが推奨)
+        headers: # 認証情報などの追加ヘッダー (AWS SigV4は通常SDKが処理)
+          # X-Amz-Security-Token: ${AWS_SESSION_TOKEN} # 一時認証情報の場合
+        timeout: 10s # エクスポートのタイムアウト時間
+        compression: gzip # 圧縮方式
+        # insecure: false # TLSを使用するかどうか (本番環境では通常false)
+```
