@@ -5,7 +5,7 @@ package item_test
 import (
 	"context"
 	"database/sql"
-	"errors"
+	"errors" // Moved to maintain alphabetical order after removing the comment.
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
@@ -18,7 +18,8 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	testutil "github.com/tigerroll/surfin/pkg/batch/test"
 	"testing"
-	"time"
+
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Dummy usage to prevent "imported and not used" error for the 'port' package.
@@ -261,26 +262,26 @@ func (m *MockMetricRecorder) RecordStepStart(ctx context.Context, execution *mod
 func (m *MockMetricRecorder) RecordStepEnd(ctx context.Context, execution *model.StepExecution) {
 	m.Called(ctx, execution)
 }
-func (m *MockMetricRecorder) RecordItemRead(ctx context.Context, stepID string) {
-	m.Called(ctx, stepID)
+func (m *MockMetricRecorder) RecordItemRead(ctx context.Context, stepExecution *model.StepExecution, count int64) {
+	m.Called(ctx, stepExecution, count)
 }
-func (m *MockMetricRecorder) RecordItemProcess(ctx context.Context, stepID string) {
-	m.Called(ctx, stepID)
+func (m *MockMetricRecorder) RecordItemProcess(ctx context.Context, stepExecution *model.StepExecution, count int64) {
+	m.Called(ctx, stepExecution, count)
 }
-func (m *MockMetricRecorder) RecordItemWrite(ctx context.Context, stepID string, count int) {
-	m.Called(ctx, stepID, count)
+func (m *MockMetricRecorder) RecordItemWrite(ctx context.Context, stepExecution *model.StepExecution, count int64) {
+	m.Called(ctx, stepExecution, count)
 }
-func (m *MockMetricRecorder) RecordItemSkip(ctx context.Context, stepID string, reason string) {
-	m.Called(ctx, stepID, reason)
+func (m *MockMetricRecorder) RecordItemSkip(ctx context.Context, stepExecution *model.StepExecution, err error) {
+	m.Called(ctx, stepExecution, err)
 }
-func (m *MockMetricRecorder) RecordItemRetry(ctx context.Context, stepID string, reason string) {
-	m.Called(ctx, stepID, reason)
+func (m *MockMetricRecorder) RecordItemRetry(ctx context.Context, stepExecution *model.StepExecution, err error) {
+	m.Called(ctx, stepExecution, err)
 }
-func (m *MockMetricRecorder) RecordChunkCommit(ctx context.Context, stepID string, count int) {
-	m.Called(ctx, stepID, count)
+func (m *MockMetricRecorder) RecordChunkCommit(ctx context.Context, stepExecution *model.StepExecution, count int64) {
+	m.Called(ctx, stepExecution, count)
 }
-func (m *MockMetricRecorder) RecordDuration(ctx context.Context, name string, duration time.Duration, tags map[string]string) {
-	m.Called(ctx, name, duration, tags)
+func (m *MockMetricRecorder) RecordDuration(ctx context.Context, name string, duration float64, attrs ...attribute.KeyValue) {
+	m.Called(ctx, name, duration, attrs)
 }
 
 // MockTracer is a mock implementation of metrics.Tracer.
@@ -473,10 +474,10 @@ func TestChunkStep_ChunkSplittingOnSkippableWriteFailure(t *testing.T) {
 	// 3. Listener/Metric Mocks
 	// Item 2 Skip notification
 	tracer.On("RecordError", mock.Anything, "testStep", mock.AnythingOfType("*exception.BatchError")).Once() // Explicit error type
-	recorder.On("RecordItemSkip", mock.Anything, "testStep", "write").Once()
+	recorder.On("RecordItemSkip", mock.Anything, mock.AnythingOfType("*model.StepExecution"), mock.AnythingOfType("*exception.BatchError")).Once()
 
 	// Item 1 and Item 3 success
-	recorder.On("RecordItemWrite", mock.Anything, "testStep", 1).Twice()
+	recorder.On("RecordItemWrite", mock.Anything, mock.AnythingOfType("*model.StepExecution"), int64(1)).Twice()
 
 	// --- Execution ---
 
@@ -529,7 +530,7 @@ func TestChunkStep_ChunkSplitting_FatalError(t *testing.T) {
 	txManager.On("Begin", mock.Anything, mock.Anything).Return(txAdapter1, nil).Once()
 	writer.On("Write", mock.Anything, []any{"item1"}).Return(nil).Once() // Updated mock expectation
 	txManager.On("Commit", txAdapter1).Return(nil).Once()
-	recorder.On("RecordItemWrite", mock.Anything, "testStep", 1).Once()
+	recorder.On("RecordItemWrite", mock.Anything, mock.AnythingOfType("*model.StepExecution"), int64(1)).Once()
 
 	// Item 2: Failure (Fatal error during write)
 	txManager.On("Begin", mock.Anything, mock.Anything).Return(txAdapter2, nil).Once()

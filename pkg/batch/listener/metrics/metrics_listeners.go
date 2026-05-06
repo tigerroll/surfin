@@ -64,7 +64,7 @@ func (l *MetricsChunkListener) BeforeChunk(ctx context.Context, stepExecution *m
 
 func (l *MetricsChunkListener) AfterChunk(ctx context.Context, stepExecution *model.StepExecution) {
 	// Records the number of chunk commits (count is fixed at 1).
-	l.recorder.RecordChunkCommit(ctx, stepExecution.StepName, 1)
+	l.recorder.RecordChunkCommit(ctx, stepExecution, 1)
 
 	// Metrics for Read/Write/Filter should ideally be recorded individually in ItemRead/Write/Process Listeners,
 	// but here only chunk commits are recorded.

@@ -3,7 +3,8 @@ package metrics
 import (
 	"context"
 	"sync"
-	"time"
+
+	"go.opentelemetry.io/otel/attribute"
 
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
@@ -13,17 +14,20 @@ import (
 	"go.uber.org/fx"
 )
 
+// Package metrics provides an asynchronous wrapper for the MetricRecorder interface.
+// It allows metric events to be recorded without blocking the caller, processing them in a separate goroutine.
+
 // MetricEvent represents a metric event to be recorded asynchronously.
+// It encapsulates all necessary data for various metric types.
 type MetricEvent struct {
-	Type          string
-	JobExecution  *model.JobExecution
-	StepExecution *model.StepExecution // Used for step execution events
-	// Other event data can be added here as needed
-	StepName string            // For item-level metrics
-	Count    int               // For ItemWrite and ChunkCommit counts
-	Reason   string            // For ItemSkip and ItemRetry reasons
-	Duration time.Duration     // For duration metrics
-	Tags     map[string]string // For duration metric tags
+	Type          string               // The type of metric event (e.g., "job_start", "item_read").
+	JobExecution  *model.JobExecution  // The JobExecution associated with the event, if applicable.
+	StepExecution *model.StepExecution // The StepExecution associated with the event, if applicable.
+	Count         int64                // Numeric count for events like item reads, writes, or chunk commits.
+	Err           error                // The error associated with skip or retry events.
+	Duration      float64              // The duration value for time-based metrics, typically in seconds.
+	Attrs         []attribute.KeyValue // OpenTelemetry attributes to associate with the metric.
+	Name          string               // The name of the metric, particularly for RecordDuration.
 }
 
 // Metric event type constants
@@ -42,11 +46,11 @@ const (
 )
 
 // AsyncMetricRecorder asynchronously records metrics by pushing events to a channel
-// and processing them in a separate goroutine.
+// and processing them in a dedicated worker goroutine.
 type AsyncMetricRecorder struct {
-	eventQueue   chan MetricEvent
-	stopCh       chan struct{}
-	wg           sync.WaitGroup
+	eventQueue   chan MetricEvent       // Buffered channel for incoming metric events.
+	stopCh       chan struct{}          // Channel to signal the worker goroutine to stop.
+	wg           sync.WaitGroup         // Used to wait for the worker goroutine to finish.
 	syncRecorder metrics.MetricRecorder // The concrete instance that performs actual metric recording
 }
 
@@ -54,7 +58,7 @@ type AsyncMetricRecorder struct {
 // bufferSize: The buffer size for the event queue. If 0 or less, a default value is used.
 // syncRec: The synchronous recorder that performs the actual metric recording.
 func NewAsyncMetricRecorder(bufferSize int, syncRec metrics.MetricRecorder) *AsyncMetricRecorder {
-	if bufferSize <= 0 {
+	if bufferSize <= 0 { // Ensure a positive buffer size.
 		bufferSize = 100 // Default buffer size
 	}
 	r := &AsyncMetricRecorder{
@@ -69,10 +73,11 @@ func NewAsyncMetricRecorder(bufferSize int, syncRec metrics.MetricRecorder) *Asy
 }
 
 // run is the worker goroutine that reads events from the event queue and processes them with the synchronous recorder.
+// It continuously processes events until a stop signal is received, then processes any remaining events in the queue before exiting.
 func (r *AsyncMetricRecorder) run() {
 	defer r.wg.Done()
 	for {
-		select {
+		select { // Wait for an event or a stop signal.
 		case event := <-r.eventQueue:
 			r.processEvent(event)
 		case <-r.stopCh:
@@ -89,9 +94,9 @@ func (r *AsyncMetricRecorder) run() {
 }
 
 // processEvent processes the received metric event.
+// It dispatches the event to the underlying synchronous metric recorder based on its type.
 func (r *AsyncMetricRecorder) processEvent(event MetricEvent) {
-	// A new background context is used here because the event payload does not contain the original context.
-	// Consider including the original context in the event structure if needed.
+	// A new background context is used here as the original context might not be available or relevant for async processing.
 	ctx := context.Background()
 	switch event.Type {
 	case MetricEventTypeJobStart:
@@ -103,25 +108,26 @@ func (r *AsyncMetricRecorder) processEvent(event MetricEvent) {
 	case MetricEventTypeStepEnd:
 		r.syncRecorder.RecordStepEnd(ctx, event.StepExecution)
 	case MetricEventTypeItemRead:
-		r.syncRecorder.RecordItemRead(ctx, event.StepName)
+		r.syncRecorder.RecordItemRead(ctx, event.StepExecution, event.Count)
 	case MetricEventTypeItemProcess:
-		r.syncRecorder.RecordItemProcess(ctx, event.StepName)
+		r.syncRecorder.RecordItemProcess(ctx, event.StepExecution, event.Count)
 	case MetricEventTypeItemWrite:
-		r.syncRecorder.RecordItemWrite(ctx, event.StepName, event.Count)
+		r.syncRecorder.RecordItemWrite(ctx, event.StepExecution, event.Count)
 	case MetricEventTypeItemSkip:
-		r.syncRecorder.RecordItemSkip(ctx, event.StepName, event.Reason)
+		r.syncRecorder.RecordItemSkip(ctx, event.StepExecution, event.Err)
 	case MetricEventTypeItemRetry:
-		r.syncRecorder.RecordItemRetry(ctx, event.StepName, event.Reason)
+		r.syncRecorder.RecordItemRetry(ctx, event.StepExecution, event.Err)
 	case MetricEventTypeChunkCommit:
-		r.syncRecorder.RecordChunkCommit(ctx, event.StepName, event.Count)
+		r.syncRecorder.RecordChunkCommit(ctx, event.StepExecution, event.Count)
 	case MetricEventTypeRecordDuration:
-		r.syncRecorder.RecordDuration(ctx, event.StepName, event.Duration, event.Tags) // Using StepName as a generic name
+		r.syncRecorder.RecordDuration(ctx, event.Name, event.Duration, event.Attrs...)
 	default:
-		logger.Warnf("AsyncMetricRecorder: Unknown metric event type: %s", event.Type)
+		logger.Warnf("AsyncMetricRecorder: Unknown metric event type received: %s", event.Type)
 	}
 }
 
-// Close gracefully stops the recorder and processes all remaining events in the queue.
+// Close gracefully stops the asynchronous recorder.
+// It sends a stop signal to the worker goroutine and waits for all pending events to be processed.
 func (r *AsyncMetricRecorder) Close() {
 	logger.Debugf("AsyncMetricRecorder: Sending shutdown signal...")
 	close(r.stopCh) // Send stop signal
@@ -129,7 +135,8 @@ func (r *AsyncMetricRecorder) Close() {
 	logger.Debugf("AsyncMetricRecorder: Shutdown complete.")
 }
 
-// sendEvent sends an event to the queue, logging a warning if the queue is full.
+// sendEvent attempts to send a MetricEvent to the event queue.
+// If the queue is full, the event is discarded and a warning is logged to prevent blocking.
 func (r *AsyncMetricRecorder) sendEvent(event MetricEvent, id string) {
 	select {
 	case r.eventQueue <- event:
@@ -139,65 +146,66 @@ func (r *AsyncMetricRecorder) sendEvent(event MetricEvent, id string) {
 	}
 }
 
-// RecordJobStart asynchronously records the start event of a JobExecution.
-func (r *AsyncMetricRecorder) RecordJobStart(ctx context.Context, execution *model.JobExecution) {
+// RecordJobStart records the start of a JobExecution asynchronously.
+func (r *AsyncMetricRecorder) RecordJobStart(_ context.Context, execution *model.JobExecution) {
 	r.sendEvent(MetricEvent{Type: MetricEventTypeJobStart, JobExecution: execution}, execution.ID)
 }
 
-// RecordJobEnd asynchronously records the end event of a JobExecution.
-func (r *AsyncMetricRecorder) RecordJobEnd(ctx context.Context, execution *model.JobExecution) {
+// RecordJobEnd records the end of a JobExecution asynchronously.
+func (r *AsyncMetricRecorder) RecordJobEnd(_ context.Context, execution *model.JobExecution) {
 	r.sendEvent(MetricEvent{Type: MetricEventTypeJobEnd, JobExecution: execution}, execution.ID)
 }
 
-// RecordStepStart asynchronously records the start event of a StepExecution.
-func (r *AsyncMetricRecorder) RecordStepStart(ctx context.Context, execution *model.StepExecution) {
+// RecordStepStart records the start of a StepExecution asynchronously.
+func (r *AsyncMetricRecorder) RecordStepStart(_ context.Context, execution *model.StepExecution) {
 	r.sendEvent(MetricEvent{Type: MetricEventTypeStepStart, StepExecution: execution}, execution.ID)
 }
 
-// RecordStepEnd asynchronously records the end event of a StepExecution.
-func (r *AsyncMetricRecorder) RecordStepEnd(ctx context.Context, execution *model.StepExecution) {
+// RecordStepEnd records the end of a StepExecution asynchronously.
+func (r *AsyncMetricRecorder) RecordStepEnd(_ context.Context, execution *model.StepExecution) {
 	r.sendEvent(MetricEvent{Type: MetricEventTypeStepEnd, StepExecution: execution}, execution.ID)
 }
 
-// RecordItemRead asynchronously records the successful item read event.
-func (r *AsyncMetricRecorder) RecordItemRead(ctx context.Context, stepName string) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeItemRead, StepName: stepName}, stepName)
+// RecordItemRead records the successful reading of an item asynchronously.
+func (r *AsyncMetricRecorder) RecordItemRead(_ context.Context, stepExecution *model.StepExecution, count int64) {
+	r.sendEvent(MetricEvent{Type: MetricEventTypeItemRead, StepExecution: stepExecution, Count: count}, stepExecution.ID)
 }
 
-// RecordItemProcess asynchronously records the successful item process event.
-func (r *AsyncMetricRecorder) RecordItemProcess(ctx context.Context, stepName string) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeItemProcess, StepName: stepName}, stepName)
+// RecordItemProcess records the successful processing of an item asynchronously.
+func (r *AsyncMetricRecorder) RecordItemProcess(_ context.Context, stepExecution *model.StepExecution, count int64) {
+	r.sendEvent(MetricEvent{Type: MetricEventTypeItemProcess, StepExecution: stepExecution, Count: count}, stepExecution.ID)
 }
 
-// RecordItemWrite asynchronously records the successful item write event.
-func (r *AsyncMetricRecorder) RecordItemWrite(ctx context.Context, stepName string, count int) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeItemWrite, StepName: stepName, Count: count}, stepName)
+// RecordItemWrite records the successful writing of items asynchronously.
+func (r *AsyncMetricRecorder) RecordItemWrite(_ context.Context, stepExecution *model.StepExecution, count int64) {
+	r.sendEvent(MetricEvent{Type: MetricEventTypeItemWrite, StepExecution: stepExecution, Count: count}, stepExecution.ID)
 }
 
-// RecordItemSkip asynchronously records the item skip event.
-func (r *AsyncMetricRecorder) RecordItemSkip(ctx context.Context, stepName string, reason string) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeItemSkip, StepName: stepName, Reason: reason}, stepName)
+// RecordItemSkip records the skipping of an item asynchronously.
+func (r *AsyncMetricRecorder) RecordItemSkip(_ context.Context, stepExecution *model.StepExecution, err error) {
+	r.sendEvent(MetricEvent{Type: MetricEventTypeItemSkip, StepExecution: stepExecution, Err: err}, stepExecution.ID)
 }
 
-// RecordItemRetry asynchronously records the item retry event.
-func (r *AsyncMetricRecorder) RecordItemRetry(ctx context.Context, stepName string, reason string) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeItemRetry, StepName: stepName, Reason: reason}, stepName)
+// RecordItemRetry records the retry of an item asynchronously.
+func (r *AsyncMetricRecorder) RecordItemRetry(_ context.Context, stepExecution *model.StepExecution, err error) {
+	r.sendEvent(MetricEvent{Type: MetricEventTypeItemRetry, StepExecution: stepExecution, Err: err}, stepExecution.ID)
 }
 
-// RecordChunkCommit asynchronously records the chunk commit event.
-func (r *AsyncMetricRecorder) RecordChunkCommit(ctx context.Context, stepName string, count int) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeChunkCommit, StepName: stepName, Count: count}, stepName)
+// RecordChunkCommit records the commitment of a chunk asynchronously.
+func (r *AsyncMetricRecorder) RecordChunkCommit(_ context.Context, stepExecution *model.StepExecution, count int64) {
+	r.sendEvent(MetricEvent{Type: MetricEventTypeChunkCommit, StepExecution: stepExecution, Count: count}, stepExecution.ID)
 }
 
-// RecordDuration asynchronously records the execution time event of a specific operation.
-func (r *AsyncMetricRecorder) RecordDuration(ctx context.Context, name string, duration time.Duration, tags map[string]string) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeRecordDuration, StepName: name, Duration: duration, Tags: tags}, name)
+// RecordDuration records the execution time event of a specific operation.
+func (r *AsyncMetricRecorder) RecordDuration(_ context.Context, name string, duration float64, attrs ...attribute.KeyValue) {
+	r.sendEvent(MetricEvent{Type: MetricEventTypeRecordDuration, Name: name, Duration: duration, Attrs: attrs}, name)
 }
 
 // Ensures AsyncMetricRecorder implements the metrics.MetricRecorder interface at compile time.
 var _ metrics.MetricRecorder = (*AsyncMetricRecorder)(nil)
 
-// NewAsyncMetricRecorderWrapper is a helper function for use with fx.Decorate.
+// NewAsyncMetricRecorderWrapper is an Fx decorator function that wraps a synchronous MetricRecorder
+// with an asynchronous one.
 // It takes fx.Lifecycle and config.Config and calls AsyncMetricRecorder.Close() on shutdown.
 func NewAsyncMetricRecorderWrapper(lc fx.Lifecycle, cfg *config.Config, syncRecorder metrics.MetricRecorder) metrics.MetricRecorder {
 	// If metricsAsyncBufferSize is not set or is 0 or less, use the default of 100.
