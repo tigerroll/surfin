@@ -2,8 +2,9 @@
 
 ## 1. 概要
 
-Surfinバッチフレームワークにおいて、OpenTelemetry Metrics Adapter (`pkg/batch/adapter/metrics/opentelemetry`) を実装する計画です。これにより、`pkg/batch/core/metrics.MetricRecorder`
+- Surfinバッチフレームワークにおいて、OpenTelemetry Metrics Adapter (`pkg/batch/adapter/metrics/opentelemetry`) を実装する計画です。これにより、`pkg/batch/core/metrics.MetricRecorder`
 インターフェースをOpenTelemetry Go SDKを用いて具体的に実装し、Surfinが生成するメトリクスをOTLP互換の様々なバックエンドへエクスポート可能にします。
+- `pkg/batch/core/config/config.go` に逆依存する設定はかかないこと
 
 | タスク                                                                | ステータス | 完了予定日 |
 | :-------------------------------------------------------------------- | :--------- | :--------- |
