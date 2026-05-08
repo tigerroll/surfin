@@ -280,10 +280,11 @@ func (s *ChunkStep) GetPropagation() string {
 // Parameters:
 //
 //	ctx: The context for the operation.
+//	stepExecution: The current StepExecution instance.
 //	err: The error that caused the retry.
-func (s *ChunkStep) notifyRetryRead(ctx context.Context, err error) {
+func (s *ChunkStep) notifyRetryRead(ctx context.Context, stepExecution *model.StepExecution, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
-	s.metricRecorder.RecordItemRetry(ctx, s.id, "read")
+	s.metricRecorder.RecordItemRetry(ctx, stepExecution, err)
 	for _, l := range s.retryItemListeners {
 		l.OnRetryRead(ctx, err)
 	}
@@ -294,10 +295,11 @@ func (s *ChunkStep) notifyRetryRead(ctx context.Context, err error) {
 // Parameters:
 //
 //	ctx: The context for the operation.
+//	stepExecution: The current StepExecution instance.
 //	err: The error that caused the skip.
-func (s *ChunkStep) notifySkipRead(ctx context.Context, err error) {
+func (s *ChunkStep) notifySkipRead(ctx context.Context, stepExecution *model.StepExecution, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
-	s.metricRecorder.RecordItemSkip(ctx, s.id, "read")
+	s.metricRecorder.RecordItemSkip(ctx, stepExecution, err)
 	for _, l := range s.skipListeners {
 		l.OnSkipRead(ctx, err)
 	}
@@ -308,11 +310,12 @@ func (s *ChunkStep) notifySkipRead(ctx context.Context, err error) {
 // Parameters:
 //
 //	ctx: The context for the operation.
+//	stepExecution: The current StepExecution instance.
 //	item: The item being processed.
 //	err: The error that caused the retry.
-func (s *ChunkStep) notifyRetryProcess(ctx context.Context, item any, err error) {
+func (s *ChunkStep) notifyRetryProcess(ctx context.Context, stepExecution *model.StepExecution, item any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
-	s.metricRecorder.RecordItemRetry(ctx, s.id, "process")
+	s.metricRecorder.RecordItemRetry(ctx, stepExecution, err)
 	for _, l := range s.retryItemListeners {
 		l.OnRetryProcess(ctx, item, err)
 	}
@@ -323,11 +326,12 @@ func (s *ChunkStep) notifyRetryProcess(ctx context.Context, item any, err error)
 // Parameters:
 //
 //	ctx: The context for the operation.
+//	stepExecution: The current StepExecution instance.
 //	item: The item being processed.
 //	err: The error that caused the skip.
-func (s *ChunkStep) notifySkipProcess(ctx context.Context, item any, err error) {
+func (s *ChunkStep) notifySkipProcess(ctx context.Context, stepExecution *model.StepExecution, item any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
-	s.metricRecorder.RecordItemSkip(ctx, s.id, "process")
+	s.metricRecorder.RecordItemSkip(ctx, stepExecution, err)
 	for _, l := range s.skipListeners {
 		l.OnSkipProcess(ctx, item, err)
 	}
@@ -338,11 +342,12 @@ func (s *ChunkStep) notifySkipProcess(ctx context.Context, item any, err error) 
 // Parameters:
 //
 //	ctx: The context for the operation.
+//	stepExecution: The current StepExecution instance.
 //	items: The list of items being written.
 //	err: The error that caused the retry.
-func (s *ChunkStep) notifyRetryWrite(ctx context.Context, items []any, err error) {
+func (s *ChunkStep) notifyRetryWrite(ctx context.Context, stepExecution *model.StepExecution, items []any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
-	s.metricRecorder.RecordItemRetry(ctx, s.id, "write")
+	s.metricRecorder.RecordItemRetry(ctx, stepExecution, err)
 	itemsInterface := make([]interface{}, len(items))
 	for i, item := range items {
 		itemsInterface[i] = item
@@ -357,11 +362,12 @@ func (s *ChunkStep) notifyRetryWrite(ctx context.Context, items []any, err error
 // Parameters:
 //
 //	ctx: The context for the operation.
+//	stepExecution: The current StepExecution instance.
 //	item: The item being skipped.
 //	err: The error that caused the skip.
-func (s *ChunkStep) notifySkipWrite(ctx context.Context, item any, err error) {
+func (s *ChunkStep) notifySkipWrite(ctx context.Context, stepExecution *model.StepExecution, item any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
-	s.metricRecorder.RecordItemSkip(ctx, s.id, "write")
+	s.metricRecorder.RecordItemSkip(ctx, stepExecution, err)
 
 	itemInterface := item
 
@@ -506,7 +512,7 @@ RetryChunk: // Jump here on write retry
 					if s.itemRetryPolicy.ShouldRetry(readErr) && readAttempts < s.itemRetryPolicy.GetMaxAttempts() {
 						readAttempts++
 						logger.Warnf("ChunkStep '%s': Item read failed (Attempt %d/%d). Retrying: %v", s.id, readAttempts, s.itemRetryPolicy.GetMaxAttempts(), readErr)
-						s.notifyRetryRead(txCtx, readErr)
+						s.notifyRetryRead(txCtx, stepExecution, readErr)
 						// TODO: Backoff wait
 						continue // Retry
 					}
@@ -517,7 +523,7 @@ RetryChunk: // Jump here on write retry
 						stepExecution.SkipReadCount++
 						stepExecution.AddFailureException(readErr)
 						logger.Warnf("ChunkStep '%s': Item read skipped (Skip Count: %d/%d): %v", s.id, s.skipPolicy.GetSkipCount(), s.skipPolicy.GetSkipLimit(), readErr)
-						s.notifySkipRead(txCtx, readErr)
+						s.notifySkipRead(txCtx, stepExecution, readErr)
 						goto NextItemRead // Go to next item
 					}
 
@@ -527,7 +533,7 @@ RetryChunk: // Jump here on write retry
 				}
 
 				// Read successful
-				s.metricRecorder.RecordItemRead(txCtx, s.id) // Record metric
+				s.metricRecorder.RecordItemRead(txCtx, stepExecution, 1) // Record metric
 				break
 			}
 
@@ -549,7 +555,7 @@ RetryChunk: // Jump here on write retry
 					if isBatchError && be.IsRetryable() && processAttempts < s.itemRetryPolicy.GetMaxAttempts() {
 						processAttempts++
 						logger.Warnf("ChunkStep '%s': Item process failed (Attempt %d/%d). Retrying: %v", s.id, processAttempts, s.itemRetryPolicy.GetMaxAttempts(), processErr)
-						s.notifyRetryProcess(txCtx, item, processErr)
+						s.notifyRetryProcess(txCtx, stepExecution, item, processErr)
 						// TODO: Backoff wait
 						continue // Retry
 					}
@@ -561,7 +567,7 @@ RetryChunk: // Jump here on write retry
 						stepExecution.FilterCount++ // Skipped items are considered filtered
 						stepExecution.AddFailureException(processErr)
 						logger.Warnf("ChunkStep '%s': Item process skipped (Skip Count: %d/%d): %v", s.id, s.skipPolicy.GetSkipCount(), s.skipPolicy.GetSkipLimit(), processErr)
-						s.notifySkipProcess(txCtx, item, processErr)
+						s.notifySkipProcess(txCtx, stepExecution, item, processErr)
 						goto NextItemRead // Go to next item
 					}
 
@@ -571,7 +577,7 @@ RetryChunk: // Jump here on write retry
 				}
 
 				// Process successful
-				s.metricRecorder.RecordItemProcess(txCtx, s.id) // Record metric
+				s.metricRecorder.RecordItemProcess(txCtx, stepExecution, 1) // Record metric
 				break
 			}
 
@@ -625,9 +631,9 @@ RetryChunk: // Jump here on write retry
 					if isBatchError && be.IsRetryable() && writeAttempts < s.itemRetryPolicy.GetMaxAttempts() {
 						writeAttempts++
 						logger.Warnf("ChunkStep '%s': Item write failed (Attempt %d/%d). Retrying chunk: %v", s.id, writeAttempts, s.itemRetryPolicy.GetMaxAttempts(), writeErr)
-						s.notifyRetryWrite(txCtx, itemsToWrite, writeErr)
+						s.notifyRetryWrite(txCtx, stepExecution, itemsToWrite, writeErr)
 
-						// Rollback transaction and continue outer chunk loop (retry)
+						// Rollback transaction and continue outer chunk loop (retry).
 						currentTxManager.Rollback(txAdapter)
 						stepExecution.RollbackCount++
 						// TODO: Backoff wait
@@ -666,7 +672,7 @@ RetryChunk: // Jump here on write retry
 				}
 
 				// Write successful
-				s.metricRecorder.RecordItemWrite(txCtx, s.id, len(itemsToWrite)) // Record metric
+				s.metricRecorder.RecordItemWrite(txCtx, stepExecution, int64(len(itemsToWrite))) // Record metric
 				break
 			}
 			writeCount += len(itemsToWrite)
@@ -892,7 +898,7 @@ func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalIte
 				s.skipPolicy.IncrementSkipCount()
 				stepExecution.SkipWriteCount++
 				stepExecution.AddFailureException(writeErr)
-				s.notifySkipWrite(txCtx, item, writeErr)
+				s.notifySkipWrite(txCtx, stepExecution, item, writeErr)
 
 				// Rollback
 				currentTxManager.Rollback(txAdapter)
@@ -915,7 +921,7 @@ func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalIte
 			// Do not add successful items to remainingItems (as they are already persisted)
 			writeCount := stepExecution.WriteCount + 1
 			stepExecution.WriteCount = writeCount
-			s.metricRecorder.RecordItemWrite(txCtx, s.id, 1)
+			s.metricRecorder.RecordItemWrite(txCtx, stepExecution, 1)
 		}
 	}
 

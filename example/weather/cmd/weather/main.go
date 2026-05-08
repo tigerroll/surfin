@@ -1,3 +1,6 @@
+// Package main provides the entry point for the Weather application.
+// It initializes the application's configuration, sets up dependencies,
+// and starts the batch processing job.
 package main
 
 import (
@@ -15,7 +18,8 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/mysql"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/postgres"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/sqlite"
-	"github.com/tigerroll/surfin/pkg/batch/adapter/storage/gcs" // Imports the GCS module.
+	otelmetrics "github.com/tigerroll/surfin/pkg/batch/adapter/metrics/opentelemetry" // Imports the OpenTelemetry Metrics adapter.
+	"github.com/tigerroll/surfin/pkg/batch/adapter/storage/gcs"                       // Imports the GCS module.
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -30,21 +34,23 @@ import (
 //go:embed resources/application.yaml
 var embeddedConfig []byte
 
-// applicationMigrationsFS is an embedded file system containing database migration files.
+// applicationMigrationsFS is an embedded file system containing application-specific database migration files.
 //
 //go:embed all:resources/migrations
 var applicationMigrationsFS embed.FS
 
-// embeddedJSL embeds the content of the Job Specification Language (JSL) file (job.yaml).
+// embeddedJSL embeds the content of the Job Specification Language (JSL) file (job.yaml) for the weather application.
 //
 //go:embed resources/job.yaml
 var embeddedJSL []byte
 
-// main is the entry point of the weather batch application.
-// It manages the startup, signal handling, and Fx container execution.
-// This function sets up a channel (`jobDoneChan`) for signaling job completion,
-// initializes the application context and configuration, and starts the batch process.
+// main is the entry point of the Weather batch application.
+// It orchestrates the application's lifecycle, including startup, signal handling,
+// and Fx container execution. This function initializes the application context
+// and configuration, sets up a channel (`jobDoneChan`) for signaling job completion,
+// and initiates the batch process. It also ensures graceful shutdown upon receiving OS signals.
 func main() {
+	// Create a cancellable context for the application lifecycle.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -78,14 +84,15 @@ func main() {
 		logger.SetLogLevel(cfg.Surfin.System.Logging.Level)
 	}
 
-	// Define Fx options for database providers. All GORM-based providers are included here.
+	// Define Fx options for adapter providers. This includes database, storage, web proxy, and metrics adapters.
 	adapterProviderOptions := []fx.Option{
-		// gormmodule.Module is removed as NewGormTransactionManagerFactory is already provided in internal/app/module.go.
-		mysql.Module,
+		// GORM-based database modules
+		mysql.Module, // MySQL module
 		postgres.Module,
-		sqlite.Module,   // SQLite module
-		gcs.Module,      // Adds the GCS storage adapter module.
-		webproxy.Module, // WebProxy adapter module
+		sqlite.Module,      // SQLite module
+		gcs.Module,         // Adds the GCS storage adapter module.
+		webproxy.Module,    // Adds the WebProxy adapter module.
+		otelmetrics.Module, // Adds the OpenTelemetry Metrics adapter module.
 	}
 
 	// Run the application.

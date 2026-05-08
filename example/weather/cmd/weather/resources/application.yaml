@@ -78,6 +78,17 @@ surfin:
         key_name: "X-API-Key"
         api_endpoint: "http://wiremock:8080/v1"
 
+    metrics:
+      otlp_exporter:
+        type: "otlp"
+        enabled: true
+        otlp:
+          host: "otel-collector"
+          port: 4317
+          protocols: "grpc"
+          timeout: "5s"
+          insecure: true
+
   # Batch framework settings
   batch:
     polling_interval_seconds: 3600 # Polling interval for job status (in seconds).
