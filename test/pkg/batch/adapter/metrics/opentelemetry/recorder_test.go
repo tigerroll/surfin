@@ -11,7 +11,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata" // Requires metricdata.ResourceMetrics, etc.
 
-
 	"github.com/tigerroll/surfin/pkg/batch/adapter/metrics/opentelemetry"
 	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
