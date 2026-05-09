@@ -47,11 +47,12 @@ RUN dnf install -y \
 # Clone the pyenv repository
 RUN git clone --depth=1 https://github.com/pyenv/pyenv.git /opt/pyenv
 
-# Use the pyenv command to install Python 3.11.9
+# Use the pyenv command to install Python 3.
 ENV PYENV_ROOT="/opt/pyenv"
 ENV PATH="$PYENV_ROOT/bin:$PATH"
-RUN pyenv install 3.11.9 && \
-    pyenv global 3.11.9
+ARG PYENV_VERSION="3.12"
+RUN pyenv install ${PYENV_VERSION} && \
+    pyenv global $(pyenv latest 3)
 
 # Create a virtual environment and install aider-chat into it
 RUN eval "$(pyenv init -)" && \
