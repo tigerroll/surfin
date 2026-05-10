@@ -15,6 +15,7 @@
 #### 目的
 *   メトリクスとトレースのコードを `observability` 配下に統合し、論理的な構造を確立する。
 *   メトリクスとトレースで共通利用できる設定構造を定義し、設定の重複を排除する。
+*   将来的な拡張性: OpenTelemetry 以外の可観測性プロバイダー（例: Prometheus）の追加を容易にするため、プロバイダーごとの独立した実装構造を確立する。
 
 #### 主要な変更点
 
@@ -31,9 +32,9 @@
 4.  **Observabilityモジュールの新規作成**:
     *   `pkg/batch/adapter/observability/module.go` を新規作成し、アプリケーションの全体設定 (`coreConfig.Config`) から `ObservabilityConfig` を抽出・提供するFxモジュールを定義します。
 5.  **トレース関連ファイルの新規作成**:
-    *   `pkg/batch/adapter/observability/trace/config/config.go` を新規作成し、トレースエクスポーター設定の型を定義します（`map[string]observability.config.CommonExporterConfig` を参照）。
-    *   `pkg/batch/adapter/observability/trace/opentelemetry/module.go` を新規作成し、`ObservabilityConfig` からトレース関連設定をフィルタリングし、TracerProviderを提供するFxモジュールを定義します。
-    *   `pkg/batch/adapter/observability/trace/opentelemetry/provider.go` を新規作成し、OpenTelemetry TracerProviderの初期化ロジック（OTLPエクスポーターの構築など）を実装します。
+    *   `pkg/batch/adapter/observability/opentelemetry/trace/config/config.go` を新規作成し、トレースエクスポーター設定の型を定義します（`map[string]observability.config.CommonExporterConfig` を参照）。**ここで `opentelemetry` は特定の可観測性プロバイダーの実装を格納するディレクトリを示します。**
+    *   `pkg/batch/adapter/observability/opentelemetry/trace/module.go` を新規作成し、`ObservabilityConfig` からトレース関連設定をフィルタリングし、TracerProviderを提供するFxモジュールを定義します。**ここでも `opentelemetry` は特定の可観測性プロバイダーの実装を格納するディレクトリを示します。**
+    *   `pkg/batch/adapter/observability/opentelemetry/trace/provider.go` を新規作成し、OpenTelemetry TracerProviderの初期化ロジック（OTLPエクスポーターの構築など）を実装します。**同様に `opentelemetry` は特定の可観測性プロバイダーの実装を格納するディレクトリを示します。**
 
 #### 影響
 *   コードベースの整理とモジュール化が進み、可観測性機能の管理が容易になります。
@@ -54,14 +55,14 @@
     *   `surfin.adapter.observability` セクションを新規追加し、`trace` と `metrics` のサブセクションを持つ共通のエクスポーター定義（例: `otlp_exporter`）を記述します。
 2.  **メトリクス設定のGoコード修正**:
     *   `pkg/batch/adapter/observability/metrics/config/config.go`: `MetricsConfig` の定義を `map[string]observability.config.CommonExporterConfig` に変更し、古い `OTLPExporterConfig` などの定義を削除します。
-    *   `pkg/batch/adapter/observability/metrics/opentelemetry/module.go`:
+    *   `pkg/batch/adapter/observability/opentelemetry/metrics/module.go`:
         *   `NewMetricsConfigFromAppConfig` 関数を `NewMetricsExportersConfigFromObservabilityConfig` にリネームし、引数を `*observability.config.ObservabilityConfig` に変更します。
         *   この関数内で、`ObservabilityConfig` から `enabled` かつ `Metrics` フィールドが `nil` でないエクスポーターのみをフィルタリングして返します。
-    *   `pkg/batch/adapter/observability/metrics/opentelemetry/provider.go`:
+    *   `pkg/batch/adapter/observability/opentelemetry/metrics/provider.go`:
         *   `NewMetricRecorderProvider` 関数の引数型を新しい `metricsConfig.MetricsConfig` (実体は `map[string]observability.config.CommonExporterConfig`) に合わせます。
         *   `createOTLPExporter` 関数が `observability.config.OTLPExporterConfig` を引数として受け取るように変更し、エクスポーター設定へのアクセスを `adapterCfg.Metrics` 経由で行うように修正します。
 3.  **トレース設定のGoコード実装**:
-    *   `pkg/batch/adapter/observability/trace/opentelemetry/module.go` および `provider.go` 内で、`observability.config.CommonExporterConfig` を利用してTracerProviderを構築するロジックを実装します。特に、`adapterCfg.Trace` フィールドからOTLP設定を取得するようにします。
+    *   `pkg/batch/adapter/observability/opentelemetry/trace/module.go` および `provider.go` 内で、`observability.config.CommonExporterConfig` を利用してTracerProviderを構築するロジックを実装します。特に、`adapterCfg.Trace` フィールドからOTLP設定を取得するようにします。
 
 #### 影響
 *   設定ファイルがより簡潔になり、メトリクスとトレースの設定が論理的にグループ化されます。
