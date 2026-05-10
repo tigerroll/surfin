@@ -83,13 +83,13 @@ surfin:
         type: "otlp"
         enabled: true # Enable this exporter entirely
         trace: # Enable tracing if the trace section exists
-          host: "otel-collector"
+          host: "otel-front"
           port: 4317
           protocols: "grpc"
           timeout: "5s"
           insecure: true
         metrics: # Enable metrics if the metrics section exists
-          host: "otel-collector"
+          host: "otel-front"
           port: 4317
           protocols: "grpc"
           timeout: "5s"

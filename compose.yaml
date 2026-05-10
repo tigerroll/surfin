@@ -10,6 +10,9 @@ services:
       TZ: 'Asia/Tokyo'
       GOPROXY: 'https://proxy.golang.org,direct'
       GOSUMDB: 'sum.golang.org'
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-front:4218"
+      OTEL_SERVICE_NAME: "surfin-app"
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=local"
     env_file:
       - .env
     privileged: true
@@ -73,23 +76,35 @@ services:
     networks:
       - surfin-network
 
-  otel-collector:
-    container_name: otel-collector
-    image: "otel/opentelemetry-collector-contrib:latest"
-    platform: linux/amd64
-    command: ["--config=/etc/otel-collector-config.yaml"]
+  #otel-collector:
+  #  container_name: otel-collector
+  #  image: "otel/opentelemetry-collector-contrib:latest"
+  #  platform: linux/amd64
+  #  command: ["--config=/etc/otel-collector-config.yaml"]
+  #  ports:
+  #    - "4317:4317" # OTLP gRPC receiver
+  #    - "4318:4318" # OTLP HTTP receiver
+  #    - "8888:8888" # Prometheus receiver (if needed)
+  #  privileged: true
+  #  volumes:
+  #    - type: bind
+  #      source: container/development/otel-collector/config.yaml
+  #      target: /etc/otel-collector-config.yaml
+  #  networks:
+  #    - surfin-network
+  #  restart: always
+
+  otel-front:
+    container_name: otel-front
+    image: ghcr.io/mesaglio/otel-front:latest
     ports:
+      - "8000:8000" # For browser access
       - "4317:4317" # OTLP gRPC receiver
       - "4318:4318" # OTLP HTTP receiver
-      - "8888:8888" # Prometheus receiver (if needed)
-    privileged: true
-    volumes:
-      - type: bind
-        source: container/development/otel-collector/config.yaml
-        target: /etc/otel-collector-config.yaml
+    environment:
+      - OTEL_FRONT_AUTO_OPEN=false
     networks:
       - surfin-network
-    restart: always
 
 networks:
   surfin-network:
