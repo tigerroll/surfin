@@ -7,6 +7,7 @@
 *   **機能の一元化**: メトリクスとトレースという2つの主要な可観測性シグナルを、OpenTelemetry を介して一元的に管理・設定できるようにします。
 *   **設定の簡素化と柔軟性**: `application.yaml` における可観測性関連の設定を統合し、単一のエクスポーター定義でメトリクスとトレースの両方を制御できるようにします。また、必要に応じて個別の設定も可能とします。
 *   **名称の統一**: システム内の可観測性関連コンポーネントの名称を「Observability」で統一し、概念的な整合性を高めます。
+*   **将来的な拡張性**: OpenTelemetry 以外の可観測性プロバイダー（例: Prometheus）の追加を容易にするため、プロバイダーごとの独立した実装構造を確立します。
 
 ## 2. 変更の概要
 
@@ -20,15 +21,15 @@
 
 ### 3.1. ディレクトリ構造の変更
 
-既存の `metrics` および `trace` 関連のファイルは、以下の新しいパスに移動されます。
+既存の `metrics` および `trace` 関連のファイルは、以下の新しいパスに移動されます。ここで `opentelemetry` は特定の可観測性プロバイダー（この場合は OpenTelemetry）の実装を格納するディレクトリを示します。
 
-*   `pkg/batch/adapter/metrics/config/config.go` → `pkg/batch/adapter/observability/metrics/config/config.go`
-*   `pkg/batch/adapter/metrics/opentelemetry/module.go` → `pkg/batch/adapter/observability/metrics/opentelemetry/module.go`
-*   `pkg/batch/adapter/metrics/opentelemetry/provider.go` → `pkg/batch/adapter/observability/metrics/opentelemetry/provider.go`
-*   `pkg/batch/adapter/metrics/opentelemetry/recorder.go` → `pkg/batch/adapter/observability/metrics/opentelemetry/recorder.go`
-*   `pkg/batch/adapter/trace/config/config.go` → `pkg/batch/adapter/observability/trace/config/config.go`
-*   `pkg/batch/adapter/trace/opentelemetry/module.go` → `pkg/batch/adapter/observability/trace/opentelemetry/module.go`
-*   `pkg/batch/adapter/trace/opentelemetry/provider.go` → `pkg/batch/adapter/observability/trace/opentelemetry/provider.go`
+*   `pkg/batch/adapter/metrics/config/config.go` → `pkg/batch/adapter/observability/opentelemetry/metrics/config/config.go`
+*   `pkg/batch/adapter/metrics/opentelemetry/module.go` → `pkg/batch/adapter/observability/opentelemetry/metrics/module.go`
+*   `pkg/batch/adapter/metrics/opentelemetry/provider.go` → `pkg/batch/adapter/observability/opentelemetry/metrics/provider.go`
+*   `pkg/batch/adapter/metrics/opentelemetry/recorder.go` → `pkg/batch/adapter/observability/opentelemetry/metrics/recorder.go`
+*   `pkg/batch/adapter/trace/config/config.go` → `pkg/batch/adapter/observability/opentelemetry/trace/config/config.go`
+*   `pkg/batch/adapter/trace/opentelemetry/module.go` → `pkg/batch/adapter/observability/opentelemetry/trace/module.go`
+*   `pkg/batch/adapter/trace/opentelemetry/provider.go` → `pkg/batch/adapter/observability/opentelemetry/trace/provider.go`
 
 また、以下の新しいファイルが作成されます。
 
@@ -100,11 +101,11 @@ surfin:
 
 *   それぞれの `MetricsExportersConfig` および `TraceExportersConfig` は、`map[string]observability.config.CommonExporterConfig` として再定義されます。
 
-#### 3.3.4. `pkg/batch/adapter/observability/metrics/opentelemetry/module.go` および `pkg/batch/adapter/observability/trace/opentelemetry/module.go`
+#### 3.3.4. `pkg/batch/adapter/observability/opentelemetry/metrics/module.go` および `pkg/batch/adapter/observability/opentelemetry/trace/module.go`
 
 *   `NewMetricsExportersConfigFromObservabilityConfig` および `NewTraceExportersConfigFromObservabilityConfig` 関数が更新され、`observability.Config` から、`enabled` かつ `Metrics` (または `Trace`) フィールドが `nil` でないエクスポーターのみをフィルタリングして返します。
 
-#### 3.3.5. `pkg/batch/adapter/observability/metrics/opentelemetry/provider.go` および `pkg/batch/adapter/observability/trace/opentelemetry/provider.go`
+#### 3.3.5. `pkg/batch/adapter/observability/opentelemetry/metrics/provider.go` および `pkg/batch/adapter/observability/opentelemetry/trace/provider.go`
 
 *   `NewMetricRecorderProvider` および `NewTracerProvider` 関数が更新され、渡された `metricsConfig.MetricsExportersConfig` (または `traceConfig.TraceExportersConfig`) の各エクスポーターの `Metrics` (または `Trace`) フィールドから OTLP 設定を取得して、OpenTelemetry のエクスポーターを構築します。
 
@@ -113,14 +114,14 @@ surfin:
 開発者は、以下の手順でこの移行を適用できます。
 
 1.  **ファイルの移動**:
-    *   `pkg/batch/adapter/metrics` ディレクトリの内容を `pkg/batch/adapter/observability/metrics` へ移動します。
+    *   `pkg/batch/adapter/metrics` ディレクトリの内容を `pkg/batch/adapter/observability/opentelemetry/metrics` へ移動します。
 2.  **新規ファイルの作成**:
-    *   `pkg/batch/adapter/observability/config/config.go` を作成し、上記「3.3.1」の内容を記述します。
-    *   `pkg/batch/adapter/observability/module.go` を作成し、上記「3.3.2」の内容を記述します。
+    *   `pkg/batch/adapter/observability/config/config.go` を新規作成し、上記「3.3.1」の内容を記述します。
+    *   `pkg/batch/adapter/observability/module.go` を新規作成し、上記「3.3.2」の内容を記述します。
 3.  **Go コードの修正**:
-    *   移動したファイル (`pkg/batch/adapter/observability/...`) 内の `package` 宣言を、新しいパスに合わせて修正します（例: `package metricsconfig` や `package opentelemetry`）。
+    *   移動したファイル (`pkg/batch/adapter/observability/opentelemetry/...`) 内の `package` 宣言を、新しいパスに合わせて修正します（例: `package metricsconfig` や `package opentelemetry`）。
     *   すべての Go ファイルで、`import` パスを新しいディレクトリ構造に合わせて修正します。特に、`observability/config` パッケージからのインポートに注意してください。
-    *   `pkg/batch/adapter/observability/metrics/opentelemetry/provider.go` および `pkg/batch/adapter/observability/trace/opentelemetry/provider.go` 内で、OTLP 設定にアクセスする際に `exporterCfg.Metrics` または `exporterCfg.Trace` を使用するように修正します。
+    *   `pkg/batch/adapter/observability/opentelemetry/metrics/provider.go` および `pkg/batch/adapter/observability/opentelemetry/trace/provider.go` 内で、OTLP 設定にアクセスする際に `exporterCfg.Metrics` または `exporterCfg.Trace` を使用するように修正します。
 4.  **`application.yaml` の更新**:
     *   `example/weather/cmd/weather/resources/application.yaml` を開き、`surfin.adapter.metrics` セクションを削除し、上記「3.2」の「変更後」の例に従って `surfin.adapter.observability` セクションを追加します。
 5.  **Fx アプリケーションの更新**:
