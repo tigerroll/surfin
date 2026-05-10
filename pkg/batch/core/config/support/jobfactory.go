@@ -79,7 +79,7 @@ type JobFactoryParams struct {
 	Cfg                  *config.Config                 // Global configuration for the framework.
 	Resolver             port.ExpressionResolver        // ExpressionResolver for resolving dynamic expressions within JSL.
 	MetricRecorder       metrics.MetricRecorder         // MetricRecorder for recording metrics.
-	Tracer               metrics.Tracer                 // Tracer for distributed tracing.
+	Tracer               metrics.Tracer                 `optional:"true"` // Tracer for distributed tracing.
 	AllResourceProviders []coreAdapter.ResourceProvider `group:"resourceProviders"`
 	MetadataTxManager    tx.TransactionManager          `name:"metadata"` // Metadata Transaction Manager, used by JobRepository.
 	StepFactory          step_factory.StepFactory       // StepFactory for building steps.
@@ -102,12 +102,19 @@ func NewJobFactory(p JobFactoryParams) *JobFactory {
 		resourceProvidersMap[provider.Name()] = provider
 	}
 
+	// If no Tracer is provided (e.g., OpenTelemetry module is not included), use a NoOpTracer.
+	// If no Tracer is provided (e.g., OpenTelemetry module is not included), use a NoOpTracer.
+	effectiveTracer := p.Tracer
+	if effectiveTracer == nil {
+		effectiveTracer = metrics.NewNoOpTracer()
+	}
+
 	return &JobFactory{
 		jobRepository:                    p.Repo,
 		expressionResolver:               p.Resolver,
 		resourceProviders:                resourceProvidersMap,
 		metricRecorder:                   p.MetricRecorder,
-		tracer:                           p.Tracer,
+		tracer:                           effectiveTracer,
 		componentBuilders:                make(map[string]jsl.ComponentBuilder),
 		jobBuilders:                      make(map[string]JobBuilder),
 		jobListenerBuilders:              make(map[string]jsl.JobExecutionListenerBuilder),

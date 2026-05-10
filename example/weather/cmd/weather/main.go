@@ -18,8 +18,8 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/mysql"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/postgres"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/sqlite"
-	otelmetrics "github.com/tigerroll/surfin/pkg/batch/adapter/metrics/opentelemetry" // Imports the OpenTelemetry Metrics adapter.
-	"github.com/tigerroll/surfin/pkg/batch/adapter/storage/gcs"                       // Imports the GCS module.
+	"github.com/tigerroll/surfin/pkg/batch/adapter/observability"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/storage/gcs" // Imports the GCS module.
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
@@ -89,10 +89,10 @@ func main() {
 		// GORM-based database modules
 		mysql.Module, // MySQL module
 		postgres.Module,
-		sqlite.Module,      // SQLite module
-		gcs.Module,         // Adds the GCS storage adapter module.
-		webproxy.Module,    // Adds the WebProxy adapter module.
-		otelmetrics.Module, // Adds the OpenTelemetry Metrics adapter module.
+		sqlite.Module,        // SQLite module
+		gcs.Module,           // Adds the GCS storage adapter module.
+		webproxy.Module,      // Adds the WebProxy adapter module.
+		observability.Module, // Adds the Observability adapter module.
 	}
 
 	// Run the application.
