@@ -1,6 +1,5 @@
 package metricsconfig
 
-
 import (
 	"github.com/tigerroll/surfin/pkg/batch/adapter/observability/config"
 )
