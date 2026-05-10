@@ -1,6 +1,5 @@
 package traceconfig
 
-
 import (
 	"github.com/tigerroll/surfin/pkg/batch/adapter/observability/config"
 )

@@ -1,6 +1,5 @@
 package config
 
-
 // OTLPExporterConfig defines the configuration for an OTLP exporter.
 // This struct is used for both trace and metrics OTLP configurations.
 type OTLPExporterConfig struct {
