@@ -16,6 +16,7 @@
 *   メトリクスとトレースのコードを `observability` 配下に統合し、論理的な構造を確立する。
 *   メトリクスとトレースで共通利用できる設定構造を定義し、設定の重複を排除する。
 *   将来的な拡張性: OpenTelemetry 以外の可観測性プロバイダー（例: Prometheus）の追加を容易にするため、プロバイダーごとの独立した実装構造を確立する。
+*   **設計原則**: 既存のDatabase AdapterやStorage Adapterの実装パターンに倣い、`pkg/batch/core/config` パッケージが特定のアダプター設定構造体（例: `observability.config.ObservabilityConfig`）に直接依存しない「逆依存」を避ける設計とします。`pkg/batch/core/config/config.go` の `SurfinConfig.AdapterConfigs` は `interface{}` のままとし、各アダプターはそれぞれ独自の設定構造体を定義し、Fxの`fx.Provide`を通じて`coreConfig.Config`から自身に必要な設定を抽出します。
 
 #### 主要な変更点
 

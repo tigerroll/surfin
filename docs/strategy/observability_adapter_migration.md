@@ -86,6 +86,9 @@ surfin:
 
 ### 3.3. Go コードの変更
 
+* 本移行におけるGoコードの変更は、既存のDatabase AdapterやStorage Adapterの実装パターンに倣い、`pkg/batch/core/config` パッケージが特定のアダプター設定構造体（例: `observability.config.ObservabilityConfig`）に直接依存しない「逆依存」を避ける設計とします。
+* 具体的には、`pkg/batch/core/config/config.go` の `SurfinConfig.AdapterConfigs` は `interface{}` のままとし、各アダプターはそれぞれ独自の設定構造体を定義し、Fxの`fx.Provide`を通じて`coreConfig.Config`から自身に必要な設定を抽出する形を取ります。
+
 #### 3.3.1. `pkg/batch/adapter/observability/config/config.go`
 
 *   `OTLPExporterConfig` は、`trace` および `metrics` のサブセクションで使用される共通の OTLP 設定構造体として定義されます。
