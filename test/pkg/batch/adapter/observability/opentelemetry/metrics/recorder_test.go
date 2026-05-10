@@ -1,4 +1,4 @@
-package opentelemetry_test
+package metrics_test
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata" // Requires metricdata.ResourceMetrics, etc.
 
-	"github.com/tigerroll/surfin/pkg/batch/adapter/metrics/opentelemetry"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/observability/opentelemetry/metrics"
 	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
@@ -74,7 +74,7 @@ func TestOtelMetricRecorder_NewOtelMetricRecorder(t *testing.T) {
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
 
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 	assert.NotNil(t, recorder)
 }
@@ -87,7 +87,7 @@ func TestOtelMetricRecorder_RecordJobStart(t *testing.T) {
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
 
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{
@@ -118,7 +118,7 @@ func TestOtelMetricRecorder_RecordJobEnd(t *testing.T) {
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
 
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 
 	endTime := time.Now()
@@ -163,7 +163,7 @@ func TestOtelMetricRecorder_RecordStepStart(t *testing.T) {
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{
@@ -201,7 +201,7 @@ func TestOtelMetricRecorder_RecordStepEnd(t *testing.T) {
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 
 	endTime := time.Now()
@@ -257,7 +257,7 @@ func TestOtelMetricRecorder_RecordItemRead(t *testing.T) {
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -285,7 +285,7 @@ func TestOtelMetricRecorder_RecordItemProcess(t *testing.T) {
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -313,7 +313,7 @@ func TestOtelMetricRecorder_RecordItemWrite(t *testing.T) {
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -341,7 +341,7 @@ func TestOtelMetricRecorder_RecordItemSkip(t *testing.T) {
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -371,7 +371,7 @@ func TestOtelMetricRecorder_RecordItemRetry(t *testing.T) {
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -401,7 +401,7 @@ func TestOtelMetricRecorder_RecordChunkCommit(t *testing.T) {
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -429,7 +429,7 @@ func TestOtelMetricRecorder_RecordDuration(t *testing.T) {
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := opentelemetry.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter)
 	assert.NoError(t, err)
 
 	recorder.RecordDuration(ctx, "test.operation.duration", 1.23, attribute.String("key", "value"))

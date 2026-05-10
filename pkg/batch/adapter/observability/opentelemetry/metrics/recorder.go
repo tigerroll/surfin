@@ -1,4 +1,4 @@
-package opentelemetry
+package metrics
 
 import (
 	"context"
@@ -11,9 +11,6 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 )
-
-// Package opentelemetry provides an OpenTelemetry-based implementation of the MetricRecorder interface.
-// It defines how metric data related to job and step executions should be collected and exported.
 
 // OtelMetricRecorder implements metrics.MetricRecorder using OpenTelemetry.
 type OtelMetricRecorder struct {

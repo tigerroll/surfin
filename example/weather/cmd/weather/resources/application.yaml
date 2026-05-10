@@ -78,11 +78,17 @@ surfin:
         key_name: "X-API-Key"
         api_endpoint: "http://wiremock:8080/v1"
 
-    metrics:
-      otlp_exporter:
+    observability:
+      otlp_exporter: # Exporter name
         type: "otlp"
-        enabled: true
-        otlp:
+        enabled: true # Enable this exporter entirely
+        trace: # Enable tracing if the trace section exists
+          host: "otel-collector"
+          port: 4317
+          protocols: "grpc"
+          timeout: "5s"
+          insecure: true
+        metrics: # Enable metrics if the metrics section exists
           host: "otel-collector"
           port: 4317
           protocols: "grpc"
