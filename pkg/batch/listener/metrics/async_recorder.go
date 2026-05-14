@@ -4,18 +4,14 @@ import (
 	"context"
 	"sync"
 
-	"go.opentelemetry.io/otel/attribute"
-
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/fx"
 )
-
-// Package metrics provides an asynchronous wrapper for the MetricRecorder interface.
-// It allows metric events to be recorded without blocking the caller, processing them in a separate goroutine.
 
 // MetricEvent represents a metric event to be recorded asynchronously.
 // It encapsulates all necessary data for various metric types.
@@ -55,8 +51,15 @@ type AsyncMetricRecorder struct {
 }
 
 // NewAsyncMetricRecorder creates a new asynchronous metric recorder.
-// bufferSize: The buffer size for the event queue. If 0 or less, a default value is used.
-// syncRec: The synchronous recorder that performs the actual metric recording.
+//
+// Parameters:
+//
+//	bufferSize: The buffer size for the event queue. If 0 or less, a default value is used.
+//	syncRec: The synchronous recorder that performs the actual metric recording.
+//
+// Returns:
+//
+//	A new instance of AsyncMetricRecorder.
 func NewAsyncMetricRecorder(bufferSize int, syncRec metrics.MetricRecorder) *AsyncMetricRecorder {
 	if bufferSize <= 0 { // Ensure a positive buffer size.
 		bufferSize = 100 // Default buffer size
@@ -206,10 +209,24 @@ var _ metrics.MetricRecorder = (*AsyncMetricRecorder)(nil)
 
 // NewAsyncMetricRecorderWrapper is an Fx decorator function that wraps a synchronous MetricRecorder
 // with an asynchronous one.
-// It takes fx.Lifecycle and config.Config and calls AsyncMetricRecorder.Close() on shutdown.
-func NewAsyncMetricRecorderWrapper(lc fx.Lifecycle, cfg *config.Config, syncRecorder metrics.MetricRecorder) metrics.MetricRecorder {
+//
+// Parameters:
+//
+//	lc: The Fx lifecycle object for registering shutdown hooks.
+//	appConfig: The application's core configuration, used to determine buffer size.
+//	obsConfig: The observability configuration, used to determine if the async wrapper should be applied.
+//	syncRecorder: The underlying synchronous MetricRecorder implementation.
+//
+// Returns:
+//
+//	A MetricRecorder instance, which is either the wrapped asynchronous recorder or the original synchronous one.
+func NewAsyncMetricRecorderWrapper(
+	lc fx.Lifecycle,
+	appConfig *config.Config,
+	syncRecorder metrics.MetricRecorder,
+) metrics.MetricRecorder {
 	// If metricsAsyncBufferSize is not set or is 0 or less, use the default of 100.
-	bufferSize := cfg.Surfin.Batch.MetricsAsyncBufferSize
+	bufferSize := appConfig.Surfin.Batch.MetricsAsyncBufferSize
 	if bufferSize <= 0 {
 		bufferSize = 100
 	}
@@ -220,6 +237,6 @@ func NewAsyncMetricRecorderWrapper(lc fx.Lifecycle, cfg *config.Config, syncReco
 			return nil
 		},
 	})
-	logger.Debugf("MetricRecorder decorated with asynchronous wrapper.")
+	logger.Debugf("MetricRecorder decorated with asynchronous wrapper (buffer size: %d).", bufferSize)
 	return asyncRecorder
 }

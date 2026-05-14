@@ -14,7 +14,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"go.uber.org/fx"
 )
 
@@ -70,10 +69,12 @@ func NewTracerProvider(lc fx.Lifecycle, traceExporters traceconfig.TraceExporter
 	}
 
 	res, err := resource.New(context.Background(),
-		resource.WithAttributes(
-			semconv.ServiceName("surfin-batch"),
-			semconv.ServiceVersion("1.0.0"), // TODO: Make this configurable or derive from build info
-		),
+		resource.WithFromEnv(),      // Load attributes from OTEL_RESOURCE_ATTRIBUTES and OTEL_SERVICE_NAME
+		resource.WithTelemetrySDK(), // Auto-detect Telemetry SDK info
+		resource.WithProcess(),      // Auto-detect process info
+		resource.WithOS(),           // Auto-detect OS info
+		resource.WithContainer(),    // Auto-detect container info
+		resource.WithHost(),         // Auto-detect host info
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %w", err)

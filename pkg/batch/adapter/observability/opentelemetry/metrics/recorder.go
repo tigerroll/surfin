@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"math/rand"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -30,6 +31,8 @@ type OtelMetricRecorder struct {
 
 	// Histograms
 	durationHistogram metric.Float64Histogram
+
+	itemSamplingRate float64
 }
 
 // NewOtelMetricRecorder creates a new instance of OtelMetricRecorder.
@@ -39,16 +42,18 @@ type OtelMetricRecorder struct {
 // Parameters:
 //
 //	meter: The OpenTelemetry `metric.Meter` used to create instruments.
+//	itemSamplingRate: The sampling rate for item-level metrics (0.0-1.0).
 //
 // Returns:
 //
 //	metrics.MetricRecorder: An initialized `OtelMetricRecorder` instance.
 //	error: An error if any metric instrument fails to be created.
-func NewOtelMetricRecorder(meter metric.Meter) (metrics.MetricRecorder, error) {
+func NewOtelMetricRecorder(meter metric.Meter, itemSamplingRate float64) (metrics.MetricRecorder, error) {
 
 	var err error
 	r := &OtelMetricRecorder{
-		meter: meter,
+		meter:            meter,
+		itemSamplingRate: itemSamplingRate,
 	}
 
 	// Initialize Counters
@@ -221,6 +226,11 @@ func (r *OtelMetricRecorder) RecordStepEnd(ctx context.Context, stepExecution *m
 //	stepExecution: The StepExecution instance where the items were read.
 //	count: The number of items read.
 func (r *OtelMetricRecorder) RecordItemRead(ctx context.Context, stepExecution *model.StepExecution, count int64) {
+	// Apply sampling for item-level metrics
+	if r.itemSamplingRate < 1.0 && rand.Float64() > r.itemSamplingRate {
+		return
+	}
+
 	attrs := []attribute.KeyValue{
 		attribute.String("job.name", stepExecution.JobExecution.JobName),
 		attribute.String("job.execution_id", stepExecution.JobExecutionID),
@@ -239,6 +249,11 @@ func (r *OtelMetricRecorder) RecordItemRead(ctx context.Context, stepExecution *
 //	stepExecution: The StepExecution instance where the items were processed.
 //	count: The number of items processed.
 func (r *OtelMetricRecorder) RecordItemProcess(ctx context.Context, stepExecution *model.StepExecution, count int64) {
+	// Apply sampling for item-level metrics
+	if r.itemSamplingRate < 1.0 && rand.Float64() > r.itemSamplingRate {
+		return
+	}
+
 	attrs := []attribute.KeyValue{
 		attribute.String("job.name", stepExecution.JobExecution.JobName),
 		attribute.String("job.execution_id", stepExecution.JobExecutionID),
@@ -257,6 +272,11 @@ func (r *OtelMetricRecorder) RecordItemProcess(ctx context.Context, stepExecutio
 //	stepExecution: The StepExecution instance where the items were written.
 //	count: The number of items written.
 func (r *OtelMetricRecorder) RecordItemWrite(ctx context.Context, stepExecution *model.StepExecution, count int64) {
+	// Apply sampling for item-level metrics
+	if r.itemSamplingRate < 1.0 && rand.Float64() > r.itemSamplingRate {
+		return
+	}
+
 	attrs := []attribute.KeyValue{
 		attribute.String("job.name", stepExecution.JobExecution.JobName),
 		attribute.String("job.execution_id", stepExecution.JobExecutionID),

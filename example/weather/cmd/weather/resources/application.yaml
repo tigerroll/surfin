@@ -94,6 +94,8 @@ surfin:
           protocols: "grpc"
           timeout: "5s"
           insecure: true
+          collection_interval: "60s" # Metrics collection interval (e.g., "60s", "2m").
+          item_sampling_rate: 0.1    # Sampling rate for item-level metrics (0.0-1.0).
 
   # Batch framework settings
   batch:
