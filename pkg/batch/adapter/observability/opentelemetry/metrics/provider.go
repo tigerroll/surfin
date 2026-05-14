@@ -1,3 +1,4 @@
+// Package metrics provides functions to create and manage OpenTelemetry MeterProvider instances.
 package metrics
 
 import (
@@ -13,7 +14,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"go.uber.org/fx"
 )
 
@@ -21,12 +21,36 @@ import (
 const moduleName = "opentelemetry-metrics"
 
 // NewMeterProvider creates and provides an OpenTelemetry MeterProvider.
-// It initializes the provider based on the configured metrics exporters.
+//
+// It initializes the MeterProvider based on the provided metrics exporter configurations.
+// If no enabled metrics exporters are found, a no-op MeterProvider is returned.
+// The function also registers an Fx lifecycle hook to ensure proper shutdown of the provider.
+//
+// Parameters:
+//
+//	lc: The Fx lifecycle object for registering shutdown hooks.
+//	metricsExporters: A map of metrics exporter configurations.
+//
+// Returns:
+//
+//	An initialized *metric.MeterProvider and an error if initialization fails.
 func NewMeterProvider(lc fx.Lifecycle, metricsExporters metricsconfig.MetricsExportersConfig) (*metric.MeterProvider, error) {
-	var (
-		exporters []metric.Exporter
-		err       error
+	var exporters []metric.Exporter
+
+	res, err := resource.New(context.Background(),
+		resource.WithFromEnv(),      // Load attributes from OTEL_RESOURCE_ATTRIBUTES and OTEL_SERVICE_NAME
+		resource.WithTelemetrySDK(), // Auto-detect Telemetry SDK info
+		resource.WithProcess(),      // Auto-detect process info
+		resource.WithOS(),           // Auto-detect OS info
+		resource.WithContainer(),    // Auto-detect container info
+		resource.WithHost(),         // Auto-detect host info
 	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
+
+	var meterProviderOptions []metric.Option
+	meterProviderOptions = append(meterProviderOptions, metric.WithResource(res))
 
 	for name, exporterCfg := range metricsExporters {
 		if !exporterCfg.Enabled {
@@ -41,6 +65,20 @@ func NewMeterProvider(lc fx.Lifecycle, metricsExporters metricsconfig.MetricsExp
 				return nil, exception.NewBatchError(moduleName, fmt.Sprintf("failed to create OTLP metrics exporter '%s'", name), expErr, false, false)
 			}
 			exporters = append(exporters, exporter)
+
+			// Apply collection interval if specified
+			if exporterCfg.Metrics.CollectionInterval != "" {
+				interval, parseErr := time.ParseDuration(exporterCfg.Metrics.CollectionInterval)
+				if parseErr != nil {
+					logger.Warnf("Invalid collection_interval for exporter '%s': %v. Using default.", name, parseErr)
+					meterProviderOptions = append(meterProviderOptions, metric.WithReader(metric.NewPeriodicReader(exporter)))
+				} else {
+					meterProviderOptions = append(meterProviderOptions, metric.WithReader(metric.NewPeriodicReader(exporter, metric.WithInterval(interval))))
+				}
+			} else {
+				meterProviderOptions = append(meterProviderOptions, metric.WithReader(metric.NewPeriodicReader(exporter)))
+			}
+
 		} else {
 			logger.Warnf("Unsupported metrics exporter type '%s' or missing metrics configuration for exporter '%s'", exporterCfg.Type, name)
 		}
@@ -49,26 +87,6 @@ func NewMeterProvider(lc fx.Lifecycle, metricsExporters metricsconfig.MetricsExp
 	if len(exporters) == 0 {
 		logger.Infof("No enabled OpenTelemetry metrics exporters found. Using NoopMeterProvider.")
 		return metric.NewMeterProvider(), nil // No-op provider
-	}
-
-	res, err := resource.New(context.Background(),
-		resource.WithAttributes(
-			semconv.ServiceName("surfin-batch"),
-			semconv.ServiceVersion("1.0.0"), // TODO: Make this configurable or derive from build info
-		),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create resource: %w", err)
-	}
-
-	// Create a new MeterProvider with the configured exporters.
-	// For simplicity, we're using a PeriodicReader for all exporters.
-	// In a more complex scenario, you might use different readers or push/pull models.
-	var meterProviderOptions []metric.Option
-	meterProviderOptions = append(meterProviderOptions, metric.WithResource(res))
-
-	for _, exp := range exporters {
-		meterProviderOptions = append(meterProviderOptions, metric.WithReader(metric.NewPeriodicReader(exp)))
 	}
 
 	mp := metric.NewMeterProvider(meterProviderOptions...)
@@ -89,6 +107,16 @@ func NewMeterProvider(lc fx.Lifecycle, metricsExporters metricsconfig.MetricsExp
 }
 
 // createOTLPExporter creates an OTLP metrics exporter based on the provided configuration.
+// It supports gRPC and HTTP/protobuf protocols.
+//
+// Parameters:
+//
+//	cfg: The OTLP exporter configuration.
+//
+// Returns:
+//
+//	A metric.Exporter instance and an error if the exporter cannot be created
+//	(e.g., due to unsupported protocol or invalid timeout).
 func createOTLPExporter(cfg *config.OTLPExporterConfig) (metric.Exporter, error) {
 	endpoint := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	timeout, err := time.ParseDuration(cfg.Timeout)

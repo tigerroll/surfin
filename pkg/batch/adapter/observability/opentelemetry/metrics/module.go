@@ -1,6 +1,9 @@
 package metrics
 
 import (
+	"math/rand"
+	"time"
+
 	"github.com/tigerroll/surfin/pkg/batch/adapter/observability/config"
 	metricsconfig "github.com/tigerroll/surfin/pkg/batch/adapter/observability/opentelemetry/metrics/config"
 	coreMetrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
@@ -40,8 +43,19 @@ func NewMetricsExportersConfigFromObservabilityConfig(obsConfig config.Observabi
 var Module = fx.Options(
 	fx.Provide(NewMetricsExportersConfigFromObservabilityConfig),
 	fx.Provide(NewMeterProvider),
-	fx.Provide(func(meterProvider *metric.MeterProvider) (coreMetrics.MetricRecorder, error) {
+	fx.Provide(func(meterProvider *metric.MeterProvider, metricsExporters metricsconfig.MetricsExportersConfig) (coreMetrics.MetricRecorder, error) {
 		// Retrieves a Meter from the MeterProvider and passes it to NewOtelMetricRecorder.
-		return NewOtelMetricRecorder(meterProvider.Meter("surfin.batch"))
+		// Determine the item sampling rate. If multiple exporters define it, pick one (e.g., the first enabled one).
+		itemSamplingRate := 1.0 // Default to no sampling
+		for _, cfg := range metricsExporters {
+			if cfg.Enabled && cfg.Metrics != nil && cfg.Metrics.ItemSamplingRate > 0 {
+				itemSamplingRate = cfg.Metrics.ItemSamplingRate
+				break // Use the first one found
+			}
+		}
+		return NewOtelMetricRecorder(meterProvider.Meter("surfin.batch"), itemSamplingRate)
+	}),
+	fx.Invoke(func() {
+		rand.Seed(time.Now().UnixNano())
 	}),
 )
