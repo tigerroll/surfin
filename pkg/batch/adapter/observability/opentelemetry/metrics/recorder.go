@@ -11,6 +11,7 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
 // OtelMetricRecorder implements metrics.MetricRecorder using OpenTelemetry.
@@ -28,6 +29,7 @@ type OtelMetricRecorder struct {
 	itemSkipCounter    metric.Int64Counter
 	itemRetryCounter   metric.Int64Counter
 	chunkCommitCounter metric.Int64Counter
+	errorCounter       metric.Int64Counter
 
 	// Histograms
 	durationHistogram metric.Float64Histogram
@@ -126,6 +128,13 @@ func NewOtelMetricRecorder(meter metric.Meter, itemSamplingRate float64) (metric
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chunkCommitCounter: %w", err)
+	}
+	r.errorCounter, err = meter.Int64Counter(
+		"surfin.batch.error.total",
+		metric.WithDescription("Total number of execution errors"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create errorCounter: %w", err)
 	}
 
 	// Initialize Histograms
@@ -360,4 +369,16 @@ func (r *OtelMetricRecorder) RecordDuration(ctx context.Context, name string, du
 	copy(allAttrs[1:], attrs)
 
 	r.durationHistogram.Record(ctx, duration, metric.WithAttributes(allAttrs...))
+}
+
+// RecordExecutionError records a general execution error.
+func (r *OtelMetricRecorder) RecordExecutionError(ctx context.Context, err error) {
+	// Log the error.
+	logger.Errorf("Metrics: Execution error recorded: %v", err)
+
+	// Increment the error counter.
+	attrs := []attribute.KeyValue{
+		attribute.String("error.message", exception.ExtractErrorMessage(err)),
+	}
+	r.errorCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 }

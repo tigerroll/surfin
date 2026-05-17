@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
@@ -39,6 +40,7 @@ const (
 	MetricEventTypeItemRetry      = "item_retry"
 	MetricEventTypeChunkCommit    = "chunk_commit"
 	MetricEventTypeRecordDuration = "record_duration"
+	MetricEventTypeExecutionError = "execution_error"
 )
 
 // AsyncMetricRecorder asynchronously records metrics by pushing events to a channel
@@ -48,6 +50,10 @@ type AsyncMetricRecorder struct {
 	stopCh       chan struct{}          // Channel to signal the worker goroutine to stop.
 	wg           sync.WaitGroup         // Used to wait for the worker goroutine to finish.
 	syncRecorder metrics.MetricRecorder // The concrete instance that performs actual metric recording
+
+	// Used for aggregating high-frequency events.
+	mu       sync.Mutex
+	counters map[string]int64
 }
 
 // NewAsyncMetricRecorder creates a new asynchronous metric recorder.
@@ -68,6 +74,7 @@ func NewAsyncMetricRecorder(bufferSize int, syncRec metrics.MetricRecorder) *Asy
 		eventQueue:   make(chan MetricEvent, bufferSize),
 		stopCh:       make(chan struct{}),
 		syncRecorder: syncRec,
+		counters:     make(map[string]int64),
 	}
 	r.wg.Add(1)
 	go r.run() // Start the worker goroutine
@@ -124,6 +131,8 @@ func (r *AsyncMetricRecorder) processEvent(event MetricEvent) {
 		r.syncRecorder.RecordChunkCommit(ctx, event.StepExecution, event.Count)
 	case MetricEventTypeRecordDuration:
 		r.syncRecorder.RecordDuration(ctx, event.Name, event.Duration, event.Attrs...)
+	case MetricEventTypeExecutionError:
+		r.syncRecorder.RecordExecutionError(ctx, event.Err)
 	default:
 		logger.Warnf("AsyncMetricRecorder: Unknown metric event type received: %s", event.Type)
 	}
@@ -146,6 +155,29 @@ func (r *AsyncMetricRecorder) sendEvent(event MetricEvent, id string) {
 		// Event added to queue
 	default:
 		logger.Warnf("AsyncMetricRecorder: Event queue is full (type: %s, ID: %s). Event discarded.", event.Type, id)
+
+		// Record the queue overflow as an error synchronously.
+		// Use syncRecorder directly to avoid circular dependencies.
+		r.syncRecorder.RecordExecutionError(context.Background(), fmt.Errorf("metric_queue_full: type=%s, id=%s", event.Type, id))
+	}
+}
+
+// incrementCounter increments the counter for a specific event type.
+func (r *AsyncMetricRecorder) incrementCounter(eventType string, count int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.counters[eventType] += count
+}
+
+// flushCounters sends all accumulated counters to the queue and resets them.
+func (r *AsyncMetricRecorder) flushCounters(stepExecution *model.StepExecution) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for eventType, count := range r.counters {
+		if count > 0 {
+			r.sendEvent(MetricEvent{Type: eventType, StepExecution: stepExecution, Count: count}, stepExecution.ID)
+			r.counters[eventType] = 0 // Reset counter
+		}
 	}
 }
 
@@ -166,22 +198,24 @@ func (r *AsyncMetricRecorder) RecordStepStart(_ context.Context, execution *mode
 
 // RecordStepEnd records the end of a StepExecution asynchronously.
 func (r *AsyncMetricRecorder) RecordStepEnd(_ context.Context, execution *model.StepExecution) {
+	// Flush accumulated counters before ending the step
+	r.flushCounters(execution)
 	r.sendEvent(MetricEvent{Type: MetricEventTypeStepEnd, StepExecution: execution}, execution.ID)
 }
 
 // RecordItemRead records the successful reading of an item asynchronously.
 func (r *AsyncMetricRecorder) RecordItemRead(_ context.Context, stepExecution *model.StepExecution, count int64) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeItemRead, StepExecution: stepExecution, Count: count}, stepExecution.ID)
+	r.incrementCounter(MetricEventTypeItemRead, count)
 }
 
 // RecordItemProcess records the successful processing of an item asynchronously.
 func (r *AsyncMetricRecorder) RecordItemProcess(_ context.Context, stepExecution *model.StepExecution, count int64) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeItemProcess, StepExecution: stepExecution, Count: count}, stepExecution.ID)
+	r.incrementCounter(MetricEventTypeItemProcess, count)
 }
 
 // RecordItemWrite records the successful writing of items asynchronously.
 func (r *AsyncMetricRecorder) RecordItemWrite(_ context.Context, stepExecution *model.StepExecution, count int64) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeItemWrite, StepExecution: stepExecution, Count: count}, stepExecution.ID)
+	r.incrementCounter(MetricEventTypeItemWrite, count)
 }
 
 // RecordItemSkip records the skipping of an item asynchronously.
@@ -196,12 +230,17 @@ func (r *AsyncMetricRecorder) RecordItemRetry(_ context.Context, stepExecution *
 
 // RecordChunkCommit records the commitment of a chunk asynchronously.
 func (r *AsyncMetricRecorder) RecordChunkCommit(_ context.Context, stepExecution *model.StepExecution, count int64) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeChunkCommit, StepExecution: stepExecution, Count: count}, stepExecution.ID)
+	r.incrementCounter(MetricEventTypeChunkCommit, count)
 }
 
 // RecordDuration records the execution time event of a specific operation.
 func (r *AsyncMetricRecorder) RecordDuration(_ context.Context, name string, duration float64, attrs ...attribute.KeyValue) {
 	r.sendEvent(MetricEvent{Type: MetricEventTypeRecordDuration, Name: name, Duration: duration, Attrs: attrs}, name)
+}
+
+// RecordExecutionError records an execution error asynchronously.
+func (r *AsyncMetricRecorder) RecordExecutionError(_ context.Context, err error) {
+	r.sendEvent(MetricEvent{Type: MetricEventTypeExecutionError, Err: err}, "system")
 }
 
 // Ensures AsyncMetricRecorder implements the metrics.MetricRecorder interface at compile time.

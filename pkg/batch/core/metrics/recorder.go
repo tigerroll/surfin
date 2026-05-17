@@ -96,6 +96,13 @@ type MetricRecorder interface {
 	//   attrs: Optional OpenTelemetry attributes to associate with the duration.
 	//          Example: `attribute.String("api_name", "OpenMeteo"), attribute.String("status", "success")`
 	RecordDuration(ctx context.Context, name string, duration float64, attrs ...attribute.KeyValue)
+
+	// RecordExecutionError records a general execution error.
+	//
+	// Parameters:
+	//   ctx: The context for the operation.
+	//   err: The error that occurred.
+	RecordExecutionError(ctx context.Context, err error)
 }
 
 // NoOpMetricRecorder is a no-operation implementation of MetricRecorder.
@@ -161,5 +168,9 @@ func (r *NoOpMetricRecorder) RecordChunkCommit(ctx context.Context, stepExecutio
 // It performs no operation.
 func (r *NoOpMetricRecorder) RecordDuration(ctx context.Context, name string, duration float64, attrs ...attribute.KeyValue) {
 }
+
+// RecordExecutionError implements the MetricRecorder interface for NoOpMetricRecorder.
+// It performs no operation.
+func (r *NoOpMetricRecorder) RecordExecutionError(ctx context.Context, err error) {}
 
 var _ MetricRecorder = (*NoOpMetricRecorder)(nil) // Compile-time check to ensure NoOpMetricRecorder implements MetricRecorder.
