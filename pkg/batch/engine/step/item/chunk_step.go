@@ -780,6 +780,7 @@ EndChunkLoop:
 	// 5. Update StepExecution status
 	if chunkError != nil {
 		s.tracer.RecordError(ctx, s.id, chunkError)
+		s.metricRecorder.RecordExecutionError(ctx, chunkError) // Record execution error.
 		stepExecution.MarkAsFailed(chunkError)
 	} else {
 		stepExecution.MarkAsCompleted()

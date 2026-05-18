@@ -92,4 +92,9 @@ func (r *PrometheusMetricRecorder) RecordDuration(ctx context.Context, name stri
 	logger.Debugf("Metrics: Duration recorded. Name: %s, Duration: %f, Tags: %+v", name, duration, tagsMap)
 }
 
+// RecordExecutionError records a general execution error.
+func (r *PrometheusMetricRecorder) RecordExecutionError(ctx context.Context, err error) {
+	logger.Errorf("Metrics: Execution error recorded: %v", err)
+}
+
 var _ metrics.MetricRecorder = (*PrometheusMetricRecorder)(nil)

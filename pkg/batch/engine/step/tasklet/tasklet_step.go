@@ -249,7 +249,8 @@ func (s *TaskletStep) Execute(ctx context.Context, jobExecution *model.JobExecut
 
 	// 7. Update StepExecution status based on the outcome of tasklet.Execute.
 	if err != nil {
-		s.tracer.RecordError(ctx, s.id, err) // Record error for tracing.
+		s.tracer.RecordError(ctx, s.id, err)            // Record error for tracing.
+		s.metricRecorder.RecordExecutionError(ctx, err) // Record execution error.
 		stepExecution.MarkAsFailed(err)
 	} else {
 		stepExecution.Status = model.BatchStatusCompleted
