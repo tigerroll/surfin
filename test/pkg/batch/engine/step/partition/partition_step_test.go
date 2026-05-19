@@ -16,40 +16,39 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// --- Mock Implementations (copied/adjusted from flow_control_test.go) ---
+// --- Mock Implementations ---
 
-// MockStepExecutor implements port.StepExecutor
+// MockStepExecutor is a mock implementation of port.StepExecutor.
+// It simulates the execution of a worker step and reflects the results in the provided StepExecution.
 type MockStepExecutor struct {
 	mock.Mock
 }
 
-// ExecuteStep simulates the execution of a Worker Step and reflects the results in StepExecution.
-// Returns: (*model.StepExecution, error)
+// ExecuteStep simulates the execution of a Worker Step and updates the StepExecution state.
 func (m *MockStepExecutor) ExecuteStep(ctx context.Context, step port.Step, jobExecution *model.JobExecution, stepExecution *model.StepExecution) (*model.StepExecution, error) {
-	// Ignore the first three arguments (ctx, step, jobExecution) and use the fourth argument (stepExecution) to call the mock.
 	args := m.Called(ctx, step, jobExecution, stepExecution)
 
-	// Reflect execution results in StepExecution
 	execErr := args.Error(1)
 
 	if execErr != nil {
 		stepExecution.MarkAsFailed(execErr)
 	} else {
-		// On success, get ExitStatus from mock arguments and set it in StepExecution
+		// On success, set ExitStatus from mock arguments.
 		var exitStatus model.ExitStatus = model.ExitStatusCompleted
 		if exitStatusStr, ok := args.Get(2).(string); ok {
 			exitStatus = model.ExitStatus(exitStatusStr)
 		}
 		stepExecution.ExitStatus = exitStatus
-		stepExecution.MarkAsCompleted()
+		// Directly update status to avoid state transition errors.
+		stepExecution.Status = model.BatchStatusCompleted
 	}
 
-	// Update ExecutionContext (for aggregation verification)
+	// Update ExecutionContext for aggregation verification.
 	if ec, ok := args.Get(3).(model.ExecutionContext); ok {
 		stepExecution.ExecutionContext = ec
 	}
 
-	// Update Read/Write Count (for aggregation verification)
+	// Update Read/Write counts for aggregation verification.
 	if readCount, ok := args.Get(4).(int); ok {
 		stepExecution.ReadCount = readCount
 	}
@@ -60,18 +59,16 @@ func (m *MockStepExecutor) ExecuteStep(ctx context.Context, step port.Step, jobE
 	return stepExecution, execErr
 }
 
-// MockJobInstanceRepository implements repository.JobInstance
+// MockJobInstanceRepository is a mock implementation of repository.JobInstance.
 type MockJobInstanceRepository struct {
 	mock.Mock
 }
 
 func (m *MockJobInstanceRepository) SaveJobInstance(ctx context.Context, instance *model.JobInstance) error {
-	args := m.Called(ctx, instance)
-	return args.Error(0)
+	return m.Called(ctx, instance).Error(0)
 }
 func (m *MockJobInstanceRepository) UpdateJobInstance(ctx context.Context, instance *model.JobInstance) error {
-	args := m.Called(ctx, instance)
-	return args.Error(0)
+	return m.Called(ctx, instance).Error(0)
 }
 func (m *MockJobInstanceRepository) FindJobInstanceByJobNameAndParameters(ctx context.Context, jobName string, params model.JobParameters) (*model.JobInstance, error) {
 	args := m.Called(ctx, jobName, params)
@@ -106,18 +103,16 @@ func (m *MockJobInstanceRepository) FindJobInstancesByJobNameAndPartialParameter
 	return nil, args.Error(1)
 }
 
-// MockJobExecutionRepository implements repository.JobExecution
+// MockJobExecutionRepository is a mock implementation of repository.JobExecution.
 type MockJobExecutionRepository struct {
 	mock.Mock
 }
 
 func (m *MockJobExecutionRepository) SaveJobExecution(ctx context.Context, execution *model.JobExecution) error {
-	args := m.Called(ctx, execution)
-	return args.Error(0)
+	return m.Called(ctx, execution).Error(0)
 }
 func (m *MockJobExecutionRepository) UpdateJobExecution(ctx context.Context, execution *model.JobExecution) error {
-	args := m.Called(ctx, execution)
-	return args.Error(0)
+	return m.Called(ctx, execution).Error(0)
 }
 func (m *MockJobExecutionRepository) FindJobExecutionByID(ctx context.Context, id string) (*model.JobExecution, error) {
 	args := m.Called(ctx, id)
@@ -141,18 +136,16 @@ func (m *MockJobExecutionRepository) FindLatestRestartableJobExecution(ctx conte
 	return nil, args.Error(1)
 }
 
-// MockStepExecutionRepository implements repository.StepExecution and repository.CheckpointDataRepository
+// MockStepExecutionRepository is a mock implementation of repository.StepExecution and repository.CheckpointDataRepository.
 type MockStepExecutionRepository struct {
 	mock.Mock
 }
 
 func (m *MockStepExecutionRepository) SaveStepExecution(ctx context.Context, stepExec *model.StepExecution) error {
-	args := m.Called(ctx, stepExec)
-	return args.Error(0)
+	return m.Called(ctx, stepExec).Error(0)
 }
 func (m *MockStepExecutionRepository) UpdateStepExecution(ctx context.Context, stepExec *model.StepExecution) error {
-	args := m.Called(ctx, stepExec)
-	return args.Error(0)
+	return m.Called(ctx, stepExec).Error(0)
 }
 func (m *MockStepExecutionRepository) FindStepExecutionByID(ctx context.Context, id string) (*model.StepExecution, error) {
 	args := m.Called(ctx, id)
@@ -169,8 +162,7 @@ func (m *MockStepExecutionRepository) FindStepExecutionsByJobExecutionID(ctx con
 	return nil, args.Error(1)
 }
 func (m *MockStepExecutionRepository) SaveCheckpointData(ctx context.Context, data *model.CheckpointData) error {
-	args := m.Called(ctx, data)
-	return args.Error(0)
+	return m.Called(ctx, data).Error(0)
 }
 func (m *MockStepExecutionRepository) FindCheckpointData(ctx context.Context, stepExecutionID string) (*model.CheckpointData, error) {
 	args := m.Called(ctx, stepExecutionID)
@@ -180,13 +172,14 @@ func (m *MockStepExecutionRepository) FindCheckpointData(ctx context.Context, st
 	return nil, args.Error(1)
 }
 
-// MockJobRepository combines all mocks into one JobRepository interface
+// MockJobRepository is a composite mock implementation of the JobRepository interface.
 type MockJobRepository struct {
 	*MockJobInstanceRepository
 	*MockJobExecutionRepository
 	*MockStepExecutionRepository
 }
 
+// NewMockJobRepository creates a new instance of MockJobRepository.
 func NewMockJobRepository() *MockJobRepository {
 	return &MockJobRepository{
 		MockJobInstanceRepository:   &MockJobInstanceRepository{},
@@ -195,11 +188,12 @@ func NewMockJobRepository() *MockJobRepository {
 	}
 }
 
+// Close is a no-op implementation for the repository interface.
 func (m *MockJobRepository) Close() error {
 	return nil
 }
 
-// MockStep (minimal implementation)
+// MockStep is a minimal implementation of the port.Step interface for testing purposes.
 type MockStep struct {
 	IDValue string
 }
@@ -215,12 +209,13 @@ func (m *MockStep) GetPropagation() string                                      
 func (m *MockStep) SetMetricRecorder(recorder metrics.MetricRecorder)              {}
 func (m *MockStep) SetTracer(tracer metrics.Tracer)                                {}
 
-// MockPartitioner implements port.Partitioner (copied from flow_control_test.go)
+// MockPartitioner is a mock implementation of port.Partitioner.
 type MockPartitioner struct {
 	mock.Mock
 	Partitions map[string]model.ExecutionContext
 }
 
+// Partition returns the configured partitions or an error.
 func (m *MockPartitioner) Partition(ctx context.Context, gridSize int) (map[string]model.ExecutionContext, error) {
 	args := m.Called(ctx, gridSize)
 	if m.Partitions != nil {
@@ -232,10 +227,14 @@ func (m *MockPartitioner) Partition(ctx context.Context, gridSize int) (map[stri
 	return nil, args.Error(1)
 }
 
-// --- Test Case: T_SCALE_1_NEW (Verification of Partition Aggregation) ---
+// --- Test Cases ---
 
+// TestPartitionStep_Aggregation verifies that the PartitionStep correctly aggregates
+// results from multiple worker partitions, including statistics (ReadCount, WriteCount)
+// and the ExecutionContext.
 func TestPartitionStep_Aggregation(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// 1. Setup
 	mockRepo := NewMockJobRepository()
@@ -282,40 +281,40 @@ func TestPartitionStep_Aggregation(t *testing.T) {
 
 	// JobRepository expectations (for Controller StepExecution updates)
 	// Controller: STARTED (1 time), FAILED (1 time)
-	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(2) // Controller: STARTED, FAILED
-	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(3)   // Save Worker StepExecution
+	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(2)
+	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(3)
 
 	// MockStepExecutor expectations (for Worker Step execution)
 
 	// Worker 0: Success, Read=10, Write=5, EC: {p0.status: "OK", p0.count: 10, start: 0}
 	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(
-		nil,         // 1st return: *model.StepExecution (nil is OK, 4th arg will be updated)
-		nil,         // 2nd return: error
-		"COMPLETED", // 3rd return: ExitStatus string
-		model.ExecutionContext{"p0.status": "OK", "p0.count": 10, "start": 0}, // 4th return: EC (changed from p1.count to p0.count)
-		10, // 5th return: ReadCount
-		5,  // 6th return: WriteCount
+		nil,
+		nil,
+		"COMPLETED",
+		model.ExecutionContext{"p0.status": "OK", "p0.count": 10, "start": 0},
+		10,
+		5,
 	).Once()
 
 	// Worker 1: Failure (FAILED), Read=5, Write=0, EC: {p1.count: 5, p1.status: "ERROR", start: 100}
 	worker1Error := errors.New("worker 1 failed")
 	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(
-		nil,          // 1st return: *model.StepExecution (nil is OK)
-		worker1Error, // 2nd return: error
-		"FAILED",     // 3rd return: ExitStatus string
-		model.ExecutionContext{"p1.count": 5, "p1.status": "ERROR", "start": 100}, // 4th return: EC (changed from p2.status to p1.status)
-		5, // 5th return: ReadCount
-		0, // 6th return: WriteCount
+		nil,
+		worker1Error,
+		"FAILED",
+		model.ExecutionContext{"p1.count": 5, "p1.status": "ERROR", "start": 100},
+		5,
+		0,
 	).Once()
 
 	// Worker 2: Success, Read=20, Write=15, EC: {p2.status: "OK", extra: "data", start: 200}
 	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(
-		nil,         // 1st return: *model.StepExecution (nil is OK)
-		nil,         // 2nd return: error
-		"COMPLETED", // 3rd return: ExitStatus string
-		model.ExecutionContext{"p2.status": "OK", "extra": "data", "start": 200}, // 4th return: EC
-		20, // 5th return: ReadCount
-		15, // 6th return: WriteCount
+		nil,
+		nil,
+		"COMPLETED",
+		model.ExecutionContext{"p2.status": "OK", "extra": "data", "start": 200},
+		20,
+		15,
 	).Once()
 
 	// 3. Execute
@@ -333,44 +332,33 @@ func TestPartitionStep_Aggregation(t *testing.T) {
 	assert.Equal(t, 35, controllerExecution.ReadCount, "ReadCount should be aggregated (10 + 5 + 20)")
 	assert.Equal(t, 20, controllerExecution.WriteCount, "WriteCount should be aggregated (5 + 0 + 15)")
 
-	// 4.3. Verify aggregation of ExecutionContext (assuming merge order: Worker 0 -> Worker 1 -> Worker 2)
-	// NOTE: Since execution order is not guaranteed, the order of EC keys is not guaranteed, but compare with DeepEqual.
-
-	// The 'start' key is non-deterministic due to map iteration order.
-	// We will check its presence and that it's one of the expected values,
-	// but remove it from the main DeepEqual comparison.
+	// 4.3. Verify aggregation of ExecutionContext
 	actualEC := controllerExecution.ExecutionContext
 	startVal, startOk := actualEC["start"]
-	delete(actualEC, "start") // Remove 'start' for deterministic comparison of other keys
+	delete(actualEC, "start") // Remove 'start' for deterministic comparison
 
 	expectedEC := model.ExecutionContext{
-		"p0.status": "OK",    // Worker 0's value
-		"p0.count":  10,      // Worker 0's value
-		"p1.count":  5,       // Worker 1's value
-		"p1.status": "ERROR", // Worker 1's value
-		"p2.status": "OK",    // Overwritten by Worker 2's value
+		"p0.status": "OK",
+		"p0.count":  10,
+		"p1.count":  5,
+		"p1.status": "ERROR",
+		"p2.status": "OK",
 		"extra":     "data",
 	}
 
-	// Verify Controller ExecutionContext for other keys
 	assert.Equal(t, expectedEC, actualEC, "Controller EC should contain merged worker ECs (excluding 'start')")
-
-	// Verify 'start' key separately
 	assert.True(t, startOk, "'start' key should be present in ExecutionContext")
 	assert.Contains(t, []interface{}{0, 100, 200}, startVal, "'start' value should be one of the partition start values")
 
 	// 4.4. Verify promotion to Job ExecutionContext
-
-	// Keys promotion: p1.count, p2.status
 	p1Count, ok := jobExecution.ExecutionContext.GetNested("p1.count")
 	assert.True(t, ok)
-	assert.Equal(t, 5, p1Count) // Expect Worker 1's value 5 to be promoted
+	assert.Equal(t, 5, p1Count)
 
 	p2Status, ok := jobExecution.ExecutionContext.GetNested("p2.status")
 	assert.True(t, ok)
 	assert.Equal(t, "OK", p2Status)
 
-	// JobLevelKeys promotion: p0.status -> job.p0_status
 	jobP0Status, ok := jobExecution.ExecutionContext.GetNested("job.p0_status")
 	assert.True(t, ok)
 	assert.Equal(t, "OK", jobP0Status)

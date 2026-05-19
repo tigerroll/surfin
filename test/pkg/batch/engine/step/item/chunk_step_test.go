@@ -283,6 +283,9 @@ func (m *MockMetricRecorder) RecordChunkCommit(ctx context.Context, stepExecutio
 func (m *MockMetricRecorder) RecordDuration(ctx context.Context, name string, duration float64, attrs ...attribute.KeyValue) {
 	m.Called(ctx, name, duration, attrs)
 }
+func (m *MockMetricRecorder) RecordExecutionError(ctx context.Context, err error) {
+	m.Called(ctx, err)
+}
 
 // MockTracer is a mock implementation of metrics.Tracer.
 type MockTracer struct {
@@ -420,6 +423,7 @@ func setupChunkStep(t *testing.T) (*item.ChunkStep, *MockItemReader, *MockItemPr
 // Successful items are committed, and skippable error items are skipped.
 func TestChunkStep_ChunkSplittingOnSkippableWriteFailure(t *testing.T) {
 	step, _, _, writer, repo, txManager, recorder, tracer, _ := setupChunkStep(t) // txManager is MockTransactionManager
+	defer repo.Close()
 	ctx := context.Background()
 
 	// Initial Step Execution setup
@@ -440,6 +444,7 @@ func TestChunkStep_ChunkSplittingOnSkippableWriteFailure(t *testing.T) {
 
 	// Mock JobRepository calls for StepExecution updates (Save/Update)
 	repo.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
+	repo.On("Close").Return(nil).Maybe()
 
 	// Mock Tracer Span End function (dummy)
 	mockSpanEnd := func() {}
@@ -505,6 +510,7 @@ func TestChunkStep_ChunkSplittingOnSkippableWriteFailure(t *testing.T) {
 // TestChunkStep_ChunkSplitting_FatalError verifies that processing is interrupted if a fatal error occurs during chunk splitting.
 func TestChunkStep_ChunkSplitting_FatalError(t *testing.T) {
 	step, _, _, writer, repo, txManager, recorder, tracer, _ := setupChunkStep(t) // txManager is MockTransactionManager
+	defer repo.Close()
 	ctx := context.Background()
 
 	jobExec := model.NewJobExecution(model.NewID(), "testJob", model.NewJobParameters())
@@ -520,6 +526,7 @@ func TestChunkStep_ChunkSplitting_FatalError(t *testing.T) {
 
 	// Mock JobRepository calls for StepExecution updates (Save/Update)
 	repo.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
+	repo.On("Close").Return(nil).Maybe()
 
 	// Mock Tracer Span End function (dummy)
 	mockSpanEnd := func() {}
