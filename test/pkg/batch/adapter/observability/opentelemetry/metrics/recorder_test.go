@@ -72,9 +72,15 @@ func TestOtelMetricRecorder_NewOtelMetricRecorder(t *testing.T) {
 	// instead of the deprecated metricdatatest.NewRecorder().
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
 
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 	assert.NotNil(t, recorder)
 }
@@ -85,9 +91,15 @@ func TestOtelMetricRecorder_RecordJobStart(t *testing.T) {
 
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
 
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{
@@ -116,9 +128,15 @@ func TestOtelMetricRecorder_RecordJobEnd(t *testing.T) {
 
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
 
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 
 	endTime := time.Now()
@@ -162,8 +180,14 @@ func TestOtelMetricRecorder_RecordStepStart(t *testing.T) {
 	ctx := context.Background()
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{
@@ -200,8 +224,14 @@ func TestOtelMetricRecorder_RecordStepEnd(t *testing.T) {
 	ctx := context.Background()
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 
 	endTime := time.Now()
@@ -256,8 +286,14 @@ func TestOtelMetricRecorder_RecordItemRead(t *testing.T) {
 	ctx := context.Background()
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -284,8 +320,14 @@ func TestOtelMetricRecorder_RecordItemProcess(t *testing.T) {
 	ctx := context.Background()
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -312,8 +354,14 @@ func TestOtelMetricRecorder_RecordItemWrite(t *testing.T) {
 	ctx := context.Background()
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -340,8 +388,14 @@ func TestOtelMetricRecorder_RecordItemSkip(t *testing.T) {
 	ctx := context.Background()
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -370,8 +424,14 @@ func TestOtelMetricRecorder_RecordItemRetry(t *testing.T) {
 	ctx := context.Background()
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -400,8 +460,14 @@ func TestOtelMetricRecorder_RecordChunkCommit(t *testing.T) {
 	ctx := context.Background()
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 
 	jobExecution := &model.JobExecution{ID: "job-123", JobName: "test-job"}
@@ -428,8 +494,14 @@ func TestOtelMetricRecorder_RecordDuration(t *testing.T) {
 	ctx := context.Background()
 	reader := metric.NewManualReader()
 	meterProvider := metric.NewMeterProvider(metric.WithReader(reader))
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meterProvider.Shutdown(ctx)
+	}()
+
 	meter := meterProvider.Meter("surfin.batch.metrics")
-	recorder, err := metrics.NewOtelMetricRecorder(meter)
+	recorder, err := metrics.NewOtelMetricRecorder(meter, 1.0)
 	assert.NoError(t, err)
 
 	recorder.RecordDuration(ctx, "test.operation.duration", 1.23, attribute.String("key", "value"))

@@ -178,7 +178,9 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 		}(workerExecution)
 	}
 
+	logger.Debugf("PartitionStep '%s': Waiting for workers to finish.", s.id)
 	wg.Wait()
+	logger.Debugf("PartitionStep '%s': All workers finished.", s.id)
 	close(errChan)
 	close(workerExecutions)
 
@@ -237,7 +239,9 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 	if combinedError != nil {
 		// If there was a worker failure, wrap the aggregated error and return it.
 		wrappedErr := exception.NewBatchError(s.id, "one or more partitions failed", combinedError, false, false)
-		s.metricRecorder.RecordExecutionError(ctx, wrappedErr) // Record execution error.
+		if s.metricRecorder != nil {
+			s.metricRecorder.RecordExecutionError(ctx, wrappedErr) // Record execution error.
+		}
 		controllerExecution.MarkAsFailed(wrappedErr)
 		combinedError = wrappedErr // Update the error to be returned finally.
 	} else {
