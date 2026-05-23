@@ -25,18 +25,16 @@ type CsvCursorReader[T any] struct {
 	readCount int                        // readCount is the current number of items read, used for restartability.
 	mapper    func([]string) (T, error)  // mapper is a function that maps a CSV record to a value of type T.
 	ec        model.ExecutionContext     // ec is the internal ExecutionContext for storing and retrieving state.
+    comma     rune                       // comma is the field delimiter.
+    lazyQuotes bool                      // lazyQuotes allows lazy handling of quotes.
 }
 ```
 
 ### 3.3 コンストラクタ
-`NewCsvCursorReader` 関数は、`CsvCursorReader` の新しいインスタンスを作成します。
+`NewCsvCursorReader` 関数は、`CsvCursorReader` の新しいインスタンスを作成します。オプション引数により、CSVのフォーマット設定を柔軟に変更可能です。
 ```go
-func NewCsvCursorReader[T any](reader io.Reader, name string, mapper func([]string) (T, error)) *CsvCursorReader[T] {
-	return &CsvCursorReader[T]{
-		reader: reader,
-		name:   name,
-		mapper: mapper,
-	}
+func NewCsvCursorReader[T any](reader io.Reader, name string, mapper func([]string) (T, error), opts ...Option) *CsvCursorReader[T] {
+    // ...
 }
 ```
 
@@ -65,3 +63,20 @@ func NewCsvCursorReader[T any](reader io.Reader, name string, mapper func([]stri
 *   **再開性**: `ExecutionContext` と `readCount` を利用することで、障害発生時でも中断箇所から処理を再開できます（※ネットワークストリームの場合は最初からの再取得を前提とする）。
 *   **柔軟性**: `io.Reader` を受け取る設計により、ローカルファイル、S3からのダウンロード、HTTP APIレスポンスなど、あらゆるデータソースに対応可能です。
 *   **型安全性**: Goのジェネリクスを使用することで、コンパイル時に型の一貫性を保証します。
+
+## 5. 実装状況
+
+以下の改善・拡張はすべて完了しています。
+
+### 5.1 ユニットテストの充実
+バッチコンポーネントの信頼性を担保するため、以下のケースを網羅したテストコードを作成し、正常に動作することを確認済みです。
+*   **正常系**: CSVを最後まで正しく読み込めること。
+*   **再開系**: `ExecutionContext` に `readCount` が保持されている状態で `Open` した際、中断箇所から正しく読み込みが再開されること。
+*   **異常系**: `mapper` 関数でエラーが発生した場合に、適切にエラーが伝播されること。
+*   **リソース解放**: `Close` メソッドが正しくリソースを解放すること。
+
+### 5.2 CSV設定の柔軟性向上
+コンストラクタでオプション（`WithComma`, `WithLazyQuotes`）を注入できるように拡張しました。これにより、タブ区切りや引用符の扱いが異なるCSVにも対応可能です。
+
+### 5.3 エラーハンドリングの強化
+`ExecutionContext` からの `readCount` 取得処理において、データが不正な形式（数値変換不可など）であった場合のハンドリングを実装しました。また、`Read` 時のエラーラップも適切に行っています。
