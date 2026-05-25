@@ -9,6 +9,8 @@ import (
 	"io/fs"
 	"os"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	helloTasklet "github.com/tigerroll/surfin/example/hello-world/internal/step"
 	database "github.com/tigerroll/surfin/pkg/batch/adapter/database"
 	dummy "github.com/tigerroll/surfin/pkg/batch/adapter/database/dummy"
@@ -21,6 +23,7 @@ import (
 	bootstrap "github.com/tigerroll/surfin/pkg/batch/core/config/bootstrap"
 	jsl "github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	supportConfig "github.com/tigerroll/surfin/pkg/batch/core/config/support"
+	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	decision "github.com/tigerroll/surfin/pkg/batch/core/job/decision"
 	split "github.com/tigerroll/surfin/pkg/batch/core/job/split"
 	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
@@ -69,6 +72,50 @@ type dummyMigratorProvider struct{}
 func (d *dummyMigratorProvider) NewMigrator(conn database.DBConnection) migration.Migrator {
 	return &dummyMigrator{}
 }
+
+// dummyMetricRecorder is a dummy implementation of the metrics.MetricRecorder interface.
+type dummyMetricRecorder struct{}
+
+func (d *dummyMetricRecorder) RecordJobStart(ctx context.Context, execution *model.JobExecution) {}
+func (d *dummyMetricRecorder) RecordJobEnd(ctx context.Context, execution *model.JobExecution)   {}
+func (d *dummyMetricRecorder) RecordChunkCommit(ctx context.Context, stepExecution *model.StepExecution, commitCount int64) {
+}
+func (d *dummyMetricRecorder) RecordDuration(ctx context.Context, name string, duration float64, attrs ...attribute.KeyValue) {
+}
+func (d *dummyMetricRecorder) RecordExecutionError(ctx context.Context, err error) {}
+func (d *dummyMetricRecorder) RecordItemProcess(ctx context.Context, stepExecution *model.StepExecution, item int64) {
+}
+func (d *dummyMetricRecorder) RecordItemRead(ctx context.Context, stepExecution *model.StepExecution, item int64) {
+}
+func (d *dummyMetricRecorder) RecordItemRetry(ctx context.Context, stepExecution *model.StepExecution, err error) {
+}
+func (d *dummyMetricRecorder) RecordItemSkip(ctx context.Context, stepExecution *model.StepExecution, err error) {
+}
+func (d *dummyMetricRecorder) RecordItemWrite(ctx context.Context, stepExecution *model.StepExecution, item int64) {
+}
+func (d *dummyMetricRecorder) RecordStepStart(ctx context.Context, stepExecution *model.StepExecution) {
+}
+func (d *dummyMetricRecorder) RecordStepEnd(ctx context.Context, stepExecution *model.StepExecution) {
+}
+
+// dummyTracer is a dummy implementation of the metrics.Tracer interface.
+type dummyTracer struct{}
+
+// StartJobSpan is a dummy implementation of the metrics.Tracer interface.
+func (d *dummyTracer) StartJobSpan(ctx context.Context, execution *model.JobExecution) (context.Context, func()) {
+	return ctx, func() {}
+}
+
+// StartStepSpan is a dummy implementation of the metrics.Tracer interface.
+func (d *dummyTracer) StartStepSpan(ctx context.Context, stepExecution *model.StepExecution) (context.Context, func()) {
+	return ctx, func() {}
+}
+
+// RecordError is a dummy implementation of the metrics.Tracer interface.
+func (d *dummyTracer) RecordError(ctx context.Context, msg string, err error) {}
+
+// RecordEvent is a dummy implementation of the metrics.Tracer interface.
+func (d *dummyTracer) RecordEvent(ctx context.Context, name string, attrs map[string]interface{}) {}
 
 // dummyPortDBConnectionResolver is a dummy implementation of the database.DBConnectionResolver interface.
 // It is used to satisfy dependencies in a DB-less environment.
@@ -218,6 +265,12 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 
 	// Add real provider for config.EnvironmentExpander
 	options = append(options, fx.Provide(provideRealEnvironmentExpander))
+
+	// Add dummy provider for metrics.MetricRecorder
+	options = append(options, fx.Provide(func() metrics.MetricRecorder { return &dummyMetricRecorder{} }))
+
+	// Add dummy provider for metrics.Tracer
+	options = append(options, fx.Provide(func() metrics.Tracer { return &dummyTracer{} }))
 
 	options = append(options, logger.Module)
 	options = append(options, metrics.Module)
