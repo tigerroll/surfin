@@ -1,6 +1,6 @@
-// Package main provides the entry point for the Weather application.
-// It initializes the application's configuration, sets up dependencies,
-// and starts the batch processing job.
+// Package main serves as the entry point for the Weather batch application.
+// It initializes the application configuration, sets up dependency injection via Fx,
+// and orchestrates the batch job lifecycle.
 package main
 
 import (
@@ -19,36 +19,34 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/postgres"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm/sqlite"
 	"github.com/tigerroll/surfin/pkg/batch/adapter/observability"
-	"github.com/tigerroll/surfin/pkg/batch/adapter/storage/gcs" // Imports the GCS module.
+	"github.com/tigerroll/surfin/pkg/batch/adapter/storage/gcs"
+	"github.com/tigerroll/surfin/pkg/batch/adapter/webproxy"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
-	"github.com/tigerroll/surfin/pkg/batch/adapter/webproxy"
 	"go.uber.org/fx"
-	"gopkg.in/yaml.v3" // yaml package
+	"gopkg.in/yaml.v3"
 )
 
-// embeddedConfig embeds the content of the application's YAML configuration file (application.yaml).
+// embeddedConfig embeds the application's YAML configuration file (application.yaml).
 //
 //go:embed resources/application.yaml
 var embeddedConfig []byte
 
-// applicationMigrationsFS is an embedded file system containing application-specific database migration files.
+// applicationMigrationsFS embeds the directory containing application-specific database migration files.
 //
 //go:embed all:resources/migrations
 var applicationMigrationsFS embed.FS
 
-// embeddedJSL embeds the content of the Job Specification Language (JSL) file (job.yaml) for the weather application.
+// resourcesFS embeds all YAML files within the resources directory, allowing dynamic selection of job definitions.
 //
-//go:embed resources/job.yaml
-var embeddedJSL []byte
+//go:embed resources/*.yaml
+var resourcesFS embed.FS
 
-// main is the entry point of the Weather batch application.
-// It orchestrates the application's lifecycle, including startup, signal handling,
-// and Fx container execution. This function initializes the application context
-// and configuration, sets up a channel (`jobDoneChan`) for signaling job completion,
-// and initiates the batch process. It also ensures graceful shutdown upon receiving OS signals.
+// main initializes the application context, handles OS signals for graceful shutdown,
+// loads configurations, selects the appropriate JSL definition based on the SERVICE_NAME
+// environment variable, and starts the Fx application container.
 func main() {
 	// Create a cancellable context for the application lifecycle.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -84,20 +82,32 @@ func main() {
 		logger.SetLogLevel(cfg.Surfin.System.Logging.Level)
 	}
 
+	// Determine the JSL file name based on the SERVICE_NAME environment variable.
+	serviceName := os.Getenv("SERVICE_NAME")
+	jslFileName := "resources/job.yaml" // Default
+	if serviceName != "" {
+		jslFileName = "resources/" + serviceName + "_job.yaml"
+	}
+
+	// Load the JSL definition from the embedded filesystem.
+	embeddedJSL, err := resourcesFS.ReadFile(jslFileName)
+	if err != nil {
+		logger.Fatalf("Failed to load JSL file '%s': %v", jslFileName, err)
+	}
+
 	// Define Fx options for adapter providers. This includes database, storage, web proxy, and metrics adapters.
 	adapterProviderOptions := []fx.Option{
-		// GORM-based database modules
-		mysql.Module, // MySQL module
+		mysql.Module,
 		postgres.Module,
-		sqlite.Module,        // SQLite module
-		gcs.Module,           // Adds the GCS storage adapter module.
-		webproxy.Module,      // Adds the WebProxy adapter module.
-		observability.Module, // Adds the Observability adapter module.
+		sqlite.Module,
+		gcs.Module,
+		webproxy.Module,
+		observability.Module,
 	}
 
 	// Run the application.
-	// Cast embeddedConfig and embeddedJSL to their respective type aliases and add jobDoneChan.
 	app.RunApplication(ctx, envFilePath, config.EmbeddedConfig(embeddedConfig), jsl.JSLDefinitionBytes(embeddedJSL), applicationMigrationsFS, adapterProviderOptions, jobDoneChan)
+
 	// Exit the process with exit code 0 after application execution completes.
 	os.Exit(0)
 }
