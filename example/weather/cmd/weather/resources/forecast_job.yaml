@@ -1,0 +1,158 @@
+id: weatherJob # Matches config.Batch.JobName.
+name: Weather Data Processing Job
+description: This job fetches weather data, processes it, and stores it.
+incrementer: # Configuration for the job parameters incrementer.
+  ref: "timestampIncrementer" # Generates unique parameters using a timestamp for each job execution.
+listeners:
+  - ref: loggingJobListener # Listener name registered in JobFactory.
+  - ref: jobCompletionSignaler
+
+flow:
+  start-element: migrateMetadataStep # The initial starting element of the job flow.
+  elements:
+    migrateMetadataStep: # Step to run framework migrations.
+      id: migrateMetadataStep
+      tasklet:
+        ref: migrationTasklet
+        properties:
+          dbRef: "metadata" # Database connection name used by JobRepository.
+          migrationFSName: "frameworkMigrationsFS" # Name of the embedded file system for framework migrations.
+          migrationDir: "postgres" # Directory within the migration FS containing PostgreSQL migration files.
+          isFramework: "true" # Indicates this is a framework migration.
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          to: migrateWorkloadStep # Transition to the next step on success.
+        - on: FAILED
+          fail: true
+
+    migrateWorkloadStep: # Step to run application migrations for the workload database.
+      id: migrateWorkloadStep
+      tasklet:
+        ref: migrationTasklet
+        properties:
+          dbRef: "workload" # Workload database connection name.
+          migrationFSName: "weatherAppFS" # Name of the embedded file system for application migrations.
+          migrationDir: "postgres" # Directory within the migration FS containing PostgreSQL migration files.
+          isFramework: "false" # Indicates this is an application migration.
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          to: fetchWeatherDataStep # Transition to the data processing step on success.
+        - on: FAILED
+          fail: true
+
+    fetchWeatherDataStep:
+      id: fetchWeatherDataStep
+      reader:
+        ref: weatherItemReader
+        properties: # Properties for the reader component.
+          webProxyRef: "openmeteo-none" # Reference to the WebProxyConnection name defined in application.yaml.
+      processor:
+        ref: weatherItemProcessor
+      writer: # Write to database.
+        ref: weatherItemWriter
+        properties: # Properties for the writer component.
+          targetDBName: "workload" # Specifies the target database connection name for the writer.
+      chunk:
+        item-count: 50 # Number of items to process in a single chunk.
+        commit-interval: 1
+      listeners: # Step-level listeners.
+        - ref: loggingStepListener
+      item-read-listeners: # Enable item read listeners.
+        - ref: loggingItemReadListener
+      item-process-listeners: # Enable item process listeners.
+        - ref: loggingItemProcessListener
+      item-write-listeners: # Enable item write listeners.
+        - ref: loggingItemWriteListener
+      skip-listeners: # Item skip listeners.
+        - ref: loggingSkipListener
+      retry-item-listeners: # Item retry listeners.
+        - ref: loggingRetryItemListener
+      chunk-listeners:
+        - ref: loggingChunkListener
+      execution-context-promotion: # Promote reader state to Job ExecutionContext.
+        keys:
+          - "reader_context" # Promotes the entire context saved by WeatherReader.
+          - "decision.condition" # Promotes the condition set by the tasklet.
+      transitions:
+        - on: COMPLETED # If the step completes successfully.
+          to: exportHourlyForecastStep # Transition to exportHourlyForecastStep.
+        - on: FAILED # If the step fails.
+          fail: true # Terminate the entire job as failed.
+
+    exportHourlyForecastStep:
+      id: exportHourlyForecastStep
+      tasklet:
+        ref: genericParquetExportTasklet # Reference to the GenericParquetExportTasklet builder.
+        properties: # Properties for the tasklet component.
+          dbRef: workload # Database connection name where the weather_data_to_store table resides.
+          storageRef: local # Connection name for the local storage adapter.
+          outputBaseDir: "exported_weather_data" # Base directory for output files within the storage.
+          outputFileNameFormat: "#{tablename}_#{timestamp}_#{uuid}_#{sequence}.parquet"
+          readBufferSize: "50" # Number of items to read into buffer at once.
+          parquetCompressionType: "SNAPPY" # Compression type for Parquet files.
+          tableName: "hourly_forecast" # Table name to export.
+          sqlSelectColumns: "time, weather_code, temperature_2m, latitude, longitude, collected_at" # Columns to select.
+          sqlOrderBy: "time ASC" # Order by clause for the SQL query.
+          partitionDefinitions:
+            - key: "CollectedAt" # CollectedAt field of weather_entity.WeatherDataToStore.
+              format: "2006-01-02" # Extract date part using Go's reference time layout (e.g., 2023-10-27).
+              prefix: "dt=" # Prefix for the partition directory (e.g., dt=2023-10-27).
+            - key: "CollectedAt" # CollectedAt field of weather_entity.WeatherDataToStore.
+              format: "15" # Extract hour part using Go's reference time layout (e.g., 10).
+              prefix: "hour=" # Prefix for the partition directory (e.g., hour=10).
+            - key: "WeatherCode" # WeatherCode field of weather_entity.WeatherDataToStore.
+              format: "%d" # Use integer value as is.
+              prefix: "code=" # Prefix for the partition directory (e.g., code=100).
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED # If the step completes successfully.
+          to: checkConditionDecision # Transition to checkConditionDecision.
+        - on: FAILED
+          fail: true # Terminate the entire job as failed.
+
+    checkConditionDecision: # ConditionalDecision element.
+      id: checkConditionDecision
+      ref: conditionalDecision # Reference to the Decision Builder.
+      properties:
+        conditionKey: "decision.condition" # Key to retrieve from ExecutionContext.
+        expectedValue: "true"             # COMPLETED if it matches this value.
+        defaultStatus: "FAILED"           # Default status if no match or key not found.
+      transitions:
+        - on: COMPLETED # If the value of 'decision.condition' in the ExecutionContext is "true".
+          to: randomFailTaskletStep # Transition to the existing randomFailTaskletStep.
+        - on: FAILED # If decision.condition is not "true", or key not found.
+          to: anotherRandomFailTaskletStep # Transition to another path.
+
+    randomFailTaskletStep:
+      id: randomFailTaskletStep
+      tasklet:
+        ref: randomFailTasklet # Reference name for the tasklet.
+        properties:
+          message: "Condition was TRUE! Executing randomFailTaskletStep."
+      listeners: # Step-level listeners.
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          end: true
+        - on: FAILED
+          fail: true
+
+    anotherRandomFailTaskletStep:
+      id: anotherRandomFailTaskletStep
+      tasklet:
+        ref: randomFailTasklet # Reference name for the tasklet.
+        properties:
+          message: "Condition was FALSE or not found! Executing anotherRandomFailTaskletStep."
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          end: true
+        - on: FAILED
+          fail: true
+  transition-rules: # Transition rules are defined within elements for clarity.
