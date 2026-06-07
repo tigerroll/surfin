@@ -94,15 +94,8 @@ func (p *BaseProvider) GetConnection(name string) (database.DBConnection, error)
 // createAndStoreConnection establishes a new connection and stores it in the map.
 func (p *BaseProvider) createAndStoreConnection(name string) (database.DBConnection, error) {
 	var dbConfig dbconfig.DatabaseConfig
-	rawAdapterConfig, ok := p.cfg.Surfin.AdapterConfigs.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid 'adapter' configuration format: expected map[string]interface{}")
-	}
-	adapterConfig, ok := rawAdapterConfig["database"]
-	if !ok {
-		return nil, fmt.Errorf("no 'database' adapter configuration found in Surfin.AdapterConfigs")
-	}
-	dbConfigsMap, ok := adapterConfig.(map[string]interface{})
+	rawAdapterConfig := p.cfg.Surfin.AdapterConfigs
+	dbConfigsMap, ok := rawAdapterConfig["database"].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid 'database' adapter configuration format: expected map[string]interface{}")
 	}

@@ -32,12 +32,7 @@ const moduleName = "observability"
 func NewObservabilityConfigFromAppConfig(cfg *coreConfig.Config) (config.ObservabilityConfig, error) {
 	// The AdapterConfigs field is an interface{}, so we need to extract the specific
 	// "observability" section and then unmarshal it into the ObservabilityConfig type.
-	adapterConfigsMap, ok := cfg.Surfin.AdapterConfigs.(map[string]interface{})
-	if !ok {
-		// If AdapterConfigs is not a map[string]interface{}, it means there's no adapter config
-		// or it's in an unexpected format. Return an empty config.
-		return config.ObservabilityConfig{}, nil
-	}
+	adapterConfigsMap := cfg.Surfin.AdapterConfigs
 
 	observabilityConfigMap, ok := adapterConfigsMap[moduleName].(map[string]interface{})
 	if !ok {

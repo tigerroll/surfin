@@ -110,10 +110,7 @@ func NewDBConnectionsAndTxManagers(p DBConnectionsAndTxManagersParams) (
 	// Extract database configurations from the main config
 	// The AdapterConfigs map holds configurations keyed by adapter type (e.g., "database").
 	// We need to get the "database" entry, which is itself a map of named database configurations.
-	rawAdapterConfig, ok := p.Cfg.Surfin.AdapterConfigs.(map[string]interface{})
-	if !ok {
-		return nil, nil, fmt.Errorf("invalid 'adapter' configuration format: expected map[string]interface{}")
-	}
+	rawAdapterConfig := p.Cfg.Surfin.AdapterConfigs
 
 	dbAdapterConfig, ok := rawAdapterConfig["database"]
 	if !ok {
@@ -218,10 +215,7 @@ func NewStorageConnections(p NewStorageConnectionsParams) (
 		allProviders[provider.Type()] = provider // Store providers by Storage type
 	}
 
-	rawAdapterConfig, ok := p.Cfg.Surfin.AdapterConfigs.(map[string]interface{})
-	if !ok {
-		return nil, nil, fmt.Errorf("invalid 'adapter' configuration format: expected map[string]interface{}")
-	}
+	rawAdapterConfig := p.Cfg.Surfin.AdapterConfigs
 
 	storageAdapterConfig, ok := rawAdapterConfig["storage"]
 	if !ok {
