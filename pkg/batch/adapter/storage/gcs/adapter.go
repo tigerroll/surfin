@@ -14,6 +14,7 @@ import (
 
 	storageAdapter "github.com/tigerroll/surfin/pkg/batch/adapter/storage"
 	storageConfig "github.com/tigerroll/surfin/pkg/batch/adapter/storage/config"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	coreConfig "github.com/tigerroll/surfin/pkg/batch/core/config"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
@@ -153,6 +154,25 @@ func (a *gcsAdapter) DeleteObject(ctx context.Context, bucket, objectName string
 	return nil
 }
 
+// Exists checks if the specified object exists in the GCS bucket.
+func (a *gcsAdapter) Exists(ctx context.Context, bucket, objectName string) (bool, error) {
+	if bucket == "" {
+		bucket = a.cfg.BucketName
+	}
+	if bucket == "" {
+		return false, fmt.Errorf("bucket name is not specified in config or arguments for object '%s'", objectName)
+	}
+
+	_, err := a.client.Bucket(bucket).Object(objectName).Attrs(ctx)
+	if err == storage.ErrObjectNotExist {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to check existence of object '%s' in bucket '%s': %w", objectName, bucket, err)
+	}
+	return true, nil
+}
+
 // Config returns the configuration used by this adapter.
 func (a *gcsAdapter) Config() storageConfig.StorageConfig {
 	return a.cfg
@@ -200,10 +220,7 @@ func (p *GCSProvider) GetConnection(name string) (storageAdapter.StorageAdapter,
 
 	// Create new connection
 	var storageCfg storageConfig.StorageConfig
-	rawAdapterConfig, ok := p.cfg.Surfin.AdapterConfigs.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid 'adapter' configuration format: expected map[string]interface{}")
-	}
+	rawAdapterConfig := p.cfg.Surfin.AdapterConfigs
 	adapterConfig, ok := rawAdapterConfig["storage"]
 	if !ok {
 		return nil, fmt.Errorf("no 'storage' adapter configuration found in Surfin.AdapterConfigs")
@@ -290,4 +307,81 @@ func (p *GCSProvider) ForceReconnect(name string) (storageAdapter.StorageAdapter
 
 	// Re-create the connection
 	return p.GetConnection(name)
+}
+
+// GCSConnectionResolver implements the storage.StorageConnectionResolver interface.
+type GCSConnectionResolver struct {
+	providers map[string]storageAdapter.StorageProvider
+	cfg       *coreConfig.Config
+}
+
+// Verify that GCSConnectionResolver implements the storage.StorageConnectionResolver interface.
+var _ storageAdapter.StorageConnectionResolver = (*GCSConnectionResolver)(nil)
+
+// NewGCSConnectionResolver creates a new GCSConnectionResolver instance.
+func NewGCSConnectionResolver(providers []storageAdapter.StorageProvider, cfg *coreConfig.Config) storageAdapter.StorageConnectionResolver {
+	providerMap := make(map[string]storageAdapter.StorageProvider)
+	for _, p := range providers {
+		providerMap[p.Type()] = p
+	}
+	return &GCSConnectionResolver{
+		providers: providerMap,
+		cfg:       cfg,
+	}
+}
+
+// ResolveConnection is specified by the interface.
+func (r *GCSConnectionResolver) ResolveConnection(ctx context.Context, name string) (coreAdapter.ResourceConnection, error) {
+	return r.ResolveStorageConnection(ctx, name)
+}
+
+// ResolveConnectionName is specified by the interface.
+func (r *GCSConnectionResolver) ResolveConnectionName(ctx context.Context, jobExecution interface{}, stepExecution interface{}, defaultName string) (string, error) {
+	return defaultName, nil
+}
+
+// ResolveStorageConnection resolves a StorageAdapter connection instance by the given name.
+func (r *GCSConnectionResolver) ResolveStorageConnection(ctx context.Context, name string) (storageAdapter.StorageAdapter, error) {
+	rawAdapterConfig := r.cfg.Surfin.AdapterConfigs
+	adapterConfig, ok := rawAdapterConfig["storage"]
+	if !ok {
+		return nil, fmt.Errorf("no 'storage' adapter configuration found in Surfin.AdapterConfigs")
+	}
+
+	storageConfigsMap, ok := adapterConfig.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid 'storage' configuration format: expected map[string]interface{}")
+	}
+
+	namedConfig, ok := storageConfigsMap[name]
+	if !ok {
+		return nil, fmt.Errorf("storage configuration for name '%s' not found", name)
+	}
+
+	var tempCfg struct {
+		Type string `yaml:"type"`
+	}
+	decoderConfig := &mapstructure.DecoderConfig{
+		Result:  &tempCfg,
+		TagName: "yaml",
+	}
+	decoder, err := mapstructure.NewDecoder(decoderConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create decoder for storage type: %w", err)
+	}
+	if err := decoder.Decode(namedConfig); err != nil {
+		return nil, fmt.Errorf("failed to decode storage type for '%s': %w", name, err)
+	}
+
+	provider, ok := r.providers[tempCfg.Type]
+	if !ok {
+		return nil, fmt.Errorf("no storage provider registered for type '%s'", tempCfg.Type)
+	}
+
+	return provider.GetConnection(name)
+}
+
+// ResolveStorageConnectionName is specified by the interface.
+func (r *GCSConnectionResolver) ResolveStorageConnectionName(ctx context.Context, jobExecution interface{}, stepExecution interface{}, defaultName string) (string, error) {
+	return defaultName, nil
 }

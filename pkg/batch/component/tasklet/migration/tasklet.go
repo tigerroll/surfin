@@ -201,10 +201,7 @@ func (t *MigrationTasklet) Execute(ctx context.Context, stepExecution *model.Ste
 
 	// 1. Get DB Configuration to determine DB Type
 	var dbConfig dbconfig.DatabaseConfig
-	rawAdapterConfig, ok := t.cfg.Surfin.AdapterConfigs.(map[string]interface{})
-	if !ok {
-		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "invalid 'adapter' configuration format: expected map[string]interface{}")
-	}
+	rawAdapterConfig := t.cfg.Surfin.AdapterConfigs
 	dbConfigsMap, ok := rawAdapterConfig["database"].(map[string]interface{})
 	if !ok {
 		return model.ExitStatusFailed, exception.NewBatchErrorf(taskletName, "no 'database' adapter configuration found in Surfin.AdapterConfigs")

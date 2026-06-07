@@ -63,10 +63,7 @@ func runFrameworkMigrationsHook(
 
 			// Get DB Configuration to determine DB Type
 			var dbConfig dbconfig.DatabaseConfig
-			rawAdapterConfig, ok := p.Cfg.Surfin.AdapterConfigs.(map[string]interface{})
-			if !ok {
-				return fmt.Errorf("invalid 'adapter' configuration format: expected map[string]interface{}")
-			}
+			rawAdapterConfig := p.Cfg.Surfin.AdapterConfigs
 			adapterConfig, ok := rawAdapterConfig["database"]
 			if !ok {
 				return fmt.Errorf("no 'database' adapter configuration found in Surfin.AdapterConfigs")

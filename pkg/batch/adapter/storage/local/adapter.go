@@ -188,6 +188,22 @@ func (a *localAdapter) DeleteObject(ctx context.Context, bucket, objectName stri
 	return nil
 }
 
+// Exists checks if the specified object exists in the local file system.
+func (a *localAdapter) Exists(ctx context.Context, bucket, objectName string) (bool, error) {
+	fullPath, err := a.resolvePath(bucket, objectName)
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve path for exists check: %w", err)
+	}
+	_, err = os.Stat(fullPath)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to check existence of file '%s': %w", fullPath, err)
+}
+
 // Config returns the storage configuration used by this adapter.
 func (a *localAdapter) Config() storageConfig.StorageConfig {
 	return a.cfg
@@ -267,10 +283,7 @@ func (p *LocalProvider) GetConnection(name string) (storageAdapter.StorageAdapte
 
 	// Decode StorageConfig from the application configuration.
 	// The AdapterConfigs field is an interface{}, so type assertion is needed.
-	rawAdapterConfig, ok := p.cfg.Surfin.AdapterConfigs.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid 'adapter' configuration format: expected map[string]interface{}")
-	}
+	rawAdapterConfig := p.cfg.Surfin.AdapterConfigs
 	storageConfigMap, ok := rawAdapterConfig["storage"].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid 'storage' configuration format: expected map[string]interface{}")
@@ -383,10 +396,7 @@ func (r *LocalConnectionResolver) ResolveConnectionName(ctx context.Context, job
 func (r *LocalConnectionResolver) ResolveStorageConnection(ctx context.Context, name string) (storageAdapter.StorageAdapter, error) {
 	// Determine the connection type from the configuration.
 	// The AdapterConfigs field is an interface{}, so type assertion is needed.
-	rawAdapterConfig, ok := r.cfg.Surfin.AdapterConfigs.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid 'adapter' configuration format: expected map[string]interface{}")
-	}
+	rawAdapterConfig := r.cfg.Surfin.AdapterConfigs
 	storageConfigMap, ok := rawAdapterConfig["storage"].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid 'storage' configuration format: expected map[string]interface{}")

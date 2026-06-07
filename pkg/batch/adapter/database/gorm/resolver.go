@@ -62,17 +62,10 @@ func NewGormDBConnectionResolver(p struct {
 func (r *GormDBConnectionResolver) ResolveDBConnection(ctx context.Context, name string) (database.DBConnection, error) {
 	// 1. Get DB type from configuration.
 	var dbConfig dbconfig.DatabaseConfig
-	rawAdapterConfig, ok := r.cfg.Surfin.AdapterConfigs.(map[string]interface{})
+	rawAdapterConfig := r.cfg.Surfin.AdapterConfigs
+	dbConfigsMap, ok := rawAdapterConfig["database"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("DBConnectionResolver: invalid 'adapter' configuration format: expected map[string]interface{}")
-	}
-	dbAdapterConfig, ok := rawAdapterConfig["database"]
-	if !ok {
-		return nil, fmt.Errorf("DBConnectionResolver: no 'database' adapter configuration found in Surfin.AdapterConfigs for connection '%s'", name)
-	}
-	dbConfigsMap, ok := dbAdapterConfig.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("DBConnectionResolver: invalid 'database' adapter configuration format for connection '%s': expected map[string]interface{} but got %T", name, dbAdapterConfig)
+		return nil, fmt.Errorf("DBConnectionResolver: invalid 'database' adapter configuration format: expected map[string]interface{}")
 	}
 	rawConfig, ok := dbConfigsMap[name]
 	if !ok {

@@ -24,14 +24,7 @@ import (
 //	A new WebProxyProvider instance.
 //	An error if configuration parsing fails.
 func NewWebProxyProviderFromConfig(cfg *config.Config) (*WebProxyProvider, error) {
-	// AdapterConfigs is of type interface{}, so assert it to map[string]interface{}.
-	adapterConfigs, ok := cfg.Surfin.AdapterConfigs.(map[string]interface{})
-	if !ok {
-		// If AdapterConfigs is not present or not of the expected type, return an empty WebProxyProvider.
-		// This prevents errors if WebProxy settings are not present in application.yaml.
-		logger.Debugf("webproxy: AdapterConfigs is not a map[string]interface{} or not found. Returning empty provider.")
-		return NewWebProxyProvider(make(map[string]webproxyconfig.WebProxyConfig)), nil
-	}
+	adapterConfigs := cfg.Surfin.AdapterConfigs
 
 	webProxyConfigs := make(map[string]webproxyconfig.WebProxyConfig)
 

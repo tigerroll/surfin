@@ -23,6 +23,8 @@ type StorageExecutor interface {
 	ListObjects(ctx context.Context, bucket, prefix string, fn func(objectName string) error) error
 	// DeleteObject deletes the specified object from the bucket.
 	DeleteObject(ctx context.Context, bucket, objectName string) error
+	// Exists checks if the specified object exists in the bucket.
+	Exists(ctx context.Context, bucket, objectName string) (bool, error)
 }
 
 // StorageAdapter represents a generic data storage connection.
@@ -30,7 +32,7 @@ type StorageExecutor interface {
 // resource connection capabilities and specific storage operations.
 type StorageAdapter interface {
 	coreAdapter.ResourceConnection // Inherits Close(), Type(), Name()
-	StorageExecutor                // Inherits Upload(), Download(), ListObjects(), DeleteObject()
+	StorageExecutor                // Inherits Upload(), Download(), ListObjects(), DeleteObject(), Exists()
 
 	// Config returns the storage configuration associated with this adapter.
 	Config() storageConfig.StorageConfig
