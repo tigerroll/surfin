@@ -1,8 +1,7 @@
 services:
   surfin:
     container_name: surfin
-    build: container/development/surfin
-    platform: linux/amd64
+    build: containers/development/surfin
     ports:
       - "4000:4000"
       - "2345:2345"
@@ -71,7 +70,7 @@ services:
     privileged: true
     volumes:
       - type: bind
-        source: container/development/wiremock/mappings
+        source: containers/development/wiremock/mappings
         target: /home/wiremock/mappings
     networks:
       - surfin-network
@@ -79,7 +78,6 @@ services:
   #otel-collector:
   #  container_name: otel-collector
   #  image: "otel/opentelemetry-collector-contrib:latest"
-  #  platform: linux/amd64
   #  command: ["--config=/etc/otel-collector-config.yaml"]
   #  ports:
   #    - "4317:4317" # OTLP gRPC receiver
@@ -88,7 +86,7 @@ services:
   #  privileged: true
   #  volumes:
   #    - type: bind
-  #      source: container/development/otel-collector/config.yaml
+  #      source: containers/development/otel-collector/config.yaml
   #      target: /etc/otel-collector-config.yaml
   #  networks:
   #    - surfin-network

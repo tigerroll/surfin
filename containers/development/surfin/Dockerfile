@@ -3,7 +3,7 @@
 # ==============================================================================
 # Stage 1: go-builder - To install Go tools
 # ==============================================================================
-FROM --platform=linux/amd64 quay.io/fedora/fedora:latest AS go-builder
+FROM quay.io/fedora/fedora:latest AS go-builder
 
 # Install base dependencies for cloning and downloading, and for Go build
 RUN dnf install -y git unzip curl gcc && dnf clean all
@@ -26,7 +26,7 @@ RUN eval "$(goenv init -)" && \
 # ==============================================================================
 # Stage 2: python-builder - To build a specific Python version with pyenv
 # ==============================================================================
-FROM --platform=linux/amd64 quay.io/fedora/fedora:latest AS python-builder
+FROM quay.io/fedora/fedora:latest AS python-builder
 
 # Install git and all dependencies required to build Python from source
 RUN dnf install -y \
@@ -64,7 +64,7 @@ RUN eval "$(pyenv init -)" && \
 # ==============================================================================
 # Stage 3: Final - The actual runtime environment
 # ==============================================================================
-FROM --platform=linux/amd64 fedora:latest
+FROM quay.io/fedora/fedora:latest
 
 # --- Install Base System Packages and Google Cloud SDK ---
 

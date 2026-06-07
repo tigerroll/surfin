@@ -1,5 +1,13 @@
 package config
 
+import (
+	"encoding/json"
+	"net"
+	"reflect"
+
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
+)
+
 // Package config provides structures and utilities for managing application configuration.
 
 // EmbeddedConfig holds the content of the configuration file, typically passed from main.go.
@@ -102,7 +110,7 @@ type SurfinConfig struct {
 	// Security contains security-related configurations.
 	Security SecurityConfig `yaml:"security"`
 	// AdapterConfigs holds configurations for various adapters, typically database connections.
-	AdapterConfigs interface{} `yaml:"adapter"`
+	AdapterConfigs map[string]any `yaml:"adapter"`
 }
 
 // Config is the root structure for the entire application configuration.
@@ -153,17 +161,17 @@ func NewConfig() *Config {
 					MaxAttempts:     3,
 					InitialInterval: 1000, // Default value (e.g., 1000ms).
 					RetryableExceptions: []string{ // Default retryable exceptions.
-						"*surfin/pkg/batch/support/util/exception.TemporaryNetworkError",
-						"net.OpError",
-						"context.DeadlineExceeded",
-						"context.Canceled",
+						reflect.TypeOf(&exception.TemporaryNetworkError{}).String(),
+						reflect.TypeOf(&net.OpError{}).String(),
+						"context.DeadlineExceeded", // Sentinel error (variable), keep as string
+						"context.Canceled",         // Sentinel error (variable), keep as string
 					},
 				},
 				ItemSkip: ItemSkipConfig{ // Default item skip configuration.
 					SkipLimit: 0, // Default is no skipping.
 					SkippableExceptions: []string{ // Default skippable exceptions.
-						"*surfin/pkg/batch/support/util/exception.DataConversionError",
-						"json.UnmarshalTypeError",
+						reflect.TypeOf(&exception.DataConversionError{}).String(),
+						reflect.TypeOf(&json.UnmarshalTypeError{}).String(),
 					},
 				},
 			},
@@ -177,6 +185,6 @@ func NewConfig() *Config {
 	}
 
 	// Initialize AdapterConfigs as an empty map, to be populated by YAML or by mergeConfig.
-	cfg.Surfin.AdapterConfigs = map[string]interface{}{}
+	cfg.Surfin.AdapterConfigs = map[string]any{}
 	return cfg
 }
