@@ -5,23 +5,41 @@ import (
 	"go.uber.org/fx"
 )
 
-// RegisterWeatherJobBuilder registers the builder for the 'weatherJob' with the JobFactory.
-func RegisterWeatherJobBuilder(
+// RegisterHistoryJobBuilder registers the builder for the 'historyJob' with the JobFactory.
+func RegisterHistoryJobBuilder(
 	jf *support.JobFactory,
 	builder support.JobBuilder,
 ) {
-	// The key "weatherJob" must match the job ID in the JSL file (job.yaml).
-	// This allows the JobFactory to find this builder when CreateJob("weatherJob") is called.
-	jf.RegisterJobBuilder("weatherJob", builder)
+	jf.RegisterJobBuilder("historyJob", builder)
+}
+
+// RegisterForecastJobBuilder registers the builder for the 'forecastJob' with the JobFactory.
+func RegisterForecastJobBuilder(
+	jf *support.JobFactory,
+	builder support.JobBuilder,
+) {
+	jf.RegisterJobBuilder("forecastJob", builder)
 }
 
 var Module = fx.Options(
-	fx.Provide(fx.Annotate(
-		NewWeatherJobBuilder,
-		fx.ResultTags(`name:"weatherJobBuilder"`),
-	)),
-	fx.Invoke(fx.Annotate(
-		RegisterWeatherJobBuilder,
-		fx.ParamTags(``, `name:"weatherJobBuilder"`),
-	)),
+	fx.Provide(
+		fx.Annotate(
+			NewHistoryJobBuilder,
+			fx.ResultTags(`name:"historyJobBuilder"`),
+		),
+		fx.Annotate(
+			NewForecastJobBuilder,
+			fx.ResultTags(`name:"forecastJobBuilder"`),
+		),
+	),
+	fx.Invoke(
+		fx.Annotate(
+			RegisterHistoryJobBuilder,
+			fx.ParamTags(``, `name:"historyJobBuilder"`),
+		),
+		fx.Annotate(
+			RegisterForecastJobBuilder,
+			fx.ParamTags(``, `name:"forecastJobBuilder"`),
+		),
+	),
 )

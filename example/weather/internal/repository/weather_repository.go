@@ -18,7 +18,7 @@ import (
 type WeatherRepository interface {
 	// BulkInsertWeatherData performs a bulk insert of weather data.
 	// It takes a transaction (tx.Tx) to ensure atomicity.
-	BulkInsertWeatherData(ctx context.Context, tx tx.Tx, items []weather_entity.WeatherDataToStore) error
+	BulkInsertWeatherData(ctx context.Context, tx tx.Tx, items []weather_entity.HourlyForecastToStore) error
 	// TruncateHourlyForecast deletes all data from the hourly_forecast table.
 	TruncateHourlyForecast(ctx context.Context) error
 	Close() error
@@ -42,7 +42,7 @@ func NewPostgresWeatherRepository(dbConn database.DBConnection, dbType string) W
 	return &PostgresRepositoryWrapper{dbConn: dbConn, dbType: dbType}
 }
 
-func (w *PostgresRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx tx.Tx, items []weather_entity.WeatherDataToStore) error {
+func (w *PostgresRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx tx.Tx, items []weather_entity.HourlyForecastToStore) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -69,7 +69,7 @@ func (w *PostgresRepositoryWrapper) TruncateHourlyForecast(ctx context.Context) 
 	const op = "PostgresRepositoryWrapper.TruncateHourlyForecast"
 
 	// Use ExecuteUpdate for DELETE operation
-	dummyEntity := weather_entity.WeatherDataToStore{}
+	dummyEntity := weather_entity.HourlyForecastToStore{}
 
 	// DELETE FROM hourly_forecast.
 	// ExecuteUpdate generates a DELETE query that deletes the entire table if no WHERE clause is provided.
@@ -109,7 +109,7 @@ func NewMySQLWeatherRepository(dbConn database.DBConnection, dbType string) Weat
 // BulkInsertWeatherData performs a bulk insert of weather data into MySQL.
 // It uses ON DUPLICATE KEY UPDATE for existing records.
 // It takes a transaction (tx.Tx) to ensure atomicity.
-func (w *MySQLRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx tx.Tx, items []weather_entity.WeatherDataToStore) error {
+func (w *MySQLRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx tx.Tx, items []weather_entity.HourlyForecastToStore) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -136,7 +136,7 @@ func (w *MySQLRepositoryWrapper) TruncateHourlyForecast(ctx context.Context) err
 	const op = "MySQLRepositoryWrapper.TruncateHourlyForecast"
 
 	// Use ExecuteUpdate for DELETE operation
-	dummyEntity := weather_entity.WeatherDataToStore{}
+	dummyEntity := weather_entity.HourlyForecastToStore{}
 
 	// DELETE FROM hourly_forecast.
 	// Explicitly pass the table name.
@@ -175,7 +175,7 @@ func NewSQLiteWeatherRepository(dbConn database.DBConnection, dbType string) Wea
 // BulkInsertWeatherData performs a bulk insert of weather data into SQLite.
 // It uses ON CONFLICT DO NOTHING for existing records.
 // It takes a transaction (tx.Tx) to ensure atomicity.
-func (w *SQLiteRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx tx.Tx, items []weather_entity.WeatherDataToStore) error {
+func (w *SQLiteRepositoryWrapper) BulkInsertWeatherData(ctx context.Context, tx tx.Tx, items []weather_entity.HourlyForecastToStore) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -202,7 +202,7 @@ func (w *SQLiteRepositoryWrapper) TruncateHourlyForecast(ctx context.Context) er
 	const op = "SQLiteRepositoryWrapper.TruncateHourlyForecast"
 
 	// Use ExecuteUpdate for DELETE operation
-	dummyEntity := weather_entity.WeatherDataToStore{}
+	dummyEntity := weather_entity.HourlyForecastToStore{}
 
 	// DELETE FROM hourly_forecast
 	// Explicitly pass the table name.

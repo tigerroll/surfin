@@ -1,0 +1,103 @@
+id: historyJob
+name: Weather Data Processing Job
+description: This job fetches weather data, processes it, and stores it.
+incrementer:
+  ref: "timestampIncrementer"
+listeners:
+  - ref: loggingJobListener
+  - ref: jobCompletionSignaler
+
+flow:
+  start-element: migrateMetadataStep
+  elements:
+    migrateMetadataStep:
+      id: migrateMetadataStep
+      tasklet:
+        ref: migrationTasklet
+        properties:
+          dbRef: "metadata"
+          migrationFSName: "frameworkMigrationsFS"
+          migrationDir: "postgres"
+          isFramework: "true"
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          to: migrateWorkloadStep
+        - on: FAILED
+          fail: true
+
+    migrateWorkloadStep:
+      id: migrateWorkloadStep
+      tasklet:
+        ref: migrationTasklet
+        properties:
+          dbRef: "workload"
+          migrationFSName: "weatherAppFS"
+          migrationDir: "postgres"
+          isFramework: "false"
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          to: fetchHourlyHistoryDataStep
+        - on: FAILED
+          fail: true
+
+    fetchHourlyHistoryDataStep:
+      id: fetchHourlyHistoryDataStep
+      reader:
+        ref: hourlyHistoryAPIReader
+        properties:
+          webProxyRef: "openmeteo-historical"
+          latitude: "35.6586"
+          longitude: "139.7454"
+          timezone: "Asia/Tokyo"
+      processor:
+        ref: hourlyHistoryTransformProcessor
+      writer:
+        ref: hourlyHistoryDatabaseWriter
+        properties:
+          targetDBName: "workload"
+      chunk:
+        item-count: 50
+        commit-interval: 1
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          to: exportHourlyHistoryStep
+        - on: FAILED
+          fail: true
+
+    exportHourlyHistoryStep:
+      id: exportHourlyHistoryStep
+      tasklet:
+        ref: genericParquetExportTasklet
+        properties:
+          dbRef: workload
+          storageRef: local
+          outputBaseDir: "exported_weather_data"
+          outputFileNameFormat: "#{tablename}_#{timestamp}_#{uuid}_#{sequence}.parquet"
+          readBufferSize: "50"
+          parquetCompressionType: "SNAPPY"
+          tableName: "hourly_history"
+          sqlSelectColumns: "time, weather_code, temperature_2m, latitude, longitude, collected_at"
+          sqlOrderBy: "time ASC"
+          partitionDefinitions:
+            - key: "CollectedAt"
+              format: "2006-01-02"
+              prefix: "dt="
+            - key: "CollectedAt"
+              format: "15"
+              prefix: "hour="
+            - key: "WeatherCode"
+              format: "%d"
+              prefix: "code="
+      listeners:
+        - ref: loggingStepListener
+      transitions:
+        - on: COMPLETED
+          end: true
+        - on: FAILED
+          fail: true

@@ -1,4 +1,4 @@
-id: weatherJob # Matches config.Batch.JobName.
+id: forecastJob # Matches config.Batch.JobName.
 name: Weather Data Processing Job
 description: This job fetches weather data, processes it, and stores it.
 incrementer: # Configuration for the job parameters incrementer.
@@ -40,12 +40,12 @@ flow:
         - ref: loggingStepListener
       transitions:
         - on: COMPLETED
-          to: fetchWeatherDataStep # Transition to the data processing step on success.
+          to: fetchHourlyForecastDataStep # Transition to the data processing step on success.
         - on: FAILED
           fail: true
 
-    fetchWeatherDataStep:
-      id: fetchWeatherDataStep
+    fetchHourlyForecastDataStep:
+      id: fetchHourlyForecastDataStep
       reader:
         ref: weatherItemReader
         properties: # Properties for the reader component.

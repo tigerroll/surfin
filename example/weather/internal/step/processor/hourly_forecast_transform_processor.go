@@ -76,7 +76,7 @@ func NewHourlyForecastTransformProcessor(
 	}, nil
 }
 
-// Process transforms an OpenMeteoForecast item into a WeatherDataToStore item.
+// Process transforms an OpenMeteoForecast item into a HourlyForecastToStore item.
 // It extracts relevant hourly forecast data and converts it into a format suitable for storage.
 //
 // Parameters:
@@ -86,7 +86,7 @@ func NewHourlyForecastTransformProcessor(
 //
 // Returns:
 //
-//	The transformed item (*weather_entity.WeatherDataToStore) or nil if the item is filtered out,
+//	The transformed item (*weather_entity.HourlyForecastToStore) or nil if the item is filtered out,
 //	or an error if the input type is unexpected or parsing fails.
 func (p *HourlyForecastTransformProcessor) Process(ctx context.Context, item any) (any, error) {
 	select {
@@ -113,7 +113,7 @@ func (p *HourlyForecastTransformProcessor) Process(ctx context.Context, item any
 		return nil, exception.NewBatchError("hourly_forecast_transform_processor", fmt.Sprintf("failed to parse time: %s", forecast.Hourly.Time[0]), err, false, true)
 	}
 
-	dataToStore := &weather_entity.WeatherDataToStore{
+	dataToStore := &weather_entity.HourlyForecastToStore{
 		Time:          parsedTime,
 		WeatherCode:   forecast.Hourly.WeatherCode[0],
 		Temperature2M: forecast.Hourly.Temperature2M[0],
@@ -122,7 +122,7 @@ func (p *HourlyForecastTransformProcessor) Process(ctx context.Context, item any
 		CollectedAt:   collectedAt,
 	}
 
-	return dataToStore, nil // Returns a single *WeatherDataToStore
+	return dataToStore, nil // Returns a single *HourlyForecastToStore
 }
 
 // SetExecutionContext sets the execution context for the processor.

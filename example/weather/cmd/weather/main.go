@@ -52,12 +52,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Signal handling for graceful shutdown (e.g., Ctrl+C)
+	// Signal handling for graceful shutdown (e.g., Ctrl+C).
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Create a channel for JobCompletionSignaler.
-	// This channel is used to notify the application externally about job completion.
+	// Create a channel for JobCompletionSignaler to notify the application externally about job completion.
 	jobDoneChan := make(chan struct{})
 
 	go func() {
@@ -72,8 +71,7 @@ func main() {
 		envFilePath = ".env"
 	}
 
-	// To ensure Fx's internal logs reflect the desired settings,
-	// the logging configuration is loaded early from application.yaml and applied to the logger before Fx initialization.
+	// Load logging configuration early from application.yaml to ensure Fx logs reflect the desired settings.
 	cfg := config.NewConfig()
 	if err := yaml.Unmarshal(embeddedConfig, cfg); err != nil {
 		logger.Errorf("Failed to unmarshal embedded application config for early logger setup: %v", err)
@@ -87,6 +85,15 @@ func main() {
 	jslFileName := "resources/job.yaml" // Default
 	if serviceName != "" {
 		jslFileName = "resources/" + serviceName + "_job.yaml"
+		// Update JobName in config if SERVICE_NAME is provided.
+		cfg.Surfin.Batch.JobName = serviceName + "Job"
+
+		// Re-marshal the updated configuration to bytes.
+		updatedConfigBytes, err := yaml.Marshal(cfg)
+		if err != nil {
+			logger.Fatalf("Failed to marshal updated config: %v", err)
+		}
+		embeddedConfig = updatedConfigBytes
 	}
 
 	// Load the JSL definition from the embedded filesystem.
@@ -95,7 +102,7 @@ func main() {
 		logger.Fatalf("Failed to load JSL file '%s': %v", jslFileName, err)
 	}
 
-	// Define Fx options for adapter providers. This includes database, storage, web proxy, and metrics adapters.
+	// Define Fx options for adapter providers.
 	adapterProviderOptions := []fx.Option{
 		mysql.Module,
 		postgres.Module,
