@@ -27,17 +27,18 @@ import (
 // HourlyForecastAPIReaderConfig is a configuration struct specific to the Reader (for JSL property binding).
 type HourlyForecastAPIReaderConfig struct {
 	WebProxyRef string `yaml:"webProxyRef,omitempty"`
+	Timezone    string `yaml:"timezone,omitempty"`
 }
 
 const (
 	// ModuleHourlyForecastAPIReader is the module name used for batch errors originating from this reader.
 	ModuleHourlyForecastAPIReader = "HourlyForecastAPIReader"
-	// ReaderContextKey is the key used to store the reader's internal state within the Step's ExecutionContext.
-	ReaderContextKey = "reader_context"
+	// ForecastReaderContextKey is the key used to store the reader's internal state within the Step's ExecutionContext.
+	ForecastReaderContextKey = "forecast_reader_context"
 	// ForecastDataKey is the key used to store the fetched forecast data within the reader's state.
 	ForecastDataKey = "forecastData"
-	// CurrentIndexKey is the key used to store the current reading index within the reader's state.
-	CurrentIndexKey = "currentIndex"
+	// ForecastCurrentIndexKey is the key used to store the current reading index within the reader's state.
+	ForecastCurrentIndexKey = "currentIndex"
 )
 
 // HourlyForecastAPIReader implements the core.ItemReader interface to fetch hourly weather forecast data
@@ -247,7 +248,7 @@ func (r *HourlyForecastAPIReader) GetExecutionContext(ctx context.Context) (mode
 	}
 	logger.Debugf("HourlyForecastAPIReader.GetExecutionContext is called.")
 
-	// Save internal state to "reader_context" in the Step ExecutionContext.
+	// Save internal state to "forecast_reader_context" in the Step ExecutionContext.
 	if err := r.saveReaderStateToExecutionContext(ctx); err != nil {
 		return nil, err
 	}
@@ -270,9 +271,14 @@ func (r *HourlyForecastAPIReader) fetchWeatherData(ctx context.Context) error {
 	latitude := 35.6586
 	longitude := 139.7454
 
+	timezone := r.config.Timezone
+	if timezone == "" {
+		timezone = "UTC"
+	}
+
 	// Construct the URL using a relative path.
-	url := fmt.Sprintf("/forecast?latitude=%f&longitude=%f&hourly=temperature_2m,weather_code&timezone=Asia/Tokyo&forecast_days=3",
-		latitude, longitude)
+	url := fmt.Sprintf("/forecast?latitude=%f&longitude=%f&hourly=temperature_2m,weather_code&timezone=%s&forecast_days=3",
+		latitude, longitude, timezone)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -325,28 +331,28 @@ func (r *HourlyForecastAPIReader) fetchWeatherData(ctx context.Context) error {
 //	An error if state restoration fails.
 func (r *HourlyForecastAPIReader) restoreReaderStateFromExecutionContext(ctx context.Context) error {
 	// Extract reader-specific context from stepExecutionContext
-	readerCtxVal, ok := r.stepExecutionContext.Get(ReaderContextKey)
+	readerCtxVal, ok := r.stepExecutionContext.Get(ForecastReaderContextKey)
 	var readerCtx model.ExecutionContext
 	if !ok || readerCtxVal == nil {
 		readerCtx = model.NewExecutionContext()
 		// New readerCtx is set in the Step EC.
-		r.stepExecutionContext.Put(ReaderContextKey, readerCtx)
+		r.stepExecutionContext.Put(ForecastReaderContextKey, readerCtx)
 		logger.Debugf("HourlyForecastAPIReader: Initialized new ReaderExecutionContext.")
 	} else if rcv, isEC := readerCtxVal.(model.ExecutionContext); isEC {
 		readerCtx = rcv
 	} else {
-		logger.Warnf("HourlyForecastAPIReader: ExecutionContext ReaderContextKey has unexpected type (%T). Initializing new ExecutionContext.", readerCtxVal)
+		logger.Warnf("HourlyForecastAPIReader: ExecutionContext ForecastReaderContextKey has unexpected type (%T). Initializing new ExecutionContext.", readerCtxVal)
 		readerCtx = model.NewExecutionContext()
-		r.stepExecutionContext.Put(ReaderContextKey, readerCtx)
+		r.stepExecutionContext.Put(ForecastReaderContextKey, readerCtx)
 	}
 	// Restore reader internal state from readerCtx.
 	r.readerState = readerCtx.Copy()
-	if idx, ok := r.readerState.GetInt(CurrentIndexKey); ok {
+	if idx, ok := r.readerState.GetInt(ForecastCurrentIndexKey); ok {
 		r.currentIndex = idx
 		logger.Debugf("HourlyForecastAPIReader: Restored currentIndex %d from ExecutionContext.", r.currentIndex)
-	} else if val, found := r.readerState.Get(CurrentIndexKey); found {
+	} else if val, found := r.readerState.Get(ForecastCurrentIndexKey); found {
 		// If GetInt failed but the key exists (type is not int/float64)
-		logger.Warnf("HourlyForecastAPIReader: ExecutionContext currentIndex has unexpected type (%T). Initializing to 0.", val)
+		logger.Warnf("HourlyForecastAPIReader: ExecutionContext ForecastCurrentIndexKey has unexpected type (%T). Initializing to 0.", val)
 		r.currentIndex = 0
 	} else {
 		r.currentIndex = 0
@@ -378,22 +384,22 @@ func (r *HourlyForecastAPIReader) restoreReaderStateFromExecutionContext(ctx con
 //	An error if state saving fails.
 func (r *HourlyForecastAPIReader) saveReaderStateToExecutionContext(ctx context.Context) error {
 	// Extract reader-specific context from stepExecutionContext (created if not present)
-	readerCtxVal, ok := r.stepExecutionContext.Get(ReaderContextKey)
+	readerCtxVal, ok := r.stepExecutionContext.Get(ForecastReaderContextKey)
 	var readerCtx model.ExecutionContext
 	if !ok || readerCtxVal == nil {
 		readerCtx = model.NewExecutionContext()
-		r.stepExecutionContext.Put(ReaderContextKey, readerCtx)
+		r.stepExecutionContext.Put(ForecastReaderContextKey, readerCtx)
 	} else if rcv, isEC := readerCtxVal.(model.ExecutionContext); isEC {
 		readerCtx = rcv
 	} else {
-		logger.Warnf("HourlyForecastAPIReader: ExecutionContext ReaderContextKey has unexpected type (%T). Initializing new ExecutionContext.", readerCtxVal)
+		logger.Warnf("HourlyForecastAPIReader: ExecutionContext ForecastReaderContextKey has unexpected type (%T). Initializing new ExecutionContext.", readerCtxVal)
 		readerCtx = model.NewExecutionContext()
-		r.stepExecutionContext.Put(ReaderContextKey, readerCtx)
+		r.stepExecutionContext.Put(ForecastReaderContextKey, readerCtx)
 	}
 
 	// Save reader internal state to readerCtx AND r.readerState.
-	readerCtx.Put(CurrentIndexKey, r.currentIndex)
-	r.readerState.Put(CurrentIndexKey, r.currentIndex)
+	readerCtx.Put(ForecastCurrentIndexKey, r.currentIndex)
+	r.readerState.Put(ForecastCurrentIndexKey, r.currentIndex)
 
 	if r.forecastData != nil {
 		forecastJSON, err := json.Marshal(r.forecastData)

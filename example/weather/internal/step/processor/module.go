@@ -12,7 +12,6 @@ import (
 )
 
 // NewHourlyForecastTransformProcessorComponentBuilder creates a jsl.ComponentBuilder for the HourlyForecastTransformProcessor.
-// This builder is used by the framework to construct an instance of the processor.
 func NewHourlyForecastTransformProcessorComponentBuilder() jsl.ComponentBuilder {
 	return jsl.ComponentBuilder(func(
 		cfg *config.Config,
@@ -20,8 +19,6 @@ func NewHourlyForecastTransformProcessorComponentBuilder() jsl.ComponentBuilder 
 		resourceProviders map[string]coreAdapter.ResourceProvider,
 		properties map[string]interface{},
 	) (interface{}, error) {
-		// resourceProviders are ignored as this processor does not use them.
-		_ = resourceProviders
 		processor, err := NewHourlyForecastTransformProcessor(cfg, resolver, properties)
 		if err != nil {
 			return nil, err
@@ -30,30 +27,38 @@ func NewHourlyForecastTransformProcessorComponentBuilder() jsl.ComponentBuilder 
 	})
 }
 
-// RegisterHourlyForecastTransformProcessorBuilder registers the HourlyForecastTransformProcessor's ComponentBuilder with the JobFactory.
-// This makes the "weatherItemProcessor" component available for use in JSL definitions.
-//
-// Parameters:
-//
-//	jf: The JobFactory instance to register the builder with.
-//	builder: The jsl.ComponentBuilder for the HourlyForecastTransformProcessor.
-func RegisterHourlyForecastTransformProcessorBuilder(
-	jf *support.JobFactory,
-	builder jsl.ComponentBuilder,
-) {
+// NewHourlyHistoryTransformProcessorComponentBuilder creates a jsl.ComponentBuilder for the HourlyHistoryTransformProcessor.
+func NewHourlyHistoryTransformProcessorComponentBuilder() jsl.ComponentBuilder {
+	return jsl.ComponentBuilder(func(
+		cfg *config.Config,
+		resolver core.ExpressionResolver,
+		resourceProviders map[string]coreAdapter.ResourceProvider,
+		properties map[string]interface{},
+	) (interface{}, error) {
+		return NewHourlyHistoryTransformProcessor(cfg, resolver, properties)
+	})
+}
+
+// RegisterHourlyForecastTransformProcessorBuilder registers the HourlyForecastTransformProcessor builder with the JobFactory.
+func RegisterHourlyForecastTransformProcessorBuilder(jf *support.JobFactory, builder jsl.ComponentBuilder) {
 	jf.RegisterComponentBuilder("weatherItemProcessor", builder)
 	logger.Debugf("HourlyForecastTransformProcessor ComponentBuilder registered with JobFactory. JSL ref: 'weatherItemProcessor'")
 }
 
-// Module defines Fx options for the weather processor component.
-// It provides the component builder and registers it with the support.JobFactory.
+// RegisterHourlyHistoryTransformProcessorBuilder registers the HourlyHistoryTransformProcessor builder with the JobFactory.
+func RegisterHourlyHistoryTransformProcessorBuilder(jf *support.JobFactory, builder jsl.ComponentBuilder) {
+	jf.RegisterComponentBuilder("hourlyHistoryTransformProcessor", builder)
+	logger.Debugf("HourlyHistoryTransformProcessor ComponentBuilder registered with JobFactory. JSL ref: 'hourlyHistoryTransformProcessor'")
+}
+
+// Module provides the Fx module for registering weather-related item processors.
 var Module = fx.Options(
-	fx.Provide(fx.Annotate(
-		NewHourlyForecastTransformProcessorComponentBuilder,
-		fx.ResultTags(`name:"weatherItemProcessor"`),
-	)),
-	fx.Invoke(fx.Annotate(
-		RegisterHourlyForecastTransformProcessorBuilder,
-		fx.ParamTags(``, `name:"weatherItemProcessor"`),
-	)),
+	fx.Provide(
+		fx.Annotate(NewHourlyForecastTransformProcessorComponentBuilder, fx.ResultTags(`name:"weatherItemProcessor"`)),
+		fx.Annotate(NewHourlyHistoryTransformProcessorComponentBuilder, fx.ResultTags(`name:"hourlyHistoryTransformProcessor"`)),
+	),
+	fx.Invoke(
+		fx.Annotate(RegisterHourlyForecastTransformProcessorBuilder, fx.ParamTags(``, `name:"weatherItemProcessor"`)),
+		fx.Annotate(RegisterHourlyHistoryTransformProcessorBuilder, fx.ParamTags(``, `name:"hourlyHistoryTransformProcessor"`)),
+	),
 )

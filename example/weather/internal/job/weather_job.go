@@ -10,9 +10,8 @@ import (
 	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
 )
 
-// NewWeatherJobBuilder creates a JobBuilder function for the weatherJob.
-// This builder uses the generic FlowJob implementation from the core framework.
-func NewWeatherJobBuilder() support.JobBuilder {
+// NewHistoryJobBuilder creates a JobBuilder function for the historyJob.
+func NewHistoryJobBuilder() support.JobBuilder {
 	return func(
 		jobRepository repository.JobRepository,
 		cfg *config.Config,
@@ -21,11 +20,32 @@ func NewWeatherJobBuilder() support.JobBuilder {
 		metricRecorder metrics.MetricRecorder,
 		tracer metrics.Tracer,
 	) (port.Job, error) {
-		// The job name "weatherJob" must match the ID in the JSL file (job.yaml).
-		// Returns runner.FlowJob instead of SimpleJob.
 		jobInstance := jobRunner.NewFlowJob(
-			"weatherJob", // ID
-			"weatherJob", // Name
+			"historyJob", // ID
+			"historyJob", // Name
+			flow,
+			jobRepository,
+			listeners,
+			metricRecorder,
+			tracer,
+		)
+		return jobInstance, nil
+	}
+}
+
+// NewForecastJobBuilder creates a JobBuilder function for the forecastJob.
+func NewForecastJobBuilder() support.JobBuilder {
+	return func(
+		jobRepository repository.JobRepository,
+		cfg *config.Config,
+		listeners []port.JobExecutionListener,
+		flow *model.FlowDefinition,
+		metricRecorder metrics.MetricRecorder,
+		tracer metrics.Tracer,
+	) (port.Job, error) {
+		jobInstance := jobRunner.NewFlowJob(
+			"forecastJob", // ID
+			"forecastJob", // Name
 			flow,
 			jobRepository,
 			listeners,

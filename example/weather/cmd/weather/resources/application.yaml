@@ -77,6 +77,9 @@ surfin:
         placement: "header"
         key_name: "X-API-Key"
         api_endpoint: "http://wiremock:8080/v1"
+      openmeteo-historical:
+        type: "NONE"
+        api_endpoint: "https://archive-api.open-meteo.com"
 
     observability:
       otlp_exporter: # Exporter name

@@ -25,7 +25,7 @@ type HourlyForecastDatabaseWriterConfig struct {
 
 // HourlyForecastDatabaseWriter implements [port.ItemWriter] for writing weather data to a database.
 type HourlyForecastDatabaseWriter struct {
-	sqlBulkWriter *writer.SqlBulkWriter[weather_entity.WeatherDataToStore] // sqlBulkWriter is the internal SqlBulkWriter instance.
+	sqlBulkWriter *writer.SqlBulkWriter[weather_entity.HourlyForecastToStore] // sqlBulkWriter is the internal SqlBulkWriter instance.
 
 	DBResolver              database.DBConnectionResolver // DBResolver is the database connection resolver, used to obtain DB connections.
 	Config                  *batch_config.Config          // Config is the application's global configuration.
@@ -90,7 +90,7 @@ func NewHourlyForecastDatabaseWriter(
 		DBResolver:         dbResolver,
 		Config:             cfg,
 		TargetResourceName: resourceName,
-		ResourcePath:       weather_entity.WeatherDataToStore{}.TableName(), // ResourcePath is initialized from the entity's TableName method.
+		ResourcePath:       weather_entity.HourlyForecastToStore{}.TableName(), // ResourcePath is initialized from the entity's TableName method.
 		bulkSize:           bulkSize,
 
 		resolver:             resolver,
@@ -132,10 +132,10 @@ func (w *HourlyForecastDatabaseWriter) Open(ctx context.Context, ec model.Execut
 		return fmt.Errorf("unsupported database type '%s'", dbType)
 	}
 
-	w.sqlBulkWriter = writer.NewSqlBulkWriter[weather_entity.WeatherDataToStore](
+	w.sqlBulkWriter = writer.NewSqlBulkWriter[weather_entity.HourlyForecastToStore](
 		w.TargetResourceName+"_sql_bulk_writer", // A more specific name for the internal writer
 		w.bulkSize,
-		weather_entity.WeatherDataToStore{}.TableName(),
+		weather_entity.HourlyForecastToStore{}.TableName(),
 		w.resolvedConflictColumns,
 		w.resolvedUpdateColumns,
 	)
@@ -151,7 +151,7 @@ func (w *HourlyForecastDatabaseWriter) Open(ctx context.Context, ec model.Execut
 }
 
 // Write persists a chunk of items to the database.
-// It converts generic items to WeatherDataToStore and delegates to the internal SqlBulkWriter.
+// It converts generic items to HourlyForecastToStore and delegates to the internal SqlBulkWriter.
 //
 // Parameters:
 //
@@ -168,11 +168,11 @@ func (w *HourlyForecastDatabaseWriter) Write(ctx context.Context, items []any) e
 		return nil
 	}
 
-	var finalDataToStore []weather_entity.WeatherDataToStore
+	var finalDataToStore []weather_entity.HourlyForecastToStore
 	for _, item := range items {
-		typedItem, ok := item.(*weather_entity.WeatherDataToStore)
+		typedItem, ok := item.(*weather_entity.HourlyForecastToStore)
 		if !ok {
-			return exception.NewBatchError("hourly_forecast_database_writer", fmt.Sprintf("unexpected input item type: %T, expected type: *weather_entity.WeatherDataToStore", item), nil, false, true)
+			return exception.NewBatchError("hourly_forecast_database_writer", fmt.Sprintf("unexpected input item type: %T, expected type: *weather_entity.HourlyForecastToStore", item), nil, false, true)
 		}
 		if typedItem != nil {
 			finalDataToStore = append(finalDataToStore, *typedItem)

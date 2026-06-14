@@ -3,7 +3,7 @@ package weather_entity
 import (
 	"time"
 
-	"github.com/tigerroll/surfin/pkg/batch/core/domain/model" // Imports shared domain models like UnixMillis.
+	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
 // Hourly represents the hourly weather forecast data retrieved from the Open Meteo API.
@@ -20,8 +20,8 @@ type OpenMeteoForecast struct {
 	Hourly    Hourly  `json:"hourly"`
 }
 
-// WeatherDataToStore represents the weather forecast data to be stored in Redshift.
-type WeatherDataToStore struct {
+// HourlyForecastToStore represents the weather forecast data to be stored in the database.
+type HourlyForecastToStore struct {
 	Time          time.Time `gorm:"column:time;primaryKey"`
 	WeatherCode   int       `gorm:"column:weather_code"`
 	Temperature2M float64   `gorm:"column:temperature_2m"`
@@ -31,8 +31,6 @@ type WeatherDataToStore struct {
 }
 
 // HourlyForecast defines the structure for hourly weather data, primarily used for Parquet export.
-// It includes `parquet` tags for serialization to Parquet format,
-// and `gorm` tags to allow direct mapping from database queries.
 type HourlyForecast struct {
 	Time          model.UnixMillis `gorm:"column:time;primaryKey" parquet:"name=time,type=INT64,convertedtype=TIMESTAMP_MILLIS"`
 	WeatherCode   int32            `gorm:"column:weather_code" parquet:"name=weather_code,type=INT32"`
@@ -42,7 +40,7 @@ type HourlyForecast struct {
 	CollectedAt   model.UnixMillis `gorm:"column:collected_at" parquet:"name=collected_at,type=INT64,convertedtype=TIMESTAMP_MILLIS"`
 }
 
-// TableName specifies the table name for WeatherDataToStore.
-func (WeatherDataToStore) TableName() string {
+// TableName specifies the table name for HourlyForecastToStore.
+func (HourlyForecastToStore) TableName() string {
 	return "hourly_forecast"
 }
