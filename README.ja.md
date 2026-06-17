@@ -2,88 +2,96 @@
   <img src="docs/images/surfin-logo.png" alt="Surfin Logo" width="150"/>
 </p>
 
-# 🌊 Surfin - Restartable Batch Processing Framework for Go
+# 🌊 Surfin - Batch framework
 
-[![GoDoc](https://pkg.go.dev/badge/github.com/tigerroll/surfin.svg)](https://pkg.go.dev/github.com/tigerroll/surfin)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/tigerroll/surfin/blob/main/LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/tigerroll/surfin)](https://goreportcard.com/report/github.com/tigerroll/surfin)
+[![GoDoc](https://pkg.go.dev/badge/github.com/tigerroll/surfin.svg)](https://pkg.go.dev/github.com/tigerroll/surfin) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/tigerroll/surfin/blob/main/LICENSE) [![Go Report Card](https://goreportcard.com/badge/github.com/tigerroll/surfin)](https://goreportcard.com/report/github.com/tigerroll/surfin)
 
 [English](./README.md) | 日本語
 
-処理が途中で中断しても、最初からやり直す必要はありません。
+堅牢なバッチアプリケーションの開発を可能にするために設計された、軽量で包括的な Go 向けのバッチフレームワークです。
 
-担当者が変わっても、持続可能な保守運用を実現します。
+Surfin は、大量のレコード処理に必要不可欠な再利用可能機能を提供します。これには、ロギング/トレーシング、トランザクション管理、ジョブ処理の統計情報、ジョブのリスタート、スキップ、およびリソース管理が含まれます。さらに、最適化およびパーティショニング技術を通じて、極めて大容量かつ高パフォーマンスなバッチジョブを可能にする、より高度な技術的サービスや機能も提供しています。シンプルなバッチジョブから、複雑で大容量なバッチジョブにいたるまで、このフレームワークを活用することで、非常に高い拡張性（スケーラビリティ）を持って膨大なデータ量を処理することができます。
 
-**Surfin は、Go 向けのエンタープライズバッチフレームワークです。**
+## Restartable Batch Processing Framework for Go
 
-API 連携・ETL・データ同期・レポート生成・データレイク投入など、
-大量データ処理に必要な運用機能を標準で提供します。
+もう処理が途中で中断しても、最初からやり直す必要はありません。JSR352 のナレッジを活用し、持続可能な保守運用を実現します。
 
-```
-External API → CSV Stream → Transform → Database → Parquet → Data Lake
-```
-
-あなたは **「何を処理するか」** に集中してください。
-
-**「どう安全に処理するか」** は、Surfin が担います。
-
-## 😱 Have you ever faced these challenges ?
-
-* バッチが途中で落ちた。どこまで処理したか、誰も知らない。
-* とりあえず最初から流し直した。翌朝、データが二重になっていた。
-* 再実行フラグ用のテーブルを作ったが、仕様を知っているのは退職した人だけだった。
-* 処理済みかどうかを判定するロジックが、バッチごとに微妙に違う。
-* 「冪等（べきとう）にしておけばいい」と理想を説かれるが、実装コストが高すぎて断念した。
-* 障害が起きるたびに、「どこから再開するか」を会議している。
-* バッチの担当者が異動・退職し、誰も全体像を説明できない。
+### 😱 Have you ever faced these challenges ?
 
 **もし 1 つでも心当たりがあるなら、Surfin はあなたのためのフレームワークです。**
 
-## 🌊 Why Surfin Was Born.
+- バッチが途中で落ちた。どこまで処理したか、誰も知らない。
+- とりあえず最初から流し直した。翌朝、データが二重になっていた。
+- 再実行フラグ用のテーブルを作ったが、仕様を知っているのは退職した人だけだった。
+- 処理済みかどうかを判定するロジックが、バッチごとに微妙に違う。
+- 「冪等（べきとう）にしておけばいい」と理想を説かれるが、実装コストが高すぎて断念した。
+- 障害が起きるたびに、「どこから再開するか」を会議している。
+- バッチの担当者が異動・退職し、誰も全体像を説明できない。
 
-> 私は、担当者不在となった Go 製バッチシステムを保守することになりました。
-> LLM にコードを読ませれば、処理内容は瞬時に解析できるでしょう。しかし、運用現場の過酷な現実は「コードの理解」だけでは解決できませんでした。
-> 
-> * 途中で停止したバッチを、LLM が「安全に再開できる」と保証してくれるわけではない。
-> * 障害のたびに「LLM に仕様を聞く」ことが、深夜の復旧作業の代替にはならない。
-> * 運用ノウハウとは、コードに埋もれたロジックではなく、**障害発生時に迷わず再開できる「運用設計という名の規律」** である。
-> 
-> 私が必要だったのは、コードの読み書きを補助するツールではありません。
-> 「誰がバトンを渡されても、障害時に迷わず、安全に再開できる仕組み」そのものでした。
->
-> その答えが、Surfin です。
+### 🎯 Use Cases
 
-Go でバッチを書くこと自体は、驚くほど簡単です。
+**API 連携・ETL・データ同期・レポート生成・データレイク投入など、大量データ処理に必要な運用機能を標準で提供します。**
+
+- **SaaS データ連携**: `External API → CSV Stream → Transform → Database → Parquet → Data Lake`
+- **ETL・データ基盤**: `API → Transform → Iceberg → Analytics`
+- **レポート生成**: `Database → Aggregation → CSV / PDF`
+- **IoT・工場データ**: `Sensor Data → Batch Processing → Parquet → Data Lake`
+
+あなたは **「何を処理するか」** に集中してください。 **「どう安全に処理するか」** は、Surfin が担います。
+
+## 🐹 Motivation: Why Surfin?
+
+### Go 製バッチシステムが抱える「ジレンマ」
+
+Go はシンプルさを重視する言語です。そのシンプルさは、バッチ処理において最大限に活かされます。
+
+* ⚡ ネイティブの並行性（goroutine）で大量データを効率的に処理
+* 📦 シングルバイナリでデプロイが簡単
+* 🚀 起動が速く、Kubernetes Job との相性が抜群
+
+現代のインフラストラクチャにおいて、バッチ処理に Go を採用するメリットは圧倒的です。メモリフットプリントが極めて小さく、起動はミリ秒単位。単一のバイナリ（シングルバイナリ）として動作するポータビリティの高さは、AWS ECS Tasks、Kubernetes Jobs、サーバーレス（FaaS）のような、短寿命でクラウドネイティブな実行環境と最高にマッチします。さらに、Go で書かれた Web API のコード（DB スキーマやドメインロジック）を、そのまま 100% 共通アセットとして再利用できるという強力な利点もあります。
+<br/> しかし、この「シンプルさ」という甘い罠の先に、深刻な落とし穴が待っています。
+
+標準ライブラリの `for rows.Next()` ループを使って、正常系（ハッピーパス）の実装をシュッと書き上げるのは驚くほど簡単です。また、強力な並行処理（Goroutine）を使って「爆速で処理するコード」も、以下のように数行で書けてしまいます。
 
 ```go
-rows, err := db.QueryContext(ctx, "SELECT * FROM orders WHERE status = 'pending'")
-for rows.Next() {
-    var order Order
-    rows.Scan(&order)
-    process(order)
+// 準標準の errgroup を使った、一見スマートな並行処理の例
+eg, ctx := errgroup.WithContext(ctx)
+
+for _, item := range items {
+    item := item
+    eg.Go(func() error {
+        // 1件でもエラーが出ると Context がキャンセルされ、
+        // 処理中の他のアイテムもすべて道連れに止まってしまう（一蓮托生の罠）
+        return process(ctx, item) 
+    })
 }
+
+if err := eg.Wait(); err != nil {
+    return err
+}
+
 ```
 
-しかし、**本当の辛さは、その先にあります。**
+しかし、本当の地獄は、この「シンプルさ」の先に待っています。
+いざ本番運用に耐えうるバッチアーキテクチャを構築しようとした瞬間、開発者は分散システムにおける無数の泥臭い課題に、1から自前で立ち向かうことになります。
 
-* プロセスが死んだとき、どこから再開するか？
-* 二重起動をどう防ぎ、データの整合性をどう担保するか？
-* 100 万件の処理中、5 万件目で起きたエラーだけをどうスキップするか？
-* アラートが鳴った深夜、運用者は「次に何をすべきか」を即座に判断できるか？
-* そして数年後、このコードの「お作法」を知らない誰かが、安心して保守できるか？
+* **障害復旧（レジリエンス）：** 上記のコードで 100 万件の処理中、5 万件目でプロセスが異常終了したとき、データの重複や二重実行を起こさず、どう安全にリトライ（冪等性の担保）するか？
+* **一蓮托生の回避：** 壊れたデータを1件だけスキップして残りの99万9999件の処理を継続したいとき、スレッドセーフを保ちながら、どうやって「エラー上限数（全体の1%を超えたら全停止など）」の高度な制御を組み込むか？
+* **分散ロックの不完全さ：** 複数プロセスの二重起動を厳格に防ぎつつ、インフラ側からコンテナが強制終了（`SIGKILL`）された際に発生する「解除されないロック（疑似生存）」をどうハンドリングするか？
+* **深夜の意思決定（可観測性）：** 午前3時にアラートが鳴り響いたとき、オンコール担当者はログだけを見て、影響範囲の特定と「次に何をすべきか」を即座に判断できるか？
 
-これらに対する答えが、Surfin です。
-
-再実行性、チェックポイント、リトライ制御、ジョブ管理。
-これらは単なる「便利な機能」ではありません。**先人たちが現場での泥臭い失敗を繰り返した末に手に入れた、「運用における知恵」そのものです。**
-
-私たちは、その知恵を現代の Go 開発に持ち込みます。
-
-**過去の失敗を、次の開発者の「武器」に変えるために。**
+Surfin は、 **過去のエンタープライズシステムで培われた 知見を、現代の Go 開発に持ち込み活かします。**
 
 ## 🚀 Getting Started with Surfin
 
-パイプラインは YAML で定義します。
+インストールはとても簡単です。
+
+```bash
+go get github.com/tigerroll/surfin
+```
+
+シンプルなジョブは、最小限のYAMLだけで定義できます。
 
 ```yaml
 jobs:
@@ -96,7 +104,6 @@ jobs:
           bean: transformReport
         writer:
           type: parquet
-
 ```
 
 ビジネスロジックは Go で実装します。
@@ -108,12 +115,54 @@ func (p *ReportProcessor) Process(
 ) (ReportRecord, error) {
     return transform(item), nil
 }
-
 ```
 
 処理フローとビジネスロジックは分離されます。
 
 フローを変えるために Go コードを触る必要はありません。
+
+#### より実践的なJSL（Job Specification Language）の例
+
+ステップ間のトランジション、アイテム単位のリトライ・スキップポリシー、チャンクサイズなども、すべてYAMLで宣言できます。
+
+```yaml
+id: myJob
+name: サンプルジョブ
+
+flow:
+  start-element: extractStep
+  elements:
+    extractStep:
+      id: extractStep
+      chunk:
+        reader:
+          ref: myItemReader
+        processor:
+          ref: myItemProcessor
+        writer:
+          ref: myItemWriter
+        chunk-size: 100
+        item-retry:
+          max_attempts: 3
+          initial_interval: 1s
+        item-skip:
+          skip_limit: 10
+      transitions:
+        - on: COMPLETED
+          to: notifyStep
+        - on: FAILED
+          fail: true
+
+    notifyStep:
+      id: notifyStep
+      tasklet:
+        ref: notifyTasklet
+      transitions:
+        - on: COMPLETED
+          end: true
+```
+
+ジョブの構造（Job → Step → Chunk）と、フォールトトレランス（Retry/Skip）の設定が、コードを書かずに表現されています。
 
 ## 📍 Key Problems Solved
 
@@ -139,30 +188,54 @@ faultTolerance:
     maxAttempts: 3
   skip:
     limit: 100
-
 ```
 
 ## ♻️ Mechanism of Resume
 
 Surfin はチャンクのコミットごとに `ExecutionContext` を DB へ永続化します。再実行時はその位置を復元して、失敗地点から再開します。
-Reader の位置保存さえ実装すれば、あとはフレームワークがすべてやります。
+
+実装者がやることは、Readerに現在位置を保存・復元するロジックを書くことだけです。
+
+```go
+// Readerが現在位置をExecutionContextに保存する
+func (r *MyReader) Update(ctx context.Context, ec *model.ExecutionContext) error {
+    ec.PutInt("read.offset", r.currentOffset)
+    return nil
+}
+
+// 再実行時のOpenで位置を復元する
+func (r *MyReader) Open(ctx context.Context, ec *model.ExecutionContext) error {
+    if offset, ok := ec.GetInt("read.offset"); ok {
+        r.currentOffset = offset
+    }
+    return nil
+}
+```
+
+あとはフレームワークがすべてやります。
 失敗した `JobExecution` の検出、コンテキストの復元、完了済みステップのスキップなど、複雑なロジックから解放されます。
 
-## ⚖️ Comparison with Custom Implementation
+## ⚖️ Comparison with Existing Solutions
 
-| 項目 | 自前実装 | Surfin |
-| --- | --- | --- |
-| 再実行 | 個別実装 | ✅ 標準 |
-| Checkpoint | 個別実装 | ✅ 標準 |
-| Retry / Skip | 個別実装 | ✅ 標準 |
-| OpenTelemetry | 個別実装 | ✅ 標準 |
-| ジョブ履歴管理 | 個別実装 | ✅ 標準 |
-| 並列実行 | 個別実装 | ✅ 標準 |
-| YAML 定義 | なし | ✅ 標準 |
-
-自前で全部作ることは可能です。しかし、再実行性・障害耐性・安全な並行実行が必要になった瞬間、複雑さは爆発します。
+自前で全部作ることは可能です。
+しかし、再実行性・障害耐性・安全な並行実行が必要になった瞬間、複雑さは爆発します。
 
 **「動いているけど、怖くて触れない」バッチになる前に。**
+
+バッチ処理の複雑な要件を自前で実装し続けることは、メンテナンスコストの増大を招きます。
+JSR352 は Java エコシステムにおける標準ですが、Go で同様の堅牢性を求める場合、Surfin がその答えとなります。
+
+| Feature                | 自前実装 (Go) | JSR352 (Java)   | Surfin (Go)  |
+| ---------------------- | --------- | --------------- | ------------ |
+| Chunk-based Processing | カスタム実装    | ✅ 標準            | ✅ 標準         |
+| Restartability         | カスタム実装    | ✅ 標準            | ✅ 標準         |
+| Fault Tolerance        | カスタム実装    | ✅ 標準            | ✅ 標準         |
+| Declarative I/O        | カスタム実装    | ✅ 標準            | ✅ 標準         |
+| Transaction Management | カスタム実装    | ✅ 標準            | ✅ 標準         |
+| Observability          | カスタム実装    | ✅ 標準            | ✅ 標準         |
+| Parallel Execution     | カスタム実装    | ✅ 標準            | ✅ 標準         |
+| Job Control            | カスタム実装    | ✅ 標準            | ✅ 標準         |
+| Definition Method      | コード記述     | XML/Java Config | ✅ YAML (JSL) |
 
 ## 🏗️ Architecture
 
@@ -174,64 +247,38 @@ Job
       ├─ Reader
       ├─ Processor
       └─ Writer
-
 ```
 
 理解しやすく、テストしやすく、保守しやすい設計です。
 
 ## 🛠️ Key Features
 
-* **♻️ Restartability**: 失敗地点からの正確な再開。完了済みステップは自動スキップ。
-* **📍 Checkpoint**: チャンク単位の進捗を永続化。どこまで処理したかを常に把握。
-* **🛡️ Fault Tolerance**: Retry・Skip・Backoff をポリシーとして宣言的に定義。
-* **📋 宣言的パイプライン（JSL）**: YAML によるジョブ定義。
-* **🔄 トランザクション管理**: `REQUIRED`・`REQUIRES_NEW`・`NESTED` をサポート。
-* **✨ Observability**: OpenTelemetry と Prometheus をコアに統合。
-* **📈 並列実行・スケーリング**: Split・Decision・Partition・Kubernetes Job をサポート。
-* **🔒 楽観的ロック**: ジョブの二重起動を自動検知して実行を拒否。
-
-## 🎯 Use Cases
-
-* **SaaS データ連携**: `Google Ads → CSV → PostgreSQL → Parquet`
-* **ETL・データ基盤**: `API → Transform → Iceberg → Analytics`
-* **レポート生成**: `Database → Aggregation → CSV / PDF`
-* **IoT・工場データ**: `Sensor Data → Batch Processing → Parquet → Data Lake`
-
-## 🐹 Why Go for Batch Processing?
-
-Go はシンプルさを重視する言語です。そのシンプルさは、バッチ処理において最大限に活かされます。
-
-* ⚡ ネイティブの並行性（goroutine）で大量データを効率的に処理
-* 📦 シングルバイナリでデプロイが簡単
-* 🚀 起動が速く、Kubernetes Job との相性が抜群
-
-Surfin は、過去のエンタープライズシステムで培われた知見を、現代の Go 開発に持ち込みます。
-
-**私たちは過去の知見を捨てません。活かします。**
-
-## 🚀 Getting Started
-
-```bash
-go get [github.com/tigerroll/surfin](https://github.com/tigerroll/surfin)
-```
-
-👉 **[tutorial - "Hello, Wold!"](docs/tutorial/hello-world.md)**
+- **📦 Chunk-based Processing**: チャンク単位の処理とチェックポイントによる進捗管理。
+- **♻️ Restartability**: 失敗地点からの正確な再開。完了済みステップは自動スキップ。
+- **🛡️ Fault Tolerance**: Retry・Skip・Backoff をポリシーとして宣言的に定義。
+- **📋 Declarative I/O & Pipeline**: YAML (JSL) によるジョブ定義と、Reader/Writerの宣言的な分離。
+- **🔄 Transaction Management**: `REQUIRED`・`REQUIRES_NEW` 等をサポートした堅牢なトランザクション管理。
+- **✨ Observability**: OpenTelemetry と Prometheus をコアに統合。
+- **📈 Parallel Execution**: Split・Decision・Partition による並列処理とスケーリング。
+- **🔒 Job Control**: 楽観的ロックによる二重起動防止と、ジョブのライフサイクル（Start/Stop）管理。
 
 ## 📚 Documentation & Usage
 
-* [イントロダクション・基本概念](https://www.google.com/search?q=./docs/guide/01_introduction.md)
-* [セットアップと JSL 定義](https://www.google.com/search?q=./docs/guide/02_setup_and_jsl.md)
-* [ステップタイプとコンポーネント](https://www.google.com/search?q=./docs/guide/03_step_types_and_components.md)
-* [フォールトトレランスとトランザクション管理](https://www.google.com/search?q=./docs/guide/04_fault_tolerance.md)
-* [スケーリングと並列処理](https://www.google.com/search?q=./docs/guide/05_scaling_and_parallelism.md)
-* [アーキテクチャと設計原則](https://www.google.com/search?q=./docs/architecture/)
-* [実装ロードマップ](https://www.google.com/search?q=./docs/strategy/adapter_and_component_roadmap.md)
+👉 **[tutorial - "Hello, World!"](./docs/tutorial/hello-world.md)**
+
+- [イントロダクション・基本概念](./docs/guide/01_introduction.md)
+- [セットアップと JSL 定義](./docs/guide/02_setup_and_jsl.md)
+- [ステップタイプとコンポーネント](./docs/guide/03_step_types_and_components.md)
+- [フォールトトレランスとトランザクション管理](./docs/guide/04_fault_tolerance.md)
+- [スケーリングと並列処理](./docs/guide/05_scaling_and_parallelism.md)
+- [アーキテクチャと設計原則](./docs/architecture/)
+- [実装ロードマップ](./docs/strategy/adapter_and_component_roadmap.md)
 
 ## 🆘 Support
 
 質問・バグ報告・機能要望は GitHub Issues へ。
 
-* **GitHub Issues**: [バグ報告・機能要望](https://www.google.com/search?q=https://github.com/tigerroll/surfin/issues)
+- **GitHub Issues**: [バグ報告・機能要望](https://github.com/tigerroll/surfin/issues)
 
 ## 📄 License
 
