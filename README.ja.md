@@ -368,7 +368,12 @@ graph LR
 * [ステップタイプとコンポーネント](./docs/guide/03_step_types_and_components.md)
 * [フォールトトレランスとトランザクション管理](./docs/guide/04_fault_tolerance.md)
 * [スケーリングと並列処理](./docs/guide/05_scaling_and_parallelism.md)
-* [アーキテクチャと設計原則](./docs/architecture/)
+* **アーキテクチャと設計原則**
+    * [プロジェクト概要](./docs/architecture/00_project_overview.md)
+    * [設計原則](./docs/architecture/01_design_principles.md)
+    * [レイヤーと実行フロー](./docs/architecture/02_layer_and_flow.md)
+    * [障害耐性とトランザクション管理](./docs/architecture/03_fault_tolerance_and_tx.md)
+    * [アーキテクチャビジョン](./docs/architecture/vision.md)
 * [実装ロードマップ](./docs/strategy/adapter_and_component_roadmap.md)
 
 ## 🆘 Support
