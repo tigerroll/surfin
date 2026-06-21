@@ -368,10 +368,10 @@ graph LR
 * [セットアップと JSL 定義](./docs/guide/02_setup_and_jsl.md)
 * [ステップタイプとコンポーネント](./docs/guide/03_chunk_components.md)
 * [フォールトトレランスとトランザクション管理](./docs/guide/04_fault_tolerance.md)
+* [実装ロードマップ](./docs/strategy/roadmap.md)
 * **アーキテクチャと設計原則**
     * [ビジョンと設計原則](./docs/architecture/01_vision_and_principles.md)
     * [アーキテクチャの全体像](./docs/architecture/02_architecture.md)
-* [実装ロードマップ](./docs/strategy/roadmap.md)
 
 ## 🆘 Support
 
