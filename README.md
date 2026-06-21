@@ -10,6 +10,10 @@ English | [日本語](./README.ja.md)
 
 A Cloud Native Batch framework for Go, inspired by JSR-352.
 
+**Surfin** is developed with robustness, scalability, and operational ease as top priorities.
+<br/> It is a lightweight batch framework for Go, designed to bring discipline to batch processing and enable safe exception handling and disaster recovery.
+<br/> With declarative job definitions (JSL) and a clean architecture, it efficiently and reliably executes complex data processing tasks.
+
 Surfin provides the reusable infrastructure that large-scale batch processing requires: logging/tracing, transaction management, job execution statistics, restart, skip, and resource management. It also offers higher-level technical services — optimization and partitioning — that enable extremely large, high-performance batch jobs. From simple jobs to large, complex ones, Surfin lets you process massive datasets with high scalability.
 
 ## Restartable Batch Processing Framework for Go
@@ -46,9 +50,9 @@ Focus on **what to process**. Surfin handles **how to process it safely**.
 
 Go favors simplicity, and that simplicity pays off in batch processing.
 
-- ⚡ Native concurrency (goroutines) for efficient large-scale data processing
-- 📦 Single binary, simple to deploy
-- 🚀 Fast startup, a good fit for Kubernetes Jobs
+* ⚡ Native concurrency (goroutines) for efficient large-scale data processing
+* 📦 Single binary, simple to deploy
+* 🚀 Fast startup, a good fit for Kubernetes Jobs
 
 Go has real advantages for batch workloads on modern infrastructure: a small memory footprint, millisecond startup, and the portability of a single binary — all of which line up well with short-lived, cloud-native environments like AWS ECS Tasks, GCP CloudRun, Kubernetes Jobs, or FaaS. You can also reuse the same Go code (DB schemas, domain logic) from your web API as a shared asset.
 
@@ -253,9 +257,94 @@ Continuing to build these requirements from scratch drives up long-term maintena
 
 ## 🏗️ Architecture
 
-Surfin Batch Frameworkは、責務を明確に分離したレイヤードアーキテクチャを採用しています。
+The "execution" and "persistence of progress" are clearly separated.
 
-詳細なアーキテクチャ図や層構造については、[2. フレームワークの層構造と実行フロー](./docs/architecture/02_architecture.md) を参照してください。
+```mermaid
+graph LR
+    %% Style definitions
+    classDef entry fill:#4f46e5,color:#fff,stroke:#312e81,stroke-width:2px
+    classDef logic fill:#0ea5e9,color:#fff,stroke:#075985,stroke-width:2px
+    classDef core fill:#64748b,color:#fff,stroke:#334155,stroke-width:2px
+    classDef domain fill:#10b981,color:#fff,stroke:#065f46,stroke-width:2px
+    classDef cloud fill:#fff,stroke:#cbd5e1,stroke-width:2px,stroke-dasharray: 5 5
+
+    %% External boundaries
+    subgraph External ["&nbsp; 🌐 External Infrastructure &nbsp;"]
+        direction LR
+        HTTP["💻&nbsp;External API"]:::cloud
+        RDB["🗄️&nbsp;RDBMS (Progress/State)"]:::cloud
+    end
+
+    %% Application core
+    subgraph Application ["&nbsp; 📦 Batch System &nbsp;"]
+        direction TB
+
+        subgraph Layer_Entry ["Top Layer: Entrypoint"]
+            Main["cmd/my_batch/main.go"]:::entry
+            Launcher["Job Launcher"]:::entry
+        end
+
+        subgraph Layer_Logic ["Middle Layer: Business Logic"]
+            direction LR
+            Job["Job Logic"]:::logic
+            Step["Step"]:::logic
+            Reader["Item Reader"]:::logic
+            Processor["Item Processor"]:::logic
+            Writer["Item Writer"]:::logic
+        end
+
+        subgraph Layer_Core ["Foundation: Surfin"]
+            direction LR
+            Runner["Job Runner"]:::core
+            Repository["Job Repository"]:::core
+            TX["TX Manager"]:::core
+            DB_Adapter["DB Adapter"]:::core
+        end
+
+        subgraph Layer_Domain ["Core Layer: Domain & Data"]
+            direction LR
+            Repo["Repository"]:::domain
+            Entity["Domain Entity"]:::domain
+        end
+    end
+
+    %% Connection and execution flow
+    Main --> Launcher
+    Launcher --> Job
+    Job --> Step
+    Step --> Reader
+    Step --> Processor
+    Step --> Writer
+
+    %% Framework and persistence integration
+    Job --> Runner
+    Runner --> Repository
+    Repository <--> DB_Adapter
+    DB_Adapter <--> RDB
+
+    %% Dependencies
+    Writer --> Repo
+    Repo --> TX
+    TX <--> DB_Adapter
+    Repo -.- Entity
+    Reader -.- HTTP
+
+    %% Layout control
+    Layer_Entry ~~~ Layer_Logic
+    Layer_Logic ~~~ Layer_Core
+    Layer_Core ~~~ Layer_Domain
+```
+
+* **Execution**: `JobLauncher` → `Job` → `Step` → `ItemReader / ItemProcessor / ItemWriter`
+* **Persistence**: `JobRepository` manages execution progress and state.
+
+Because this "execution" and "persistence" always work as a set, you can resume when a failure occurs.
+
+A design that is easy to understand, easy to test, and easy to maintain.
+
+<p align="center">
+  <img src="docs/images/mascot.png" alt="Surfin Logo" width="400"/>
+</p>
 
 ## 🛠️ Key Features
 
@@ -278,6 +367,7 @@ Surfin Batch Frameworkは、責務を明確に分離したレイヤードアー�
 * **Architecture & Design**
     * [Vision & Design Principles](./docs/architecture/01_vision_and_principles.md)
     * [Architecture Overview](./docs/architecture/02_architecture.md)
+* [Roadmap](./docs/strategy/roadmap.md)
 
 ## 🆘 Support
 
