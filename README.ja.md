@@ -363,18 +363,14 @@ graph LR
 
 ## 📚 Documentation & Usage
 
+* [はじめに・クイックスタート](./docs/guide/00_getting_started.md)
 * [イントロダクション・基本概念](./docs/guide/01_introduction.md)
 * [セットアップと JSL 定義](./docs/guide/02_setup_and_jsl.md)
-* [ステップタイプとコンポーネント](./docs/guide/03_step_types_and_components.md)
+* [ステップタイプとコンポーネント](./docs/guide/03_chunk_components.md)
 * [フォールトトレランスとトランザクション管理](./docs/guide/04_fault_tolerance.md)
-* [スケーリングと並列処理](./docs/guide/05_scaling_and_parallelism.md)
 * **アーキテクチャと設計原則**
-    * [プロジェクト概要](./docs/architecture/00_project_overview.md)
-    * [設計原則](./docs/architecture/01_design_principles.md)
-    * [レイヤーと実行フロー](./docs/architecture/02_layer_and_flow.md)
-    * [障害耐性とトランザクション管理](./docs/architecture/03_fault_tolerance_and_tx.md)
-    * [アーキテクチャビジョン](./docs/architecture/vision.md)
-* [実装ロードマップ](./docs/strategy/adapter_and_component_roadmap.md)
+    * [設計原則](./docs/architecture/01_vision_and_principles.md)
+    * [レイヤーと実行フロー](./docs/architecture/02_architecture.md)
 
 ## 🆘 Support
 
