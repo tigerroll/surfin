@@ -76,12 +76,24 @@ flow:
     *   **パフォーマンス:** 巨大な履歴データと頻繁に更新される Forecast データを分けることで、インデックスの肥大化を防ぎ、クエリ性能を維持する。
     *   **安全性:** 履歴データのバッチ処理による誤操作が、Forecast データに影響を与えるリスクを排除する。
 
-## 6. 実装ステップ
+## 6. 実装例: Hourly Forecast Export Tasklet
 
-1.  **マイグレーション作成:** `hourly_history` テーブル作成用 SQL を追加。
-2.  **Entity作成:** `HourlyHistoryToStore` を定義。
-3.  **Processor 実装:** `HourlyHistoryTransformProcessor` を作成。
-4.  **Writer 実装:** `HourlyHistoryDatabaseWriter` を作成。
-5.  **DI 登録:** `internal/step/processor/module.go` 等に各 Builder を追加し、Fx に登録。
-6.  **JSL 作成:** `history_job.yaml` を作成。
-7.  **動作確認:** `SERVICE_NAME=history` で実行し、データが `hourly_history` に格納されることを確認。
+`HourlyForecastExportTasklet` は、`hourly_forecast` テーブルからデータを読み込み、Hive パーティション形式（`dt=YYYY-MM-DD`）で Parquet ファイルとしてローカルストレージにエクスポートするタスクレットです。
+
+### 6.1. 実装のポイント
+*   **データ変換**: データベースのタイムスタンプを Parquet の `TIMESTAMP_MILLIS` (INT64) に変換して保持します。
+*   **パーティショニング**: `time` カラムから日付を抽出し、`dt=YYYY-MM-DD` 形式のディレクトリ構造を動的に生成します。
+*   **ストレージ連携**: `StorageAdapter` を介してローカルファイルシステムへ書き込みます。
+*   **Fx 登録**: `jsl.ComponentBuilder` を使用して、ジョブ定義からタスクレットを動的に生成・注入できるようにします。
+
+### 6.2. 設定例 (`job.yaml`)
+```yaml
+exportHourlyForecastStep:
+  id: exportHourlyForecastStep
+  tasklet:
+    ref: hourlyForecastExportTasklet
+    properties:
+      dbRef: workload
+      storageRef: local
+      outputBaseDir: "exported_weather_data"
+```

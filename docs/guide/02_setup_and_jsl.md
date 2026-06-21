@@ -92,4 +92,37 @@ func NewMyReader(properties map[string]string) (*MyReader, error) {
 }
 ```
 
+## 2.4. コンポーネントの登録 (DI と Fx)
 
+JSL で指定した `ref` 名は、Go コード側で `JobFactory` に登録されている必要があります。Surfin では、Uber Fx を使用してコンポーネントをモジュール化し、アプリケーション起動時に集約します。
+
+### モジュールパターンの推奨構成
+
+各コンポーネント（Tasklet, Reader, Writer 等）は、`fx.Options` を含む `Module` 変数を定義します。
+
+```go
+// internal/step/hello_tasklet_module.go
+var Module = fx.Options(
+    fx.Provide(
+        fx.Annotate(
+            NewHelloWorldTaskletComponentBuilder,
+            fx.ResultTags(`name:"helloWorldTasklet"`),
+        ),
+    ),
+    fx.Invoke(func(jf *support.JobFactory, builder jsl.ComponentBuilder) {
+        jf.RegisterTaskletBuilder("helloWorldTasklet", builder)
+    }),
+)
+```
+
+この `Module` を、アプリケーションの `app_options.go` で集約します。
+
+```go
+// cmd/hello-world/app_options.go
+func GetApplicationOptions(...) []fx.Option {
+    var options []fx.Option
+    // ... 他のオプション ...
+    options = append(options, helloTasklet.Module) // モジュールを追加
+    return options
+}
+```

@@ -360,7 +360,12 @@ The design is easy to understand, easy to test, and easy to maintain.
 * [Step types & components](./docs/guide/03_step_types_and_components.md)
 * [Fault tolerance & transaction management](./docs/guide/04_fault_tolerance.md)
 * [Scaling & parallel processing](./docs/guide/05_scaling_and_parallelism.md)
-* [Architecture & design principles](./docs/architecture/)
+* **Architecture & Design**
+    * [Project Overview](./docs/architecture/00_project_overview.md)
+    * [Design Principles](./docs/architecture/01_design_principles.md)
+    * [Layer & Flow](./docs/architecture/02_layer_and_flow.md)
+    * [Fault Tolerance & TX](./docs/architecture/03_fault_tolerance_and_tx.md)
+    * [Vision](./docs/architecture/vision.md)
 * [Implementation roadmap](./docs/strategy/adapter_and_component_roadmap.md)
 
 ## 🆘 Support

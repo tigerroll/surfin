@@ -162,3 +162,13 @@ JSLの `execution-context-promotion` 設定を使用すると、ステップの 
           - "reader_context" # WeatherReader が保存したコンテキスト全体を昇格
           - "decision.condition" # Decision ステップでチェックされる条件キー
 ```
+
+## 3.5. コンポーネントの登録とDI
+
+実装したコンポーネントを JSL から参照可能にするには、以下の手順で登録を行います。
+
+1. **Builder の作成**: `jsl.ComponentBuilder` を実装し、プロパティのバインドを行います。
+2. **Module の定義**: `fx.Options` を使用して、Builder の提供と `JobFactory` への登録を行う `Module` を定義します。
+3. **アプリケーションへの統合**: `app_options.go` の `GetApplicationOptions` 関数内で、定義した `Module` を `options` スライスに追加します。
+
+この構成により、ビジネスロジック（コンポーネント）とアプリケーションの起動設定（DI）が疎結合に保たれます。

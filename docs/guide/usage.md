@@ -74,76 +74,18 @@ graph TD
 **シンプルな `main.go` の構造:**
 
 ```go
-package main
-
-import (
-	"context"
-	"embed"
-	"os"
-	"os/signal"
-	"syscall"
-
-	"github.com/tigerroll/surfin/example/weather/internal/app" // アプリケーション固有のモジュール
-	"github.com/tigerroll/surfin/pkg/batch/core/config"
-	"github.com/tigerroll/surfin/pkg/batch/core/config/jsl"
-	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
-
-	"go.uber.org/fx" // Fx (DIコンテナ)
-)
-
-//go:embed resources/application.yaml
-var embeddedConfig []byte
-
-//go:embed resources/job.yaml
-var embeddedJSL []byte
-
-// main関数: アプリケーションのエントリポイント
+// main.go の推奨構造
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+    // ... (シグナルハンドリング等はそのまま)
 
-	// シグナルハンドリング (Ctrl+Cなどで安全に停止するため)
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		logger.Warnf("シグナルを受信しました。ジョブの停止を試みます...")
-		cancel()
-	}()
-
-	// 環境変数から設定ファイルのパスを取得 (省略可能)
-	envFilePath := os.Getenv("ENV_FILE_PATH")
-	if envFilePath == "" {
-		envFilePath = ".env"
-	}
-
-	// DBプロバイダのオプションを準備 (例: Postgres, MySQL, SQLiteなど)
-	// これはアプリケーションのニーズに応じて動的に選択されます
-	dbProviderOptions := getDBProviderOptions() // 実際のアプリケーションでは、この関数でfx.Optionを生成
-
-	// Surfin Batchアプリケーションを起動
-	app.RunApplication(
-		ctx,
-		envFilePath,
-		config.EmbeddedConfig(embeddedConfig),
-		jsl.JSLDefinitionBytes(embeddedJSL),
-		nil, // アプリケーション固有のマイグレーションFS (必要に応じて設定)
-		dbProviderOptions,
-	)
-	os.Exit(0)
-}
-
-// getDBProviderOptions は、使用するDBプロバイダのFxオプションを生成する関数 (詳細は省略)
-func getDBProviderOptions() []fx.Option {
-    // 例:
-    // import (
-    //     "go.uber.org/fx"
-    //     "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm" // gormパッケージをインポート
-    // )
-    // return []fx.Option{
-    //     fx.Provide(fx.Annotate(gorm.NewPostgresProvider, fx.ResultTags(`group:"db_providers"`))),
-    //     fx.Provide(fx.Annotate(gorm.NewMySQLProvider, fx.ResultTags(`group:"db_providers"`))),
-    // }
-    return nil
+    // app_options.go で定義した GetApplicationOptions を使用して起動
+    app.RunApplication(
+        ctx,
+        ".env",
+        config.EmbeddedConfig(embeddedConfig),
+        jsl.JSLDefinitionBytes(embeddedJSL),
+        nil,
+        app.GetApplicationOptions(ctx, ".env", embeddedConfig, embeddedJSL), 
+    )
 }
 ```
