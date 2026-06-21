@@ -253,94 +253,9 @@ Continuing to build these requirements from scratch drives up long-term maintena
 
 ## 🏗️ Architecture
 
-Execution and persistence of progress are kept separate.
+Surfin Batch Frameworkは、責務を明確に分離したレイヤードアーキテクチャを採用しています。
 
-```mermaid
-graph LR
-    %% Style definitions
-    classDef entry fill:#4f46e5,color:#fff,stroke:#312e81,stroke-width:2px
-    classDef logic fill:#0ea5e9,color:#fff,stroke:#075985,stroke-width:2px
-    classDef core fill:#64748b,color:#fff,stroke:#334155,stroke-width:2px
-    classDef domain fill:#10b981,color:#fff,stroke:#065f46,stroke-width:2px
-    classDef cloud fill:#fff,stroke:#cbd5e1,stroke-width:2px,stroke-dasharray: 5 5
-
-    %% External boundaries
-    subgraph External ["&nbsp; 🌐 External Infrastructure &nbsp;"]
-        direction LR
-        HTTP["💻&nbsp;External API"]:::cloud
-        RDB["🗄️&nbsp;RDBMS (Progress/State)"]:::cloud
-    end
-
-    %% Application core
-    subgraph Application ["&nbsp; 📦 Batch System &nbsp;"]
-        direction TB
-
-        subgraph Layer_Entry ["Top Layer: Entrypoint"]
-            Main["cmd/my_batch/main.go"]:::entry
-            Launcher["Job Launcher"]:::entry
-        end
-
-        subgraph Layer_Logic ["Middle Layer: Business Logic"]
-            direction LR
-            Job["Job Logic"]:::logic
-            Step["Step"]:::logic
-            Reader["Item Reader"]:::logic
-            Processor["Item Processor"]:::logic
-            Writer["Item Writer"]:::logic
-        end
-
-        subgraph Layer_Core ["Foundation: Surfin"]
-            direction LR
-            Runner["Job Runner"]:::core
-            Repository["Job Repository"]:::core
-            TX["TX Manager"]:::core
-            DB_Adapter["DB Adapter"]:::core
-        end
-
-        subgraph Layer_Domain ["Core Layer: Domain & Data"]
-            direction LR
-            Repo["Repository"]:::domain
-            Entity["Domain Entity"]:::domain
-        end
-    end
-
-    %% Connections and execution flow
-    Main --> Launcher
-    Launcher --> Job
-    Job --> Step
-    Step --> Reader
-    Step --> Processor
-    Step --> Writer
-
-    %% Framework and persistence integration
-    Job --> Runner
-    Runner --> Repository
-    Repository <--> DB_Adapter
-    DB_Adapter <--> RDB
-
-    %% Dependencies
-    Writer --> Repo
-    Repo --> TX
-    TX <--> DB_Adapter
-    Repo -.- Entity
-    Reader -.- HTTP
-
-    %% Layout control
-    Layer_Entry ~~~ Layer_Logic
-    Layer_Logic ~~~ Layer_Core
-    Layer_Core ~~~ Layer_Domain
-```
-
-- **Execution:** `JobLauncher` → `Job` → `Step` → `ItemReader / ItemProcessor / ItemWriter`
-- **Persistence:** `JobRepository` tracks the progress and state of each run
-
-Resuming after a failure works because execution and persistence always happen together.
-
-The design is easy to understand, easy to test, and easy to maintain.
-
-<p align="center">
-  <img src="docs/images/mascot.png" alt="Surfin Logo" width="400"/>
-</p>
+詳細なアーキテクチャ図や層構造については、[2. フレームワークの層構造と実行フロー](./docs/architecture/02_layer_and_flow.md) を参照してください。
 
 ## 🛠️ Key Features
 
