@@ -364,10 +364,10 @@ A design that is easy to understand, easy to test, and easy to maintain.
 * [Setup & JSL definition](./docs/guide/02_setup_and_jsl.md)
 * [Step types & components](./docs/guide/03_chunk_components.md)
 * [Fault Tolerance & transaction management](./docs/guide/04_fault_tolerance.md)
+* [Roadmap](./docs/strategy/roadmap.md)
 * **Architecture & Design**
     * [Vision & Design Principles](./docs/architecture/01_vision_and_principles.md)
     * [Architecture Overview](./docs/architecture/02_architecture.md)
-* [Roadmap](./docs/strategy/roadmap.md)
 
 ## 🆘 Support
 
