@@ -46,54 +46,28 @@ Focus on **what to process**. Surfin handles **how to process it safely**.
 
 ## 🐹 Motivation: Why Surfin?
 
-### The dilemma of batch systems written in Go
+### Beyond DIY: Building Robust Batch Systems in Go
 
-Go favors simplicity, and that simplicity pays off in batch processing.
+The Go community thrives on a "DIY" (Do It Yourself) culture, and rightfully so. However, we don't need to reinvent the wheel when it comes to batch architecture.
 
-* ⚡ Native concurrency (goroutines) for efficient large-scale data processing
-* 📦 Single binary, simple to deploy
-* 🚀 Fast startup, a good fit for Kubernetes Jobs
+Let's bring the wisdom of our predecessors to Go batch processing. Challenges like "restartability," "checkpoints," and "transaction boundaries" are "solved problems" that have been refined over decades in mainframe and Java (JSR-352) environments.
 
-Go has real advantages for batch workloads on modern infrastructure: a small memory footprint, millisecond startup, and the portability of a single binary — all of which line up well with short-lived, cloud-native environments like AWS ECS Tasks, GCP CloudRun, Kubernetes Jobs, or FaaS. You can also reuse the same Go code (DB schemas, domain logic) from your web API as a shared asset.
+Surfin rebuilds these universal design principles using Go interfaces. Keep the implementation simple, but borrow the architectural wisdom of our predecessors. That is the shortcut to building production-grade batch systems.
 
-But that simplicity comes with a catch.
+**※For a deeper dive into the philosophy, read the article: '[Borrow the best, build the rest: Go Batch Processing](../docs/articles/batching-the-go-way-inheriting-enterprise-patterns.md)'**
 
-Writing the happy path with a plain `for rows.Next()` loop is easy. So is making it fast with goroutines:
+### Separation of Concerns: Business logic shouldn't even know it's part of a batch process
+
+Surfin's design philosophy is rooted in the "Separation of Concerns."
 
 ```go
-// concurrent processing with errgroup
-eg, ctx := errgroup.WithContext(ctx)
-
-for _, item := range items {
-    item := item
-    eg.Go(func() error {
-        // a single error cancels the context,
-        // stopping every other in-flight item too
-        return process(ctx, item)
-    })
-}
-
-if err := eg.Wait(); err != nil {
-    return err
+// Business logic shouldn't even know it's part of a batch process
+func (p *ReportProcessor) Process(ctx context.Context, item Report) (ReportRecord, error) {
+    return transform(item), nil // Only write "how to process" here
 }
 ```
 
-The hard part comes after that.
-
-The moment you try to build a production-grade batch architecture, you're on your own with a long list of distributed-systems problems:
-
-* **Recovery:** If the process above crashes at item 50,000 of 1,000,000, how do you retry safely — without duplicating or double-processing data?
-* **Error isolation:** If one bad record should be skipped while the other 999,999 keep processing, how do you enforce a thread-safe error budget (e.g., halt if failures exceed 1%)?
-* **Imperfect distributed locks:** How do you prevent double-starts across processes while still handling the lock that never gets released after a container is killed (`SIGKILL`)?
-* **3 a.m. decisions (observability):** When an alert fires at 3 a.m., can the on-call engineer tell from the logs alone what's affected and what to do next?
-
-Surfin brings the knowledge built up in enterprise systems over the years into modern Go development.
-
-Go is a relatively young language. The problems batch processing has to deal with are not: restartability, recovery, checkpointing, job management, operational visibility. These have been worked on for decades.
-
-Cloud platforms came and went. Containers became the norm. AI agents started doing the work. None of that changed what large-scale data processing actually requires.
-
-**We don't discard that knowledge. We build on it.**
+Operational responsibilities—like "how far have we processed?" or "what happens if this fails?"—are handled by the framework (Runner) wrapping the logic. This allows developers to focus on business logic, dramatically improving maintainability.
 
 ## 🚀 Getting Started with Surfin
 
@@ -118,17 +92,6 @@ jobs:
           bean: transformReport
         writer:
           type: parquet
-```
-
-Business logic is implemented in Go.
-
-```go
-func (p *ReportProcessor) Process(
-    ctx context.Context,
-    item Report,
-) (ReportRecord, error) {
-    return transform(item), nil
-}
 ```
 
 Flow and business logic are separate. Changing the flow doesn't require touching Go code.
@@ -241,8 +204,6 @@ But the moment restartability, fault tolerance, and safe concurrency become requ
 
 **Before it becomes a job that works but nobody wants to touch.**
 
-Continuing to build these requirements from scratch drives up long-term maintenance cost. JSR-352 is the standard for this in the Java ecosystem; Surfin aims to be the equivalent for Go.
-
 | Feature                | Custom (Go) | JSR-352 (Java)    | Surfin (Go)   |
 | ---------------------- | ----------- | ----------------- | ------------- |
 | Chunk-based processing | custom      | ✅ built-in       | ✅ built-in   |
@@ -335,16 +296,11 @@ graph LR
     Layer_Core ~~~ Layer_Domain
 ```
 
-* **Execution**: `JobLauncher` → `Job` → `Step` → `ItemReader / ItemProcessor / ItemWriter`
-* **Persistence**: `JobRepository` manages execution progress and state.
+### Surfin's Design Principles
 
-Because this "execution" and "persistence" always work as a set, you can resume when a failure occurs.
-
-A design that is easy to understand, easy to test, and easy to maintain.
-
-<p align="center">
-  <img src="docs/images/mascot.png" alt="Surfin Logo" width="400"/>
-</p>
+1. **Chunking**: Process data in chunks to define transaction boundaries.
+2. **Persistence**: Manage state via `JobRepository` to know "where to resume."
+3. **Explicit Resume Points**: Create a safety net to resume from the last successful point, not from scratch.
 
 ## 🛠️ Key Features
 
@@ -377,4 +333,4 @@ Questions, bug reports, and feature requests go through GitHub Issues.
 
 ## 📄 License
 
-MIT
+* MIT License.
