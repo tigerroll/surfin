@@ -177,7 +177,7 @@ func TestSQLiteJobRepository_Lifecycle(t *testing.T) {
 	// Begin a new transaction.
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
-	txCtx = context.WithValue(ctx, "tx", txAdapter)
+	txCtx = tx.ContextWithTx(ctx, txAdapter)
 
 	err = repo.SaveJobInstance(txCtx, instance)
 	assert.NoError(t, err)
@@ -193,7 +193,7 @@ func TestSQLiteJobRepository_Lifecycle(t *testing.T) {
 	execution := test_util.NewTestJobExecution(instance.ID, instance.JobName, instance.Parameters)
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
-	txCtx = context.WithValue(ctx, "tx", txAdapter)
+	txCtx = tx.ContextWithTx(ctx, txAdapter)
 
 	err = repo.SaveJobExecution(txCtx, execution)
 	assert.NoError(t, err)
@@ -204,7 +204,7 @@ func TestSQLiteJobRepository_Lifecycle(t *testing.T) {
 	execution.ExecutionContext.Put("testKey", 123)
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
-	txCtx = context.WithValue(ctx, "tx", txAdapter)
+	txCtx = tx.ContextWithTx(ctx, txAdapter)
 	err = repo.UpdateJobExecution(txCtx, execution)
 	assert.NoError(t, err)
 	err = globalTxManager.Commit(txAdapter)
@@ -221,7 +221,7 @@ func TestSQLiteJobRepository_Lifecycle(t *testing.T) {
 	stepExecution := test_util.NewTestStepExecution(execution, "step1")
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
-	txCtx = context.WithValue(ctx, "tx", txAdapter)
+	txCtx = tx.ContextWithTx(ctx, txAdapter)
 
 	err = repo.SaveStepExecution(txCtx, stepExecution)
 	assert.NoError(t, err)
@@ -233,7 +233,7 @@ func TestSQLiteJobRepository_Lifecycle(t *testing.T) {
 	stepExecution.MarkAsCompleted()
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
-	txCtx = context.WithValue(ctx, "tx", txAdapter)
+	txCtx = tx.ContextWithTx(ctx, txAdapter)
 	err = repo.UpdateStepExecution(txCtx, stepExecution)
 	assert.NoError(t, err)
 	err = globalTxManager.Commit(txAdapter)
@@ -272,7 +272,7 @@ func TestSQLiteJobRepository_OptimisticLocking(t *testing.T) {
 
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
-	txCtx = context.WithValue(ctx, "tx", txAdapter)
+	txCtx = tx.ContextWithTx(ctx, txAdapter)
 	repo.SaveJobExecution(txCtx, exec1) // Initial save sets version to 0.
 	globalTxManager.Commit(txAdapter)   // Commit to persist version 0.
 
@@ -283,7 +283,7 @@ func TestSQLiteJobRepository_OptimisticLocking(t *testing.T) {
 	exec1.MarkAsStarted()
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
-	txCtx = context.WithValue(ctx, "tx", txAdapter)
+	txCtx = tx.ContextWithTx(ctx, txAdapter)
 	err = repo.UpdateJobExecution(txCtx, exec1) // Update from version 0 to 1.
 	assert.NoError(t, err)
 	globalTxManager.Commit(txAdapter)
@@ -294,7 +294,7 @@ func TestSQLiteJobRepository_OptimisticLocking(t *testing.T) {
 	foundExec.MarkAsCompleted()
 	txAdapter, err = globalTxManager.Begin(ctx)
 	assert.NoError(t, err)
-	txCtx = context.WithValue(ctx, "tx", txAdapter)
+	txCtx = tx.ContextWithTx(ctx, txAdapter)
 	err = repo.UpdateJobExecution(txCtx, foundExec)
 	assert.Error(t, err)
 	assert.True(t, exception.IsOptimisticLockingFailure(err))
@@ -326,7 +326,7 @@ func TestSQLiteJobRepository_CheckpointData(t *testing.T) {
 	// Save StepExecution first, as CheckpointData references it.
 	txAdapter, err = txManager.Begin(ctx)
 	assert.NoError(t, err)
-	txCtx = context.WithValue(ctx, "tx", txAdapter)
+	txCtx = tx.ContextWithTx(ctx, txAdapter)
 	repo.SaveStepExecution(txCtx, stepExec)
 	txManager.Commit(txAdapter)
 
@@ -337,7 +337,7 @@ func TestSQLiteJobRepository_CheckpointData(t *testing.T) {
 
 	txAdapter, err = txManager.Begin(ctx)
 	assert.NoError(t, err)
-	txCtx = context.WithValue(ctx, "tx", txAdapter)
+	txCtx = tx.ContextWithTx(ctx, txAdapter)
 	err = repo.SaveCheckpointData(txCtx, dataToSave)
 	assert.NoError(t, err)
 	txManager.Commit(txAdapter)
@@ -356,7 +356,7 @@ func TestSQLiteJobRepository_CheckpointData(t *testing.T) {
 
 	txAdapter, err = txManager.Begin(ctx)
 	assert.NoError(t, err)
-	txCtx = context.WithValue(ctx, "tx", txAdapter)
+	txCtx = tx.ContextWithTx(ctx, txAdapter)
 	err = repo.SaveCheckpointData(txCtx, dataToSave)
 	assert.NoError(t, err)
 	txManager.Commit(txAdapter)

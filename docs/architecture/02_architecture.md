@@ -110,6 +110,6 @@ sequenceDiagram
 
 ### 2.5.2. JobRepository とトランザクション
 
- - トランザクションの検出: GORMJobRepository は、操作を実行する際、現在の context.Context に tx.Tx が存在するかどうかをチェックします。
+ - トランザクションの検出: SQLJobRepository は、操作を実行する際、現在の context.Context に tx.Tx が存在するかどうかをチェックします。
     - Txあり: 既存のトランザクションに参加し、tx.TxExecutor を使用して操作を実行します。
     - Txなし: adapter.DBConnection を使用して非トランザクション操作を実行します（主に読み取り操作や、StepExecutorがトランザクションを開始しない場合の書き込み）。

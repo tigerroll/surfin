@@ -78,14 +78,11 @@ graph TD
 func main() {
     // ... (シグナルハンドリング等はそのまま)
 
-    // app_options.go で定義した GetApplicationOptions を使用して起動
+    // アプリケーションの起動
     app.RunApplication(
         ctx,
         ".env",
-        config.EmbeddedConfig(embeddedConfig),
-        jsl.JSLDefinitionBytes(embeddedJSL),
-        nil,
-        app.GetApplicationOptions(ctx, ".env", embeddedConfig, embeddedJSL),
+        config.EmbeddedConfig(embeddedConfig), // 埋め込み設定
     )
 }
 ```

@@ -106,7 +106,7 @@ import (
 func NewLoggingJobListenerBuilder() jsl.JobExecutionListenerBuilder {
 	return func(
 		_ *config.Config, 
-		properties map[string]string,
+		properties map[string]interface{},
 	) (port.JobExecutionListener, error) {
 		return NewLoggingJobListener(properties), nil
 	}
