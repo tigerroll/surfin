@@ -54,7 +54,7 @@ Let's bring the wisdom of our predecessors to Go batch processing. Challenges li
 
 Surfin rebuilds these universal design principles using Go interfaces. Keep the implementation simple, but borrow the architectural wisdom of our predecessors. That is the shortcut to building production-grade batch systems.
 
-**※For a deeper dive into the philosophy, read the article: '[Borrow the best, build the rest: Go Batch Processing](../docs/articles/batching-the-go-way-inheriting-enterprise-patterns.md)'**
+**※For a deeper dive into the philosophy, read the article: '[Borrow the best, build the rest: Go Batch Processing](./docs/articles/batching-the-go-way-inheriting-enterprise-patterns.md)'**
 
 ### Separation of Concerns: Business logic shouldn't even know it's part of a batch process
 
