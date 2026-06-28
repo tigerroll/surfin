@@ -85,7 +85,7 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 	// 1. Transaction start/join logic (only if not a ChunkStep)
 	if !isChunkStep {
 		// Get existing transaction from context
-		existingTx, hasExistingTx := ctx.Value("tx").(tx.Tx)
+		existingTx, hasExistingTx := tx.TxFromContext(ctx)
 
 		switch propagation {
 		case "REQUIRED", "": // REQUIRED or default (empty string)
@@ -126,7 +126,7 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 				// Suspend existing transaction
 				suspendedTx = existingTx
 				// Do not include Tx in the new context
-				ctx = context.WithValue(ctx, "tx", nil) // Remove Tx from context
+				ctx = tx.ContextWithTx(ctx, nil) // Remove Tx from context
 				logger.Debugf("Propagation NOT_SUPPORTED: Suspending existing transaction for Worker Step '%s'.", workerStepName)
 			} else {
 				logger.Debugf("Propagation NOT_SUPPORTED: No transaction active for Worker Step '%s'.", workerStepName)
@@ -191,7 +191,7 @@ func (e *SimpleStepExecutor) ExecuteStep(ctx context.Context, step core.Step, jo
 
 		// If a transaction was started, create a new context
 		if txAdapter != nil {
-			ctx = context.WithValue(ctx, "tx", txAdapter)
+			ctx = tx.ContextWithTx(ctx, txAdapter)
 		}
 	} else {
 		// For ChunkStep, transactions are managed internally, so no external transaction is started.

@@ -12,6 +12,7 @@ import (
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	sqlrepo "github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/sql"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	mocktx "github.com/tigerroll/surfin/pkg/batch/test"
@@ -64,7 +65,7 @@ func TestGORMJobRepository_SaveJobExecution(t *testing.T) {
 	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "CREATE", "batch_job_execution", testify_mock.Anything).Return(int64(1), nil)
 
 	// Create a context with the mocked transaction, allowing JobRepository's getTxExecutor to detect it.
-	txCtx := context.WithValue(ctx, "tx", mockTx)
+	txCtx := tx.ContextWithTx(ctx, mockTx)
 
 	err := repo.SaveJobExecution(txCtx, jobExecution)
 	assert.NoError(t, err)
@@ -91,7 +92,7 @@ func TestGORMJobRepository_UpdateJobExecution(t *testing.T) {
 	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_job_execution", expectedQuery).Return(int64(1), nil)
 
 	// Create a context with the mocked transaction.
-	txCtx := context.WithValue(ctx, "tx", mockTx)
+	txCtx := tx.ContextWithTx(ctx, mockTx)
 
 	err := repo.UpdateJobExecution(txCtx, jobExecution)
 	assert.NoError(t, err)
@@ -119,7 +120,7 @@ func TestGORMJobRepository_UpdateJobExecution_OptimisticLocking(t *testing.T) {
 	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_job_execution", expectedQuery).Return(int64(0), nil) // Simulate 0 rows affected for optimistic locking failure.
 
 	// Create a context with the mocked transaction.
-	txCtx := context.WithValue(ctx, "tx", mockTx)
+	txCtx := tx.ContextWithTx(ctx, mockTx)
 
 	err := repo.UpdateJobExecution(txCtx, jobExecution)
 	assert.Error(t, err)

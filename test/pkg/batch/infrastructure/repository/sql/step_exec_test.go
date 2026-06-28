@@ -12,6 +12,7 @@ import (
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 	sqlrepo "github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/sql"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	mocktx "github.com/tigerroll/surfin/pkg/batch/test"
@@ -62,7 +63,7 @@ func TestGORMJobRepository_SaveStepExecution(t *testing.T) {
 	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "CREATE", "batch_step_execution", testify_mock.Anything).Return(int64(1), nil)
 
 	// Create a context with the mocked transaction.
-	txCtx := context.WithValue(ctx, "tx", mockTx)
+	txCtx := tx.ContextWithTx(ctx, mockTx)
 
 	err := repo.SaveStepExecution(txCtx, stepExecution)
 	assert.NoError(t, err)
@@ -92,7 +93,7 @@ func TestGORMJobRepository_UpdateStepExecution(t *testing.T) {
 	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_step_execution", expectedQuery).Return(int64(1), nil)
 
 	// Create a context with the mocked transaction.
-	txCtx := context.WithValue(ctx, "tx", mockTx)
+	txCtx := tx.ContextWithTx(ctx, mockTx)
 
 	err := repo.UpdateStepExecution(txCtx, stepExecution)
 	assert.NoError(t, err)
@@ -123,7 +124,7 @@ func TestGORMJobRepository_UpdateStepExecution_OptimisticLocking(t *testing.T) {
 	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_step_execution", expectedQuery).Return(int64(0), nil)
 
 	// Create a context with the mocked transaction.
-	txCtx := context.WithValue(ctx, "tx", mockTx)
+	txCtx := tx.ContextWithTx(ctx, mockTx)
 
 	err := repo.UpdateStepExecution(txCtx, stepExecution)
 	assert.Error(t, err)

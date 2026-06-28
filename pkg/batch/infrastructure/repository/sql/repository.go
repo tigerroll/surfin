@@ -68,7 +68,7 @@ func (r *SQLJobRepository) getDBConnection(ctx context.Context) (database.DBConn
 // This is used for operations within a transaction (ExecuteUpdate, ExecuteUpsert).
 func (r *SQLJobRepository) getTxExecutor(ctx context.Context) (tx.TxExecutor, error) {
 	// Get Tx from context.
-	if t, ok := ctx.Value("tx").(tx.Tx); ok {
+	if t, ok := tx.TxFromContext(ctx); ok {
 		return t, nil // If a transaction exists in the context, use it.
 	}
 	// If no transaction is found in the context, use the direct DBConnection.

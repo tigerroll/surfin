@@ -10,6 +10,7 @@ import (
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	job "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
 	metrics "github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	partition "github.com/tigerroll/surfin/pkg/batch/engine/step/partition"
 	mocktx "github.com/tigerroll/surfin/pkg/batch/test"
 	testutil "github.com/tigerroll/surfin/pkg/batch/test"
@@ -599,7 +600,7 @@ func TestSimpleStepExecutor_NESTED_Propagation(t *testing.T) {
 	// SimpleStepExecutor detects an external transaction if the "tx" key exists in the context.
 	externalTx := &mocktx.MockTx{}
 	// Context with active external transaction
-	ctxWithExternalTx := context.WithValue(ctx, "tx", externalTx)
+	ctxWithExternalTx := tx.ContextWithTx(ctx, externalTx)
 
 	// 3. Define MockStep (NESTED propagation, simulate failure)
 	simulatedError := errors.New("simulated step failure")
@@ -669,7 +670,7 @@ func TestSimpleStepExecutor_NESTED_Propagation_Success(t *testing.T) {
 
 	// Simulate external transaction
 	externalTx := &mocktx.MockTx{}
-	ctxWithExternalTx := context.WithValue(ctx, "tx", externalTx)
+	ctxWithExternalTx := tx.ContextWithTx(ctx, externalTx)
 
 	// 3. Define MockStep (NESTED propagation, simulate success)
 	nestedStep := &MockStep{
@@ -728,7 +729,7 @@ func TestSimpleStepExecutor_REQUIRES_NEW_Propagation(t *testing.T) {
 	// 2. Simulate external transaction
 	externalTx := &mocktx.MockTx{}
 	// Context with active external transaction
-	ctxWithExternalTx := context.WithValue(ctx, "tx", externalTx)
+	ctxWithExternalTx := tx.ContextWithTx(ctx, externalTx)
 
 	// 3. Define MockStep (REQUIRES_NEW propagation, simulate success)
 	requiresNewStep := &MockStep{
@@ -791,7 +792,7 @@ func TestSimpleStepExecutor_REQUIRES_NEW_Propagation_Failure(t *testing.T) {
 
 	// 2. Simulate external transaction
 	externalTx := &mocktx.MockTx{}
-	ctxWithExternalTx := context.WithValue(ctx, "tx", externalTx)
+	ctxWithExternalTx := tx.ContextWithTx(ctx, externalTx)
 
 	// 3. Define MockStep (REQUIRES_NEW propagation, simulate failure)
 	simulatedError := errors.New("internal step failure")
