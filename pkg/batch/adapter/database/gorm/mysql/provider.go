@@ -8,6 +8,7 @@ import (
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/secret"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -57,10 +58,11 @@ func (p *MySQLDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string {
 // Parameters:
 //
 //	cfg: The application's global configuration.
+//	resolver: The secret resolver for resolving sensitive configuration values.
 //
 // Returns:
 //
 //	A `database.DBProvider` instance configured for MySQL.
-func NewProvider(cfg *config.Config) database.DBProvider {
-	return &MySQLDBProvider{BaseProvider: gormadapter.NewBaseProvider(cfg, "mysql")}
+func NewProvider(cfg *config.Config, resolver secret.SecretResolver) database.DBProvider {
+	return &MySQLDBProvider{BaseProvider: gormadapter.NewBaseProvider(cfg, resolver, "mysql")}
 }

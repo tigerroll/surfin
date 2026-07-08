@@ -8,6 +8,7 @@ import (
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/secret"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -48,10 +49,11 @@ func (p *PostgresDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string 
 // Parameters:
 //
 //	cfg: The application's global configuration.
+//	resolver: The secret resolver for resolving sensitive configuration values.
 //
 // Returns:
 //
 //	A `database.DBProvider` instance configured for PostgreSQL.
-func NewProvider(cfg *config.Config) database.DBProvider {
-	return &PostgresDBProvider{BaseProvider: gormadapter.NewBaseProvider(cfg, "postgres")}
+func NewProvider(cfg *config.Config, resolver secret.SecretResolver) database.DBProvider {
+	return &PostgresDBProvider{BaseProvider: gormadapter.NewBaseProvider(cfg, resolver, "postgres")}
 }

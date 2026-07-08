@@ -20,50 +20,113 @@ import (
 
 	"github.com/tigerroll/surfin/pkg/batch/adapter/webproxy/config"
 	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
+	"github.com/tigerroll/surfin/pkg/batch/core/secret"
 )
 
-// ContextKeySignaturePayload is the key used to store the payload for HMAC signing in context.Context.
+// ContextKeySignaturePayload is the type used for context keys related to signature payloads.
 type ContextKeySignaturePayload string
 
 const (
 	// SignaturePayloadContextKey is the key for storing the string to be signed in the context.
 	SignaturePayloadContextKey ContextKeySignaturePayload = "signaturePayload"
 	// SignatureHeaderContextKey is the key for storing the signed header in the context.
-	// This can be used when HMAC signature applies to a custom header other than the Authorization header.
 	SignatureHeaderContextKey ContextKeySignaturePayload = "signatureHeader"
 )
 
-// WebProxyConnection represents a connection to a Web Proxy.
+// WebProxyConnection represents a connection to a Web Proxy, managing authentication and TLS configuration.
 type WebProxyConnection struct {
 	name   string
 	cfg    config.WebProxyConfig
-	client *http.Client // The actual HTTP client.
+	client *http.Client
+
 	// HMAC-related fields
-	privateKey *rsa.PrivateKey // Parsed private key.
+	privateKey *rsa.PrivateKey
+
+	// TLS-related fields
+	tlsCert []byte
+	tlsKey  []byte
+	tlsPem  []byte
 }
 
-// NewWebProxyConnection creates a new WebProxyConnection.
-//
-// Parameters:
-//
-//	name: The name of the connection.
-//	cfg: The WebProxyConfig for this connection.
-//
-// Returns:
-//
-//	A new WebProxyConnection instance.
-//	An error if private key parsing or configuration validation fails.
-func NewWebProxyConnection(name string, cfg config.WebProxyConfig) (*WebProxyConnection, error) {
+// NewWebProxyConnection initializes a new WebProxyConnection with the provided configuration and secret resolver.
+// It resolves secrets for authentication and TLS, and parses private keys if required.
+func NewWebProxyConnection(name string, cfg config.WebProxyConfig, resolver secret.SecretResolver) (*WebProxyConnection, error) {
+	// Helper to resolve string-based secrets
+	resolve := func(val string) (string, error) {
+		if strings.HasPrefix(val, "env://") || strings.HasPrefix(val, "file://") {
+			resolved, err := resolver.Resolve(val)
+			if err != nil {
+				return "", err
+			}
+			if str, ok := resolved.(string); ok {
+				return str, nil
+			}
+			if b, ok := resolved.([]byte); ok {
+				return string(b), nil
+			}
+			return "", fmt.Errorf("unsupported secret type")
+		}
+		return val, nil
+	}
+
+	// Helper to resolve byte-based secrets
+	resolveToBytes := func(val string) ([]byte, error) {
+		if val == "" {
+			return nil, nil
+		}
+		if strings.HasPrefix(val, "env://") || strings.HasPrefix(val, "file://") {
+			resolved, err := resolver.Resolve(val)
+			if err != nil {
+				return nil, err
+			}
+			if b, ok := resolved.([]byte); ok {
+				return b, nil
+			}
+			if s, ok := resolved.(string); ok {
+				return []byte(s), nil
+			}
+			return nil, fmt.Errorf("unsupported secret type")
+		}
+		return []byte(val), nil
+	}
+
+	// Resolve configuration fields
+	var err error
+	cfg.PrivateKey, err = resolve(cfg.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+	cfg.ClientSecret, err = resolve(cfg.ClientSecret)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Key, err = resolve(cfg.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolve TLS fields
+	tlsKey, err := resolveToBytes(cfg.TLSKey)
+	if err != nil {
+		return nil, err
+	}
+	tlsCrt, err := resolveToBytes(cfg.TLSCrt)
+	if err != nil {
+		return nil, err
+	}
+	tlsPem, err := resolveToBytes(cfg.TLSPem)
+	if err != nil {
+		return nil, err
+	}
+
 	var privateKey *rsa.PrivateKey
 	if cfg.Type == "HMAC" && cfg.PrivateKey != "" {
-		// Parse the private key.
 		block, _ := pem.Decode([]byte(cfg.PrivateKey))
 		if block == nil {
 			return nil, fmt.Errorf("webproxy: failed to decode PEM block for private key for HMAC connection '%s'", name)
 		} else {
 			parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 			if err != nil {
-				// If PKCS8 parsing fails, try PKCS1 format.
 				parsedKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
 			}
 			if err == nil {
@@ -78,10 +141,9 @@ func NewWebProxyConnection(name string, cfg config.WebProxyConfig) (*WebProxyCon
 		}
 	}
 
-	// Validate APIKEY type configuration.
 	if cfg.Type == "APIKEY" {
 		if cfg.Key == "" {
-			return nil, fmt.Errorf("webproxy: APIKEY type for connection '%s' requires 'key' to be configured (check environment variable)", name)
+			return nil, fmt.Errorf("webproxy: APIKEY type for connection '%s' requires 'key' to be configured", name)
 		}
 		if (cfg.Placement == "query" || cfg.Placement == "header") && cfg.KeyName == "" {
 			return nil, fmt.Errorf("webproxy: APIKEY authentication with placement '%s' for connection '%s' requires 'key_name'", cfg.Placement, name)
@@ -89,46 +151,44 @@ func NewWebProxyConnection(name string, cfg config.WebProxyConfig) (*WebProxyCon
 	}
 
 	transport := &WebProxyRoundTripper{
-		next: http.DefaultTransport, // Wrap the default transport.
-		cfg:  cfg,
-		// Pass the parsed private key to WebProxyRoundTripper.
+		next:           http.DefaultTransport,
+		cfg:            cfg,
 		hmacPrivateKey: privateKey,
 	}
 	return &WebProxyConnection{
-		name: name,
-		cfg:  cfg,
+		name:    name,
+		cfg:     cfg,
+		tlsKey:  tlsKey,
+		tlsCert: tlsCrt,
+		tlsPem:  tlsPem,
 		client: &http.Client{
 			Transport: transport,
 		},
-		privateKey: privateKey, // Also keep it in WebProxyConnection itself.
+		privateKey: privateKey,
 	}, nil
 }
 
-// Type returns the type of the resource.
-//
-// Returns:
-//
-//	The string "webproxy".
+// TLSCert returns the resolved TLS certificate data.
+func (c *WebProxyConnection) TLSCert() []byte { return c.tlsCert }
+
+// TLSKey returns the resolved TLS key data.
+func (c *WebProxyConnection) TLSKey() []byte { return c.tlsKey }
+
+// TLSPem returns the resolved TLS PEM data.
+func (c *WebProxyConnection) TLSPem() []byte { return c.tlsPem }
+
+// Type returns the resource type, which is "webproxy".
 func (c *WebProxyConnection) Type() string {
 	return "webproxy"
 }
 
 // Name returns the connection name.
-//
-// Returns:
-//
-//	The name of the connection.
 func (c *WebProxyConnection) Name() string {
 	return c.name
 }
 
-// Close closes the connection.
-//
-// Returns:
-//
-//	An error if closing idle connections fails.
+// Close closes idle connections associated with the HTTP client.
 func (c *WebProxyConnection) Close() error {
-	// Close idle connections of the HTTP client.
 	if c.client != nil && c.client.Transport != nil {
 		if tr, ok := c.client.Transport.(*http.Transport); ok {
 			tr.CloseIdleConnections()
@@ -137,17 +197,12 @@ func (c *WebProxyConnection) Close() error {
 	return nil
 }
 
-// GetClient returns the http.Client associated with this connection.
-//
-// Returns:
-//
-//	The *http.Client instance.
+// GetClient returns the underlying http.Client.
 func (c *WebProxyConnection) GetClient() *http.Client {
 	return c.client
 }
 
-// WebProxyRoundTripper implements the http.RoundTripper interface and
-// is responsible for adding authentication information to requests.
+// WebProxyRoundTripper implements http.RoundTripper to inject authentication headers into requests.
 type WebProxyRoundTripper struct {
 	next http.RoundTripper
 	cfg  config.WebProxyConfig
@@ -155,46 +210,31 @@ type WebProxyRoundTripper struct {
 	// OAuth2-related fields
 	oauth2Token     string
 	oauth2ExpiresAt time.Time
-	oauth2Mutex     sync.Mutex // Mutex to prevent race conditions during token acquisition.
+	oauth2Mutex     sync.Mutex
 
 	// HMAC-related fields
-	hmacPrivateKey *rsa.PrivateKey // Parsed private key.
+	hmacPrivateKey *rsa.PrivateKey
 }
 
-// RoundTrip processes the request and adds authentication information.
-//
-// Parameters:
-//
-//	req: The HTTP request to process.
-//
-// Returns:
-//
-//	The HTTP response.
-//	An error if authentication fails or the request cannot be sent.
+// RoundTrip processes the HTTP request, applies authentication, and executes the request.
 func (t *WebProxyRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Copy the request to avoid modifying the original.
-	// This is an http.RoundTripper best practice.
 	req = req.Clone(req.Context())
 
-	// If APIEndpoint is configured, rewrite the request URL.
 	if t.cfg.APIEndpoint != "" {
 		parsedURL, err := url.Parse(t.cfg.APIEndpoint)
 		if err != nil {
 			return nil, fmt.Errorf("webproxy: invalid APIEndpoint configured: %w", err)
 		}
-		// Rewrite the Scheme, Host, and Path of the request URL.
-		// req.URL.Path is combined with parsedURL.Path.
-		// Example: parsedURL.Path = "/v1", req.URL.Path = "/forecast" -> newPath = "/v1/forecast"
 		newPath := parsedURL.Path
 		if !strings.HasSuffix(newPath, "/") && !strings.HasPrefix(req.URL.Path, "/") {
 			newPath += "/"
 		}
-		newPath += req.URL.Path // Combine with the original path.
+		newPath += req.URL.Path
 
 		req.URL.Scheme = parsedURL.Scheme
 		req.URL.Host = parsedURL.Host
 		req.URL.Path = newPath
-		req.URL.RawPath = newPath // Also update RawPath.
+		req.URL.RawPath = newPath
 	}
 
 	switch t.cfg.Type {
@@ -215,14 +255,12 @@ func (t *WebProxyRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 				return nil, fmt.Errorf("webproxy: APIKEY authentication with placement 'query' requires 'key_name'")
 			}
 		case "auth_header":
-			// Set the key directly in the Authorization header. KeyName is not used.
 			req.Header.Set("Authorization", t.cfg.Key)
 		default:
 			return nil, fmt.Errorf("webproxy: unsupported APIKEY placement type: %s", t.cfg.Placement)
 		}
 	case "OAUTH2":
-		// Acquire/refresh token if expired or not yet obtained.
-		if t.oauth2Token == "" || time.Now().After(t.oauth2ExpiresAt.Add(-5*time.Minute)) { // Try to refresh 5 minutes before expiry.
+		if t.oauth2Token == "" || time.Now().After(t.oauth2ExpiresAt.Add(-5*time.Minute)) {
 			err := t.refreshOAuth2Token(req.Context())
 			if err != nil {
 				return nil, fmt.Errorf("webproxy: failed to refresh OAuth2 token: %w", err)
@@ -238,13 +276,11 @@ func (t *WebProxyRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 			return nil, fmt.Errorf("webproxy: HMAC authentication requires a valid private key configured")
 		}
 
-		// Get the string to be signed from the context.
 		signaturePayload, ok := req.Context().Value(SignaturePayloadContextKey).(string)
 		if !ok || signaturePayload == "" {
 			return nil, fmt.Errorf("webproxy: HMAC authentication requires signature payload in context with key '%s'", SignaturePayloadContextKey)
 		}
 
-		// Select signing algorithm and generate signature.
 		var signed []byte
 		var err error
 		switch t.cfg.Algorithm {
@@ -258,60 +294,35 @@ func (t *WebProxyRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 			return nil, fmt.Errorf("webproxy: unsupported HMAC algorithm: %s", t.cfg.Algorithm)
 		}
 
-		// Construct the Authorization header.
-		// Although the design document states injection into the Authorization header, the specific format depends on the external API.
-		// Here, we construct the Authorization header referencing the Amazon Pay v2 example.
-		// It's possible to add flexibility, e.g., by getting the header name from the context, if needed.
 		authHeader := fmt.Sprintf("AMZ-PAY-RSASSA-PSS-V2 SignedHeaders=x-amz-pay-date;x-amz-pay-id;x-amz-pay-region, Signature=%s",
-			url.QueryEscape(string(signed))) // URL-encode the signature.
-		// In Amazon Pay v2 examples, the signature itself is often Base64 encoded, but simplified here.
-		// Adjustment according to actual API specifications may be necessary.
+			url.QueryEscape(string(signed)))
 
-		// Inject into the Authorization header as specified in the design document.
 		req.Header.Set("Authorization", authHeader)
 
-		// Other HMAC-related headers (e.g., x-amz-pay-date, x-amz-pay-id, x-amz-pay-region) are
-		// expected to be set by the ItemReader.
-		// If necessary, these header values can be included in WebProxyConfig or
-		// logic to retrieve them from Context can be added.
 		if t.cfg.PublicKeyId != "" {
 			req.Header.Set("x-amz-pay-id", t.cfg.PublicKeyId)
 		}
 		if t.cfg.Region != "" {
 			req.Header.Set("x-amz-pay-region", t.cfg.Region)
 		}
-		// x-amz-pay-date is typically a timestamp at the time of request submission, so it should be set by the ItemReader.
-		// Setting it here might cause a mismatch with the signature payload calculated by the ItemReader.
 
 	case "NONE":
-		// For "NONE" type, no authentication logic is applied; the request is passed directly to the next RoundTripper.
-		// This means the WebProxy simply acts as a transparent pass-through.
 		return t.next.RoundTrip(req)
-	default:
-		// Unknown authentication type, or no authentication required.
-		// However, this path should typically not be reached as unknown/unsupported types are skipped in module.go.
+	case "TLS":
+		return t.next.RoundTrip(req)
 	}
 
 	return t.next.RoundTrip(req)
 }
 
 // refreshOAuth2Token acquires or refreshes an OAuth2 access token.
-// It safely handles concurrent calls from multiple goroutines.
-//
-// Parameters:
-//
-//	ctx: The context for the operation.
-//
-// Returns:
-//
-//	An error if token acquisition or refresh fails.
+// It uses a mutex to ensure thread safety during token acquisition.
 func (t *WebProxyRoundTripper) refreshOAuth2Token(ctx context.Context) error {
 	t.oauth2Mutex.Lock()
 	defer t.oauth2Mutex.Unlock()
 
-	// Re-check token validity after acquiring the lock (double-checked locking).
 	if t.oauth2Token != "" && time.Now().Before(t.oauth2ExpiresAt.Add(-5*time.Minute)) {
-		return nil // Another goroutine has already refreshed.
+		return nil
 	}
 
 	if t.cfg.GrantType != "client_credentials" {
@@ -332,9 +343,7 @@ func (t *WebProxyRoundTripper) refreshOAuth2Token(ctx context.Context) error {
 	}
 	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	// Use a new client with the default Transport for token acquisition to avoid
-	// using its own RoundTripper, which would cause an infinite loop.
-	client := &http.Client{Transport: t.next} // Use t.next to avoid infinite loop.
+	client := &http.Client{Transport: t.next}
 	resp, err := client.Do(tokenReq)
 	if err != nil {
 		return fmt.Errorf("webproxy: failed to send token request: %w", err)
@@ -348,7 +357,7 @@ func (t *WebProxyRoundTripper) refreshOAuth2Token(ctx context.Context) error {
 
 	var tokenResponse struct {
 		AccessToken string `json:"access_token"`
-		ExpiresIn   int    `json:"expires_in"` // seconds
+		ExpiresIn   int    `json:"expires_in"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
 		return fmt.Errorf("webproxy: failed to decode token response: %w", err)
@@ -359,48 +368,31 @@ func (t *WebProxyRoundTripper) refreshOAuth2Token(ctx context.Context) error {
 	}
 
 	t.oauth2Token = tokenResponse.AccessToken
-	// Expiry is current time + ExpiresIn seconds.
 	t.oauth2ExpiresAt = time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second)
 
 	return nil
 }
 
-// WebProxyProvider provides WebProxyConnection instances.
+// WebProxyProvider manages and provides WebProxyConnection instances.
 type WebProxyProvider struct {
 	name        string
 	configs     map[string]config.WebProxyConfig
 	connections map[string]*WebProxyConnection
-	mu          sync.RWMutex // Protects access to the connections map.
+	mu          sync.RWMutex
+	resolver    secret.SecretResolver
 }
 
-// NewWebProxyProvider creates a new WebProxyProvider.
-// This function accepts a map of WebProxyConfig parsed by the Fx module.
-//
-// Parameters:
-//
-//	configs: A map of WebProxyConfig instances, keyed by connection name.
-//
-// Returns:
-//
-//	A new WebProxyProvider instance.
-func NewWebProxyProvider(configs map[string]config.WebProxyConfig) *WebProxyProvider {
+// NewWebProxyProvider creates a new WebProxyProvider with the given configurations and secret resolver.
+func NewWebProxyProvider(configs map[string]config.WebProxyConfig, resolver secret.SecretResolver) *WebProxyProvider {
 	return &WebProxyProvider{
-		name:        "webproxy", // Fixed name for the provider.
+		name:        "webproxy",
 		configs:     configs,
 		connections: make(map[string]*WebProxyConnection),
+		resolver:    resolver,
 	}
 }
 
-// GetConnection retrieves a WebProxyConnection with the specified name.
-//
-// Parameters:
-//
-//	name: The name of the connection to retrieve.
-//
-// Returns:
-//
-//	The ResourceConnection instance.
-//	An error if the configuration for the connection is not found or connection creation fails.
+// GetConnection retrieves a WebProxyConnection by name, creating it if it does not exist.
 func (p *WebProxyProvider) GetConnection(name string) (coreAdapter.ResourceConnection, error) {
 	p.mu.RLock()
 	conn, ok := p.connections[name]
@@ -412,7 +404,6 @@ func (p *WebProxyProvider) GetConnection(name string) (coreAdapter.ResourceConne
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Double-checked locking.
 	conn, ok = p.connections[name]
 	if ok {
 		return conn, nil
@@ -423,20 +414,16 @@ func (p *WebProxyProvider) GetConnection(name string) (coreAdapter.ResourceConne
 		return nil, fmt.Errorf("webproxy: configuration for connection '%s' not found", name)
 	}
 
-	newConn, err := NewWebProxyConnection(name, cfg)
+	newConn, err := NewWebProxyConnection(name, cfg, p.resolver)
 	if err != nil {
-		return nil, err // Propagate the error from NewWebProxyConnection.
+		return nil, err
 	}
 
 	p.connections[name] = newConn
 	return newConn, nil
 }
 
-// CloseAll closes all connections managed by this provider.
-//
-// Returns:
-//
-//	An error if any connection fails to close.
+// CloseAll closes all connections managed by the provider.
 func (p *WebProxyProvider) CloseAll() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -454,45 +441,24 @@ func (p *WebProxyProvider) CloseAll() error {
 	return nil
 }
 
-// Type returns the type of the provider.
-//
-// Returns:
-//
-//	The string "webproxy".
+// Type returns the provider type, which is "webproxy".
 func (p *WebProxyProvider) Type() string {
 	return "webproxy"
 }
 
-// Name returns the name of the provider.
-//
-// Returns:
-//
-//	The name of the provider.
+// Name returns the provider name.
 func (p *WebProxyProvider) Name() string {
 	return p.name
 }
 
-// Sha256Sum hashes a byte slice with SHA256.
-//
-// Parameters:
-//
-//	data: The byte slice to hash.
-//
-// Returns:
-//
-//	The 32-byte SHA256 hash.
+// Sha256Sum computes the SHA256 hash of the given data.
 func Sha256Sum(data []byte) [32]byte {
 	return sha256.Sum256(data)
 }
 
-// CryptoSHA256 returns crypto.SHA256.
-//
-// Returns:
-//
-//	The crypto.Hash value for SHA256.
+// CryptoSHA256 returns the crypto.Hash value for SHA256.
 func CryptoSHA256() crypto.Hash {
 	return crypto.SHA256
 }
 
-// Verify that WebProxyProvider implements coreAdapter.ResourceProvider interface.
 var _ coreAdapter.ResourceProvider = (*WebProxyProvider)(nil)

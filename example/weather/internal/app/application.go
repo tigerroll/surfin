@@ -17,6 +17,7 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/core/job/decision"
 	"github.com/tigerroll/surfin/pkg/batch/core/job/split"
 	"github.com/tigerroll/surfin/pkg/batch/core/metrics"
+	"github.com/tigerroll/surfin/pkg/batch/core/secret"
 	"github.com/tigerroll/surfin/pkg/batch/core/support/incrementer"
 	"github.com/tigerroll/surfin/pkg/batch/infrastructure/repository/sql"
 	batchlistener "github.com/tigerroll/surfin/pkg/batch/listener"
@@ -37,7 +38,8 @@ import (
 func RunApplication(appCtx context.Context, envFilePath string, embeddedConfig config.EmbeddedConfig, embeddedJSL jsl.JSLDefinitionBytes, applicationMigrationsFS embed.FS, dbProviderOptions []fx.Option, jobDoneChan chan struct{}) {
 	// Context setting and signal handling moved to main.go
 
-	cfg, err := config.LoadConfig(envFilePath, embeddedConfig)
+	resolver := secret.NewCompositeSecretResolver()
+	cfg, err := config.LoadConfig(envFilePath, embeddedConfig, resolver)
 	if err != nil {
 		logger.Fatalf("Failed to load configuration: %v", err)
 	}

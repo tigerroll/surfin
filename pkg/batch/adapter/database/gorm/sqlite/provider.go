@@ -8,6 +8,7 @@ import (
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	gormadapter "github.com/tigerroll/surfin/pkg/batch/adapter/database/gorm"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/secret"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -50,10 +51,11 @@ func (p *SQLiteDBProvider) ConnectionString(c dbconfig.DatabaseConfig) string {
 // Parameters:
 //
 //	cfg: The application's global configuration.
+//	resolver: The secret resolver for resolving sensitive configuration values.
 //
 // Returns:
 //
 //	A `database.DBProvider` instance configured for SQLite.
-func NewProvider(cfg *config.Config) database.DBProvider {
-	return &SQLiteDBProvider{BaseProvider: gormadapter.NewBaseProvider(cfg, "sqlite")}
+func NewProvider(cfg *config.Config, resolver secret.SecretResolver) database.DBProvider {
+	return &SQLiteDBProvider{BaseProvider: gormadapter.NewBaseProvider(cfg, resolver, "sqlite")}
 }

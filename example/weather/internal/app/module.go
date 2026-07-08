@@ -14,6 +14,7 @@ import (
 	storageConfig "github.com/tigerroll/surfin/pkg/batch/adapter/storage/config"
 	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/secret"
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
@@ -37,15 +38,6 @@ import (
 // referenced in comments or interfaces.
 func init() {
 	var _ coreAdapter.ResourceConnection // Explicitly reference a type from coreAdapter.
-}
-
-// DBProviderMap maps database type strings to functions that create database.DBProvider instances,
-// used for dynamic provider registration.
-var DBProviderMap = map[string]func(cfg *config.Config) database.DBProvider{
-	"postgres": postgres.NewProvider,
-	"redshift": postgres.NewProvider, // Redshift also uses PostgresProvider
-	"mysql":    mysql.NewProvider,
-	"sqlite":   sqlite.NewProvider,
 }
 
 // MigrationFSMapParams defines the Fx-injected dependencies for NewMigrationFSMap.
@@ -297,6 +289,25 @@ func NewMetadataTxManager(p struct {
 	return p.TxFactory.NewTransactionManager(conn), nil
 }
 
+// AppSecretResolver implements secret.SecretResolver
+type AppSecretResolver struct{}
+
+func (r *AppSecretResolver) Resolve(uri string) (any, error) {
+	env := &secret.EnvSecretProvider{}
+	file := &secret.FileSecretProvider{}
+	if env.Supports(uri) {
+		return env.Resolve(uri)
+	}
+	if file.Supports(uri) {
+		return file.Resolve(uri)
+	}
+	return nil, fmt.Errorf("unsupported secret URI: %s", uri)
+}
+
+func NewSecretResolver() secret.SecretResolver {
+	return &AppSecretResolver{}
+}
+
 // Module defines the application's Fx module, configuring and providing core batch framework components.
 var Module = fx.Options(
 	// DB Provider Modules.
@@ -365,6 +376,9 @@ var Module = fx.Options(
 	)),
 	// Imports application-specific tasklet modules.
 	weatherTasklet.Module,
+
+	// Provide SecretResolver
+	fx.Provide(NewSecretResolver),
 
 	// Registers the genericParquetExportTasklet builder with the JobFactory.
 	fx.Invoke(func(p struct {

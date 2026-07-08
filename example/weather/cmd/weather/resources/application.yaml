@@ -8,7 +8,7 @@ surfin:
         port: 5432
         database: "main"
         user: "weather"
-        password: "weather"
+        password: file:///run/secrets/surfin/database
         schema: "public"
         sslmode: "disable"
         # Connection pool settings
@@ -24,7 +24,7 @@ surfin:
         port: 5432
         database: "main"
         user: "weather"
-        password: "weather"
+        password: file:///run/secrets/surfin/database
         schema: "public"
         sslmode: "disable"
         # Connection pool settings
@@ -40,7 +40,7 @@ surfin:
         port: 3306
         database: "main"
         user: "weather"
-        password: "weather"
+        password: file:///run/secrets/surfin/database
         schema: "main"
         sslmode: "disable"
         # Connection pool settings

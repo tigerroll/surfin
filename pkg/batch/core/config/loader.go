@@ -12,20 +12,21 @@ import (
 	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 
+	"github.com/tigerroll/surfin/pkg/batch/core/secret"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"go.uber.org/fx"
 )
 
-// moduleName is used for error reporting within this package.
 const moduleName = "config"
 
-// ConfigParams defines the dependencies required by NewConfigProvider.
+// ConfigParams defines the dependencies required by NewConfigProvider for dependency injection.
 type ConfigParams struct {
 	fx.In
 	EmbeddedConfig EmbeddedConfig
 	EnvFilePath    string `name:"envFilePath" optional:"true"`
+	SecretResolver secret.SecretResolver
 }
 
 // loadConfig loads and initializes the application configuration.
@@ -35,9 +36,10 @@ type ConfigParams struct {
 // 2. Initializes the default configuration.
 // 3. Expands environment variables within the embedded YAML configuration.
 // 4. Unmarshals the expanded YAML into a temporary configuration struct.
-// 5. Merges the YAML configuration into the default configuration.
-// 6. Overrides values with environment variables.
-func loadConfig(envFilePath string, embeddedConfig EmbeddedConfig) (*Config, error) {
+// 5. Resolves secret URIs within the configuration.
+// 6. Merges the YAML configuration into the default configuration.
+// 7. Overrides values with environment variables.
+func loadConfig(envFilePath string, embeddedConfig EmbeddedConfig, resolver secret.SecretResolver) (*Config, error) {
 	if envFilePath != "" {
 		if err := godotenv.Load(envFilePath); err != nil {
 			logger.Warnf(".env file (%s) not found or could not be loaded: %v", envFilePath, err)
@@ -63,10 +65,15 @@ func loadConfig(envFilePath string, embeddedConfig EmbeddedConfig) (*Config, err
 		return nil, exception.NewBatchError(moduleName, "failed to unmarshal expanded embedded config", err, false, false)
 	}
 
-	// 4. Merge YAML configuration into the default configuration.
+	// 4. Resolve secrets in the configuration.
+	if err := resolveSecrets(reflect.ValueOf(&yamlConfig).Elem(), resolver); err != nil {
+		return nil, exception.NewBatchError(moduleName, "failed to resolve secrets in config", err, false, false)
+	}
+
+	// 5. Merge YAML configuration into the default configuration.
 	mergeConfig(cfg, &yamlConfig)
 
-	// 5. Override with environment variables
+	// 6. Override with environment variables.
 	if err := loadStructFromEnv(reflect.ValueOf(cfg).Elem(), ""); err != nil {
 		return nil, exception.NewBatchError(moduleName, "failed to load config from environment variables", err, false, false)
 	}
@@ -77,7 +84,7 @@ func loadConfig(envFilePath string, embeddedConfig EmbeddedConfig) (*Config, err
 // It loads defaults, merges embedded YAML, overrides with environment variables,
 // sets the global logger level, and validates exception classes.
 func NewConfigProvider(params ConfigParams) (*Config, error) {
-	cfg, err := loadConfig(params.EnvFilePath, params.EmbeddedConfig)
+	cfg, err := loadConfig(params.EnvFilePath, params.EmbeddedConfig, params.SecretResolver)
 	if err != nil {
 		return nil, exception.NewBatchError(moduleName, "failed to load config from environment variables", err, false, false)
 	}
@@ -97,8 +104,52 @@ func NewConfigProvider(params ConfigParams) (*Config, error) {
 }
 
 // LoadConfig wraps loadConfig for external use during application startup.
-func LoadConfig(envFilePath string, embeddedConfig EmbeddedConfig) (*Config, error) {
-	return loadConfig(envFilePath, embeddedConfig)
+func LoadConfig(envFilePath string, embeddedConfig EmbeddedConfig, resolver secret.SecretResolver) (*Config, error) {
+	return loadConfig(envFilePath, embeddedConfig, resolver)
+}
+
+// resolveSecrets recursively traverses the configuration struct using reflection.
+// It identifies fields that implement the secret.Secret interface, resolves their URI values,
+// and sets the resolved value into the field.
+func resolveSecrets(val reflect.Value, resolver secret.SecretResolver) error {
+	if val.Kind() != reflect.Struct {
+		return nil
+	}
+
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		if !field.CanSet() {
+			continue
+		}
+
+		// Check if the field implements the secret.Secret interface
+		if s, ok := field.Addr().Interface().(secret.Secret); ok {
+			uri := ""
+			// We need to get the current value to check if it's a URI.
+			// Since Secret types are strings or []byte, we can convert them to string.
+			if field.Kind() == reflect.String {
+				uri = field.String()
+			} else if field.Kind() == reflect.Slice && field.Type().Elem().Kind() == reflect.Uint8 {
+				uri = string(field.Bytes())
+			}
+
+			if strings.HasPrefix(uri, "file://") || strings.HasPrefix(uri, "env://") {
+				resolved, err := resolver.Resolve(uri)
+				if err != nil {
+					return err
+				}
+
+				if err := s.SetValue(resolved); err != nil {
+					return err
+				}
+			}
+		} else if field.Kind() == reflect.Struct {
+			if err := resolveSecrets(field, resolver); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // validateExceptionClasses verifies that all exception class names referenced in the configuration
@@ -124,13 +175,11 @@ func validateExceptionClasses(cfg *Config) error {
 // mergeConfig performs a deep merge of sourceConfig into destConfig.
 // Values in sourceConfig overwrite corresponding values in destConfig if they are non-zero.
 func mergeConfig(destConfig, sourceConfig *Config) {
-	// Merge SurfinConfig
 	mergeSurfinConfig(&destConfig.Surfin, &sourceConfig.Surfin)
 }
 
 // mergeSurfinConfig merges the source SurfinConfig into the destination.
 func mergeSurfinConfig(dest, source *SurfinConfig) {
-	// Merge BatchConfig
 	if source.Batch.PollingIntervalSeconds != 0 {
 		dest.Batch.PollingIntervalSeconds = source.Batch.PollingIntervalSeconds
 	}
@@ -146,25 +195,20 @@ func mergeSurfinConfig(dest, source *SurfinConfig) {
 	if source.Batch.MetricsAsyncBufferSize != 0 {
 		dest.Batch.MetricsAsyncBufferSize = source.Batch.MetricsAsyncBufferSize
 	}
-	// Merge nested structs like Retry, ItemRetry, ItemSkip
 	mergeRetryConfig(&dest.Batch.Retry, &source.Batch.Retry)
 	mergeItemRetryConfig(&dest.Batch.ItemRetry, &source.Batch.ItemRetry)
 	mergeItemSkipConfig(&dest.Batch.ItemSkip, &source.Batch.ItemSkip)
 
-	// Merge SystemConfig
 	mergeSystemConfig(&dest.System, &source.System)
 
-	// Merge InfrastructureConfig
 	if source.Infrastructure.JobRepositoryDBRef != "" {
 		dest.Infrastructure.JobRepositoryDBRef = source.Infrastructure.JobRepositoryDBRef
 	}
 
-	// Merge SecurityConfig
 	if source.Security.MaskedParameterKeys != nil {
 		dest.Security.MaskedParameterKeys = source.Security.MaskedParameterKeys
 	}
 
-	// Merge AdapterConfigs
 	if source.AdapterConfigs != nil {
 		if dest.AdapterConfigs == nil {
 			dest.AdapterConfigs = make(map[string]any)
@@ -343,7 +387,7 @@ func setStructFieldFromEnv(structVal reflect.Value, fieldName string, value stri
 	return nil
 }
 
-// setField converts and sets the value of a reflect.Value field based on its kind.
+// setField converts the string value to the appropriate type and sets it on the provided reflect.Value field.
 // Supported types: string, int, float64, and bool.
 func setField(field reflect.Value, value string) error {
 	if !field.CanSet() {
