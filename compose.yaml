@@ -26,12 +26,18 @@ services:
         source: .
         target: /opt/surfin
     working_dir: /opt/surfin
+    secrets:
+      - source: database
+        target: /run/secrets/surfin/database
+        uid: '1000'
+        gid: '1000'
+        mode: 400
     networks:
       - surfin-network
 
   mysql:
     container_name: mysql
-    image: "mysql:8.4"
+    image: "docker.io/library/mysql:8.4"
     ports:
       - "3306:3306"
     environment:
@@ -46,7 +52,7 @@ services:
 
   postgres:
     container_name: postgres
-    image: "postgres:latest"
+    image: "docker.io/library/postgres:latest"
     ports:
       - "5432:5432"
     environment:
@@ -62,7 +68,7 @@ services:
 
   wiremock:
     container_name: wiremock
-    image: "wiremock/wiremock:latest"
+    image: "docker.io/wiremock/wiremock:latest"
     ports:
       - "8080:8080"
     privileged: true
@@ -101,6 +107,10 @@ services:
       - OTEL_FRONT_AUTO_OPEN=false
     networks:
       - surfin-network
+
+secrets:
+  database:
+    external: true
 
 networks:
   surfin-network:

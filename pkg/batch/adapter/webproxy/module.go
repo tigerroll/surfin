@@ -9,6 +9,7 @@ import (
 	webproxyconfig "github.com/tigerroll/surfin/pkg/batch/adapter/webproxy/config"
 	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/secret"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
@@ -18,12 +19,13 @@ import (
 // Parameters:
 //
 //	cfg: The application's global configuration.
+//	resolver: The SecretResolver to resolve secrets.
 //
 // Returns:
 //
 //	A new WebProxyProvider instance.
 //	An error if configuration parsing fails.
-func NewWebProxyProviderFromConfig(cfg *config.Config) (*WebProxyProvider, error) {
+func NewWebProxyProviderFromConfig(cfg *config.Config, resolver secret.SecretResolver) (*WebProxyProvider, error) {
 	adapterConfigs := cfg.Surfin.AdapterConfigs
 
 	webProxyConfigs := make(map[string]webproxyconfig.WebProxyConfig)
@@ -64,14 +66,14 @@ func NewWebProxyProviderFromConfig(cfg *config.Config) (*WebProxyProvider, error
 
 			// Verify that the Type field of WebProxyConfig is a recognized Web Proxy authentication type.
 			// This distinguishes it from other adapter configurations.
-			if wpCfg.Type == "HMAC" || wpCfg.Type == "OAUTH2" || wpCfg.Type == "APIKEY" || wpCfg.Type == "NONE" {
+			if wpCfg.Type == "HMAC" || wpCfg.Type == "OAUTH2" || wpCfg.Type == "APIKEY" || wpCfg.Type == "NONE" || wpCfg.Type == "TLS" {
 				webProxyConfigs[name] = wpCfg
 			} else {
 				logger.Warnf("webproxy: Unknown or unsupported WebProxyConfig type '%s' for '%s'. Skipping.", wpCfg.Type, name)
 			}
 		}
 	}
-	return NewWebProxyProvider(webProxyConfigs), nil
+	return NewWebProxyProvider(webProxyConfigs, resolver), nil
 }
 
 // Module is the Fx module for the webproxy package.

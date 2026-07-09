@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	_ "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
+	"strings"
 	"sync"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database" // Imports the database package.
 	dbconfig "github.com/tigerroll/surfin/pkg/batch/adapter/database/config"
 	config "github.com/tigerroll/surfin/pkg/batch/core/config"
+	"github.com/tigerroll/surfin/pkg/batch/core/secret"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 
 	"gorm.io/gorm"
@@ -47,17 +49,19 @@ func GetDialectorFactory(dbType string) (DialectorFactory, error) {
 
 // BaseProvider provides common functionality for DBProvider implementations.
 type BaseProvider struct {
-	cfg    *config.Config
-	dbType string
+	cfg      *config.Config
+	resolver secret.SecretResolver
+	dbType   string
 	// Map to hold connections managed by this provider (name -> DBConnection)
 	connections map[string]database.DBConnection
 	mu          sync.RWMutex
 }
 
 // NewBaseProvider creates a new BaseProvider.
-func NewBaseProvider(cfg *config.Config, dbType string) *BaseProvider {
+func NewBaseProvider(cfg *config.Config, resolver secret.SecretResolver, dbType string) *BaseProvider {
 	return &BaseProvider{
 		cfg:         cfg,
+		resolver:    resolver,
 		dbType:      dbType,
 		connections: make(map[string]database.DBConnection),
 	}
@@ -105,6 +109,23 @@ func (p *BaseProvider) createAndStoreConnection(name string) (database.DBConnect
 	}
 	if err := mapstructure.Decode(rawConfig, &dbConfig); err != nil {
 		return nil, fmt.Errorf("failed to decode database config for '%s': %w", name, err)
+	}
+
+	// Resolve secret for password if necessary
+	if dbConfig.Password != "" && (strings.HasPrefix(dbConfig.Password, "env://") || strings.HasPrefix(dbConfig.Password, "file://")) {
+		uri := dbConfig.Password
+		resolved, err := p.resolver.Resolve(uri)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve password for '%s': %w", name, err)
+		}
+
+		logger.Debugf("Successfully resolved secret for '%s' from URI: %s", name, uri)
+
+		if strVal, ok := resolved.(string); ok {
+			dbConfig.Password = strVal
+		} else if byteVal, ok := resolved.([]byte); ok {
+			dbConfig.Password = string(byteVal)
+		}
 	}
 
 	// Check if the configuration type matches the provider type (or is redshift handled by postgres provider)
