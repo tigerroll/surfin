@@ -303,11 +303,11 @@ graph LR
 2. **状態を外部に永続化する**: `JobRepository` を通じて、障害発生時に「どこから再開するか」を管理する。
 3. **再開点を明示する**: 障害発生時に0件目からではなく、前回成功した直後から再開できる防波堤を作る。
 
-## 🛠️ Key Features
-
 <p align="center">
   <img src="docs/images/mascot.png" alt="Surfin Logo" width="400"/>
 </p>
+
+## 🛠️ Key Features
 
 * **📦 Chunk-based Processing**: チャンク単位の処理とチェックポイントによる進捗管理。
 * **♻️ Restartability**: 失敗地点からの正確な再開。完了済みステップは自動スキップ。

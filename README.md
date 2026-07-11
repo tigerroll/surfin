@@ -302,11 +302,11 @@ graph LR
 2. **Persistence**: Manage state via `JobRepository` to know "where to resume."
 3. **Explicit Resume Points**: Create a safety net to resume from the last successful point, not from scratch.
 
-## 🛠️ Key Features
-
 <p align="center">
   <img src="docs/images/mascot.png" alt="Surfin Logo" width="400"/>
 </p>
+
+## 🛠️ Key Features
 
 * **📦 Chunk-based processing**: Progress tracking via chunked execution and checkpoints.
 * **♻️ Restartability**: Resume precisely from the point of failure; completed steps are skipped automatically.
