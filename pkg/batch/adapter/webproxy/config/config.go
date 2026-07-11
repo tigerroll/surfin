@@ -12,6 +12,7 @@ type WebProxyConfig struct {
 	ClientId     string `yaml:"client_id,omitempty" json:"client_id,omitempty"`         // OAuth2 client ID.
 	ClientSecret string `yaml:"client_secret,omitempty" json:"client_secret,omitempty"` // OAuth2 client secret.
 	Key          string `yaml:"key,omitempty" json:"key,omitempty"`                     // API Key value.
+	Prefix       string `yaml:"prefix,omitempty" json:"prefix,omitempty"`               // API Key prefix (e.g., "Bearer").
 	APIKey       string `yaml:"api_key,omitempty" json:"api_key,omitempty"`             // API Key value (alternative).
 	Placement    string `yaml:"placement,omitempty" json:"placement,omitempty"`         // API Key placement ("header", "query", or "auth_header").
 	KeyName      string `yaml:"key_name,omitempty" json:"key_name,omitempty"`           // API Key header name or query parameter name.

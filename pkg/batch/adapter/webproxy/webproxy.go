@@ -239,23 +239,28 @@ func (t *WebProxyRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 
 	switch t.cfg.Type {
 	case "APIKEY":
+		authValue := t.cfg.Key
+		if t.cfg.Prefix != "" {
+			authValue = fmt.Sprintf("%s %s", t.cfg.Prefix, authValue)
+		}
+
 		switch t.cfg.Placement {
 		case "header":
 			if t.cfg.KeyName != "" {
-				req.Header.Set(t.cfg.KeyName, t.cfg.Key)
+				req.Header.Set(t.cfg.KeyName, authValue)
 			} else {
 				return nil, fmt.Errorf("webproxy: APIKEY authentication with placement 'header' requires 'key_name'")
 			}
 		case "query":
 			if t.cfg.KeyName != "" {
 				q := req.URL.Query()
-				q.Add(t.cfg.KeyName, t.cfg.Key)
+				q.Add(t.cfg.KeyName, authValue)
 				req.URL.RawQuery = q.Encode()
 			} else {
 				return nil, fmt.Errorf("webproxy: APIKEY authentication with placement 'query' requires 'key_name'")
 			}
 		case "auth_header":
-			req.Header.Set("Authorization", t.cfg.Key)
+			req.Header.Set("Authorization", authValue)
 		default:
 			return nil, fmt.Errorf("webproxy: unsupported APIKEY placement type: %s", t.cfg.Placement)
 		}
