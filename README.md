@@ -238,7 +238,7 @@ graph LR
 
     %% Application core
     subgraph Application ["&nbsp; 📦 Batch System &nbsp;"]
-        direction TB
+        direction LR
 
         subgraph Layer_Entry ["Top Layer: Entrypoint"]
             Main["cmd/my_batch/main.go"]:::entry
@@ -303,6 +303,10 @@ graph LR
 3. **Explicit Resume Points**: Create a safety net to resume from the last successful point, not from scratch.
 
 ## 🛠️ Key Features
+
+<p align="center">
+  <img src="docs/images/mascot.png" alt="Surfin Logo" width="400"/>
+</p>
 
 * **📦 Chunk-based processing**: Progress tracking via chunked execution and checkpoints.
 * **♻️ Restartability**: Resume precisely from the point of failure; completed steps are skipped automatically.
