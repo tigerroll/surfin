@@ -241,7 +241,7 @@ func (t *WebProxyRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 	case "APIKEY":
 		authValue := t.cfg.Key
 		if t.cfg.Prefix != "" {
-			authValue = t.cfg.Prefix + " " + authValue
+			authValue = fmt.Sprintf("%s %s", t.cfg.Prefix, authValue)
 		}
 
 		switch t.cfg.Placement {

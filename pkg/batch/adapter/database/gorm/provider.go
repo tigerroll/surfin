@@ -122,9 +122,9 @@ func (p *BaseProvider) createAndStoreConnection(name string) (database.DBConnect
 		logger.Debugf("Successfully resolved secret for '%s' from URI: %s", name, uri)
 
 		if strVal, ok := resolved.(string); ok {
-			dbConfig.Password = strVal
+			dbConfig.Password = strings.TrimSpace(strVal)
 		} else if byteVal, ok := resolved.([]byte); ok {
-			dbConfig.Password = string(byteVal)
+			dbConfig.Password = strings.TrimSpace(string(byteVal))
 		}
 	}
 
