@@ -8,7 +8,7 @@ surfin:
         port: 5432
         database: "main"
         user: "weather"
-        password: file:///run/secrets/surfin/database
+        password: file:///run/secrets/database
         schema: "public"
         sslmode: "disable"
         # Connection pool settings
@@ -24,7 +24,7 @@ surfin:
         port: 5432
         database: "main"
         user: "weather"
-        password: file:///run/secrets/surfin/database
+        password: file:///run/secrets/database
         schema: "public"
         sslmode: "disable"
         # Connection pool settings
@@ -40,7 +40,7 @@ surfin:
         port: 3306
         database: "main"
         user: "weather"
-        password: file:///run/secrets/surfin/database
+        password: file:///run/secrets/database
         schema: "main"
         sslmode: "disable"
         # Connection pool settings
@@ -73,9 +73,16 @@ surfin:
         api_endpoint: "http://wiremock:8080/v1"
       openmeteo-apikey:
         type: "APIKEY"
-        key: "test"
+        key: file:///run/secrets/openmeteo
         placement: "header"
         key_name: "X-API-Key"
+        api_endpoint: "http://wiremock:8080/v1"
+      openmeteo-bearer:
+        type: "APIKEY"
+        key: file:///run/secrets/openmeteo
+        prefix: "Bearer"
+        placement: "header"
+        key_name: "Authorization"
         api_endpoint: "http://wiremock:8080/v1"
       openmeteo-historical:
         type: "NONE"
