@@ -27,11 +27,8 @@ services:
         target: /opt/surfin
     working_dir: /opt/surfin
     secrets:
-      - source: database
-        target: /run/secrets/surfin/database
-        uid: '1000'
-        gid: '1000'
-        mode: 400
+      - database
+      - openmeteo
     networks:
       - surfin-network
 
@@ -110,6 +107,8 @@ services:
 
 secrets:
   database:
+    external: true
+  openmeteo:
     external: true
 
 networks:

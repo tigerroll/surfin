@@ -1,9 +1,18 @@
 {
-  "request": {
-    "method": "ANY",
-    "urlPattern": "/v1/.*"
-  },
-  "response": {
-    "proxyBaseUrl": "https://api.open-meteo.com"
-  }
+  "mappings": [
+    {
+      "request": {
+        "method": "ANY",
+        "urlPattern": "/v1/.*",
+        "headers": {
+          "Authorization": {
+            "equalTo": "Bearer test"
+          }
+        }
+      },
+      "response": {
+        "proxyBaseUrl": "https://api.open-meteo.com"
+      }
+    }
+  ]
 }
