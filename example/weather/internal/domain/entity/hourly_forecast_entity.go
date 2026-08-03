@@ -32,12 +32,12 @@ type HourlyForecastToStore struct {
 
 // HourlyForecast defines the structure for hourly weather data, primarily used for Parquet export.
 type HourlyForecast struct {
-	Time          model.UnixMillis `gorm:"column:time;primaryKey" parquet:"name=time,type=INT64,convertedtype=TIMESTAMP_MILLIS"`
-	WeatherCode   int32            `gorm:"column:weather_code" parquet:"name=weather_code,type=INT32"`
-	Temperature2M float64          `gorm:"column:temperature_2m" parquet:"name=temperature_2m,type=DOUBLE"`
-	Latitude      float64          `gorm:"column:latitude;primaryKey" parquet:"name=latitude,type=DOUBLE"`
-	Longitude     float64          `gorm:"column:longitude;primaryKey" parquet:"name=longitude,type=DOUBLE"`
-	CollectedAt   model.UnixMillis `gorm:"column:collected_at" parquet:"name=collected_at,type=INT64,convertedtype=TIMESTAMP_MILLIS"`
+	Time          model.UnixMillis `gorm:"column:time;primaryKey" parquet:"time,type=INT64,convertedtype=TIMESTAMP_MILLIS"`
+	WeatherCode   int32            `gorm:"column:weather_code" parquet:"weather_code,type=INT32"`
+	Temperature2M float64          `gorm:"column:temperature_2m" parquet:"temperature_2m,type=DOUBLE"`
+	Latitude      float64          `gorm:"column:latitude;primaryKey" parquet:"latitude,type=DOUBLE"`
+	Longitude     float64          `gorm:"column:longitude;primaryKey" parquet:"longitude,type=DOUBLE"`
+	CollectedAt   model.UnixMillis `gorm:"column:collected_at" parquet:"collected_at,type=INT64,convertedtype=TIMESTAMP_MILLIS"`
 }
 
 // TableName specifies the table name for HourlyForecastToStore.
