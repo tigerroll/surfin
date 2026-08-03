@@ -22,24 +22,24 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
-// ParquetWriterConfig defines the configuration for a ParquetWriter, including storage and compression settings.
+// ParquetWriterConfig holds the configuration for a ParquetWriter, including storage and compression settings.
 type ParquetWriterConfig struct {
-	// StorageRef is the name of the storage connection to use.
+	// StorageRef is the identifier for the storage connection to use.
 	StorageRef string `mapstructure:"storageRef"`
-	// OutputBaseDir is the base directory within the storage bucket for Parquet files.
+	// OutputBaseDir is the base directory path within the storage bucket for Parquet files.
 	OutputBaseDir string `mapstructure:"outputBaseDir"`
 	// CompressionType specifies the compression algorithm (e.g., "SNAPPY", "GZIP", "NONE").
 	// Defaults to "SNAPPY".
 	CompressionType string `mapstructure:"compressionType"`
-	// FileNameFormat is the format pattern for the output file name.
+	// FileNameFormat is the pattern for generating output file names.
 	// Supported placeholders: #{tablename}, #{timestamp}, #{uuid}, #{random}, #{sequence}.
 	FileNameFormat string `mapstructure:"fileNameFormat"`
-	// TableName is the table name included in the file name.
+	// TableName is the table name used in the file name generation.
 	TableName string `mapstructure:"tableName"`
 }
 
-// ParquetWriter implements port.ItemWriter for writing structured data to Parquet files.
-// It buffers items in memory, partitioned by a key, and writes them to storage upon Close.
+// ParquetWriter implements port.ItemWriter to buffer items in memory, partition them,
+// and write them to Parquet files upon flushing.
 type ParquetWriter[T any] struct {
 	name                      string
 	config                    *ParquetWriterConfig
@@ -52,7 +52,7 @@ type ParquetWriter[T any] struct {
 	partitionSequence         map[string]int
 }
 
-// NewParquetWriter initializes a new ParquetWriter instance.
+// NewParquetWriter initializes a new ParquetWriter instance with the provided configuration and dependencies.
 func NewParquetWriter[T any](
 	name string,
 	properties map[string]interface{},
@@ -145,7 +145,7 @@ func (w *ParquetWriter[T]) Open(ctx context.Context, ec model.ExecutionContext) 
 	return nil
 }
 
-// Write buffers items for later writing. It does not perform I/O operations.
+// Write buffers items for later writing. It does not perform I/O operations until Flush is called.
 func (w *ParquetWriter[T]) Write(ctx context.Context, items []T) error {
 	if w.bufferedItems == nil {
 		w.bufferedItems = make(map[string][]T)
@@ -171,6 +171,8 @@ func (w *ParquetWriter[T]) Write(ctx context.Context, items []T) error {
 }
 
 // Flush writes all buffered items to Parquet files in the configured storage.
+// It partitions items based on the partitionKeyFunc, generates files, and uploads them.
+// If an error occurs during writing or uploading, it returns a multierror containing all encountered errors.
 func (w *ParquetWriter[T]) Flush(ctx context.Context) error {
 	logger.Debugf("ParquetWriter '%s' Flush called. Items in buffer: %d.", w.name, len(w.bufferedItems))
 
@@ -179,7 +181,7 @@ func (w *ParquetWriter[T]) Flush(ctx context.Context) error {
 		return nil
 	}
 
-	// Determine compression options
+	// Prepare compression options based on the configuration.
 	var compression parquet.WriterOption
 	switch strings.ToUpper(w.config.CompressionType) {
 	case "GZIP":
@@ -198,6 +200,8 @@ func (w *ParquetWriter[T]) Flush(ctx context.Context) error {
 		logger.Debugf("ParquetWriter '%s': Processing partition '%s' with %d items.", w.name, partitionKey, len(items))
 
 		buf := new(bytes.Buffer)
+
+		// Create the Parquet writer. Rely on type inference for the schema.
 		pw := parquet.NewGenericWriter[T](buf, compression)
 
 		writeSuccessful := true
@@ -214,36 +218,23 @@ func (w *ParquetWriter[T]) Flush(ctx context.Context) error {
 			writeSuccessful = false
 		}
 
-		if len(items) > 0 && writeSuccessful {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						err := fmt.Errorf("Parquet writer panicked during Close for partition '%s' in ParquetWriter '%s': %v", partitionKey, w.name, r)
-						multiErr = multierror.Append(multiErr, exception.NewBatchError(
-							"writer",
-							err.Error(),
-							err,
-							false,
-							false,
-						))
-						logger.Errorf("ParquetWriter '%s': Recovered from panic during Close: %v", w.name, r)
-					}
-				}()
-				if err := pw.Close(); err != nil {
-					multiErr = multierror.Append(multiErr, exception.NewBatchError(
-						"writer",
-						fmt.Sprintf("Failed to close Parquet writer for partition '%s' in ParquetWriter '%s': %v", partitionKey, w.name, err),
-						err,
-						false,
-						false,
-					))
-					return
-				}
-			}()
-		} else {
-			logger.Warnf("ParquetWriter '%s': Skipping Close for partition '%s' because no items were written successfully or no items were buffered.", w.name, partitionKey)
+		// Close the writer to finalize the file. This writes the footer and metadata.
+		// We perform strict error handling; if closing fails, mark the write as unsuccessful.
+		if writeSuccessful {
+			if err := pw.Close(); err != nil {
+				logger.Errorf("ParquetWriter '%s': Failed to close Parquet writer for partition '%s': %v", w.name, partitionKey, err)
+				multiErr = multierror.Append(multiErr, exception.NewBatchError(
+					"writer",
+					fmt.Sprintf("Failed to close Parquet writer for partition '%s' in ParquetWriter '%s': %v", partitionKey, w.name, err),
+					err,
+					false,
+					false,
+				))
+				writeSuccessful = false
+			}
 		}
 
+		// Generate the output file name based on the configured format.
 		fileName := w.config.FileNameFormat
 		if fileName == "" {
 			fileName = "data_#{timestamp}_#{random}.parquet"
@@ -259,6 +250,7 @@ func (w *ParquetWriter[T]) Flush(ctx context.Context) error {
 
 		objectName := filepath.Join(w.config.OutputBaseDir, partitionKey, fileName)
 
+		// Upload the generated Parquet file to the configured storage.
 		targetBucketName := w.storageConn.Config().BucketName
 		logger.Debugf("ParquetWriter '%s': Uploading %d bytes to %s/%s", w.name, buf.Len(), targetBucketName, objectName)
 		if writeSuccessful && buf.Len() > 0 {
@@ -312,7 +304,7 @@ func (w *ParquetWriter[T]) Close(ctx context.Context) error {
 	return closeErr
 }
 
-// generateRandomString generates a random string of the specified length.
+// generateRandomString generates a random alphanumeric string of the specified length.
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
