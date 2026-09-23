@@ -42,7 +42,7 @@ func setupGormJobMock(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, dbadapter.DBConn
 
 	// Create a single connection resolver for testing.
 	mockResolver := testutil.NewTestSingleConnectionResolver(dbConn)
-	repo := sqlrepo.NewSQLJobRepository(mockResolver, txManager, "mock_db") // Initialize the SQL job repository.
+	repo := sqlrepo.NewSQLJobRepository(mockResolver, txManager, "mock_db", "batch_metadata") // Initialize the SQL job repository.
 
 	return gormDB, mock, dbConn, repo
 }
@@ -62,7 +62,7 @@ func TestGORMJobRepository_SaveJobExecution(t *testing.T) {
 	mockTx := new(mocktx.MockTx)
 
 	// Expect an ExecuteUpdate("CREATE") call. The query argument can be nil or an empty map, so use Anything.
-	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "CREATE", "batch_job_execution", testify_mock.Anything).Return(int64(1), nil)
+	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "CREATE", "batch_metadata.batch_job_execution", testify_mock.Anything).Return(int64(1), nil)
 
 	// Create a context with the mocked transaction, allowing JobRepository's getTxExecutor to detect it.
 	txCtx := tx.ContextWithTx(ctx, mockTx)
@@ -89,7 +89,7 @@ func TestGORMJobRepository_UpdateJobExecution(t *testing.T) {
 	// Mock the transaction using MockTxManager.
 	mockTx := new(mocktx.MockTx)
 	expectedQuery := map[string]interface{}{"version": 5}
-	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_job_execution", expectedQuery).Return(int64(1), nil)
+	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_metadata.batch_job_execution", expectedQuery).Return(int64(1), nil)
 
 	// Create a context with the mocked transaction.
 	txCtx := tx.ContextWithTx(ctx, mockTx)
@@ -117,7 +117,7 @@ func TestGORMJobRepository_UpdateJobExecution_OptimisticLocking(t *testing.T) {
 	// Mock the transaction using MockTxManager.
 	mockTx := new(mocktx.MockTx)
 	expectedQuery := map[string]interface{}{"version": 5}
-	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_job_execution", expectedQuery).Return(int64(0), nil) // Simulate 0 rows affected for optimistic locking failure.
+	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_metadata.batch_job_execution", expectedQuery).Return(int64(0), nil) // Simulate 0 rows affected for optimistic locking failure.
 
 	// Create a context with the mocked transaction.
 	txCtx := tx.ContextWithTx(ctx, mockTx)
