@@ -33,15 +33,12 @@
 *   **`Close` メソッドの義務:** 全ての `Step` 実装は、`Close` メソッドの終了直前に `saveCheckpoint` を呼び出さなければならない。
 *   **エラーハンドリング:**
     *   `saveCheckpoint` が失敗した場合、現在の実装では致命的なエラーとはせず、ログ出力のみを行い処理を続行するポリシーを採用している。
-    *   ※将来的に、データの整合性要件に応じて「失敗として扱う（Fail-fast）」ポリシーへの切り替えを検討する。
 *   **ログ出力:** 永続化のタイミングと、保存される `ExecutionContext` の中身は `DEBUG` レベルでログ出力し、トレース可能にすること。
 
 ## 5. 監視と検証
 チェックポイントが正しく機能しているかは、以下のクエリで検証する。
 
 ```sql
--- ステップ実行ごとのコンテキスト確認
--- 現在の設計では、ExecutionContextは batch_step_execution テーブルの execution_context カラムに保存されます。
 SELECT id, step_name, execution_context FROM batch_metadata.batch_step_execution;
 ```
 
@@ -51,12 +48,13 @@ SELECT id, step_name, execution_context FROM batch_metadata.batch_step_execution
 
 ### 6.1. Component Contract (ItemStream)
 *   **Idempotency:** `Update` メソッドは、複数回呼び出されても副作用が累積しないように実装すること。
+*   **Restartability:** `Open` メソッドは、`ExecutionContext` から読み込んだオフセットを基に、データソースの読み込み位置を正しく復元すること。
 *   **Memory-Only:** `Update` メソッド内で外部リソース（DB等）への書き込みを行ってはならない。
 *   **Namespace:** `ExecutionContext` に保存するキーは、`PutNested` を活用し、`component.name.key` のような階層構造をプレフィックスとして使用し、衝突を避けること。
 
 ### 6.2. Container Contract (ChunkStep)
 *   **Persistence Responsibility:** `saveCheckpoint` は、トランザクションコミット直後に呼び出し、永続化の成否を監視すること。
-*   **Error Propagation:** `saveCheckpoint` が失敗した場合、そのエラーは握りつぶさず、ステップの失敗として伝播させ、ジョブを `FAILED` 状態に遷移させること。
+*   **Error Handling:** `saveCheckpoint` が失敗した場合、ログ出力を行い、処理を継続する（Policy C）。
 *   **Finalization:** `Close` メソッドは、正常終了・異常終了に関わらず必ず呼び出され、最終的なチェックポイントを保存すること。
 
 ### 6.3. ExecutionContext Contract

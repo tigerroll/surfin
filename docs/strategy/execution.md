@@ -62,12 +62,10 @@ Job Complete
 
 ### 4.1. Update Failure Policy (Policy C)
 `ItemStream.Update()` はメモリ上の状態更新のみを責務とし、失敗しない（あるいは失敗を `saveCheckpoint` の失敗として扱う）契約とする。
-*   **理由:** `Update` をメモリ操作に限定することで、コンポーネント側の実装を単純化し、DB永続化の失敗（`saveCheckpoint`）とロジックの失敗を明確に分離するため。
 
 ### 4.2. Failure Matrix Implementation
-Failure Matrixの各ケースは、`test/semantics/` 配下に「Executable Specification」として実装する。
-*   **実装方針:** `Given/When/Then` 形式の統合テストを作成し、各障害ポイントで「データがロールバックされているか」「チェックポイントが期待通りか」を検証する。
-*   **テストの目的:** 異常系における挙動をコードで固定し、将来のリファクタリングによる回帰を防ぐ。
+Failure Matrixの各ケースは、`test/semantics/` 配下に「Executable Specification」として実装済み。
+*   **検証状況:** 統合テストにより、各障害ポイントにおける挙動（ロールバック、チェックポイント保存、ステータス遷移）が期待通りであることを保証している。
 
 ### 4.3. ExecutionContext Contract
 `ExecutionContext` は型安全なアクセサとネスト構造をサポートしており、実行状態の永続化およびコンポーネント間のデータ共有において、この堅牢な契約を遵守すること。
@@ -81,13 +79,13 @@ Surfinの実行モデルを堅牢化するため、以下のフェーズで開�
 4.  **Add failure matrix tests** (完了)
 5.  **Define Update / saveCheckpoint failure policy** (完了)
 6.  **Harden ExecutionContext contract** (完了)
-7.  **Define idempotency / duplicate processing semantics**
+7.  **Define idempotency / duplicate processing semantics** (Next)
 8.  **Stateful Processor / Tasklet semantics**
 9.  **Partition execution semantics**
 10. **Batch execution observability**
 
-## 6. Target: Batch Execution Semantics v1
-最初のマイルストーンとして、以下の機能を完全にテストで保証することを目指します。
+## 6. Target: Batch Execution Semantics v1 (達成済み)
+以下の機能は実装およびテストによる保証が完了しています。
 
 *   Single-threaded Chunk
 *   Transaction Management
