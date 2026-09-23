@@ -120,7 +120,7 @@ func setupSQLiteTestDB(t *testing.T) (repository.JobRepository, dbadapter.DBConn
 	})
 
 	// 3. Create the JobRepository using the shared connection and resolver.
-	repo := sqlrepo.NewSQLJobRepository(testDBResolver, globalTxManager, "test_sqlite")
+	repo := sqlrepo.NewSQLJobRepository(testDBResolver, globalTxManager, "test_sqlite", "")
 
 	return repo, globalDBConn, globalTxManager
 }
@@ -369,7 +369,7 @@ func TestSQLiteJobRepository_CheckpointData(t *testing.T) {
 
 	// 4. Cleanup the created records.
 	globalGormDB.Exec("DELETE FROM batch_checkpoint_data WHERE step_execution_id = ?", stepExec.ID)
-	globalGormDB.Exec("DELETE FROM batch_step_execution WHERE id = ?", stepExec.ID)
+	globalGormDB.Exec("DELETE FROM batch_step_execution WHERE step_execution_id = ?", stepExec.ID)
 }
 
 // createTestTables manually creates the tables required for SQLite tests.
@@ -378,7 +378,7 @@ func createTestTables(db *gorm.DB) error {
 	// Note: For SQLite, JSON types are typically stored as TEXT.
 	// Primary keys, NOT NULL constraints, and indexes are defined here.
 
-	// Create batch_job_instance table.
+	// Create "batch_job_instance" table.
 	if err := db.Exec(`
 		CREATE TABLE batch_job_instance (
 			id VARCHAR(36) PRIMARY KEY,
@@ -398,7 +398,7 @@ func createTestTables(db *gorm.DB) error {
 		return err
 	}
 
-	// Create batch_job_execution table.
+	// Create "batch_job_execution" table.
 	if err := db.Exec(`
 		CREATE TABLE batch_job_execution (
 			id VARCHAR(36) PRIMARY KEY,
@@ -428,7 +428,7 @@ func createTestTables(db *gorm.DB) error {
 		return err
 	}
 
-	// Create batch_step_execution table.
+	// Create "batch_step_execution" table.
 	if err := db.Exec(`
 		CREATE TABLE batch_step_execution (
 			id VARCHAR(36) PRIMARY KEY,
@@ -461,7 +461,7 @@ func createTestTables(db *gorm.DB) error {
 		return err
 	}
 
-	// Create batch_checkpoint_data table.
+	// Create "batch_checkpoint_data" table.
 	if err := db.Exec(`
 		CREATE TABLE batch_checkpoint_data (
 			step_execution_id VARCHAR(36) PRIMARY KEY,

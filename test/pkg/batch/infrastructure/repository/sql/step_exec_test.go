@@ -41,7 +41,7 @@ func setupGormStepMock(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, dbadapter.DBCon
 
 	// Create a single connection resolver for testing.
 	mockResolver := testutil.NewTestSingleConnectionResolver(dbConn)
-	repo := sqlrepo.NewSQLJobRepository(mockResolver, txManager, "mock_db") // Initialize the SQL job repository.
+	repo := sqlrepo.NewSQLJobRepository(mockResolver, txManager, "mock_db", "batch_metadata") // Initialize the SQL job repository.
 
 	return gormDB, mock, dbConn, repo
 }
@@ -60,7 +60,7 @@ func TestGORMJobRepository_SaveStepExecution(t *testing.T) {
 
 	// Mock the transaction using MockTxManager.
 	mockTx := new(mocktx.MockTx)
-	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "CREATE", "batch_step_execution", testify_mock.Anything).Return(int64(1), nil)
+	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "CREATE", "batch_metadata.batch_step_execution", testify_mock.Anything).Return(int64(1), nil)
 
 	// Create a context with the mocked transaction.
 	txCtx := tx.ContextWithTx(ctx, mockTx)
@@ -90,7 +90,7 @@ func TestGORMJobRepository_UpdateStepExecution(t *testing.T) {
 	// Mock the transaction using MockTxManager.
 	mockTx := new(mocktx.MockTx)
 	expectedQuery := map[string]interface{}{"version": 0}
-	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_step_execution", expectedQuery).Return(int64(1), nil)
+	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_metadata.batch_step_execution", expectedQuery).Return(int64(1), nil)
 
 	// Create a context with the mocked transaction.
 	txCtx := tx.ContextWithTx(ctx, mockTx)
@@ -121,7 +121,7 @@ func TestGORMJobRepository_UpdateStepExecution_OptimisticLocking(t *testing.T) {
 	// Mock the transaction using MockTxManager.
 	mockTx := new(mocktx.MockTx)
 	expectedQuery := map[string]interface{}{"version": 0}
-	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_step_execution", expectedQuery).Return(int64(0), nil)
+	mockTx.On("ExecuteUpdate", testify_mock.Anything, testify_mock.Anything, "UPDATE", "batch_metadata.batch_step_execution", expectedQuery).Return(int64(0), nil)
 
 	// Create a context with the mocked transaction.
 	txCtx := tx.ContextWithTx(ctx, mockTx)
