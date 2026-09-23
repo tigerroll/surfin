@@ -69,15 +69,18 @@ Failure Matrixの各ケースは、`test/semantics/` 配下に「Executable Spec
 *   **実装方針:** `Given/When/Then` 形式の統合テストを作成し、各障害ポイントで「データがロールバックされているか」「チェックポイントが期待通りか」を検証する。
 *   **テストの目的:** 異常系における挙動をコードで固定し、将来のリファクタリングによる回帰を防ぐ。
 
+### 4.3. ExecutionContext Contract
+`ExecutionContext` は型安全なアクセサとネスト構造をサポートしており、実行状態の永続化およびコンポーネント間のデータ共有において、この堅牢な契約を遵守すること。
+
 ## 5. Development Roadmap (EPIC)
 Surfinの実行モデルを堅牢化するため、以下のフェーズで開発を進めます。
 
 1.  **Document execution lifecycle** (完了)
-2.  **Add normal lifecycle integration tests**
-3.  **Add restart integration tests**
-4.  **Add failure matrix tests**
-5.  **Define Update / saveCheckpoint failure policy**
-6.  **Harden ExecutionContext contract**
+2.  **Add normal lifecycle integration tests** (完了)
+3.  **Add restart integration tests** (完了)
+4.  **Add failure matrix tests** (完了)
+5.  **Define Update / saveCheckpoint failure policy** (完了)
+6.  **Harden ExecutionContext contract** (完了)
 7.  **Define idempotency / duplicate processing semantics**
 8.  **Stateful Processor / Tasklet semantics**
 9.  **Partition execution semantics**
