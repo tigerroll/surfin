@@ -225,15 +225,6 @@ func (s *TaskletStep) Execute(ctx context.Context, jobExecution *model.JobExecut
 		s.jobRepository.UpdateStepExecution(ctx, stepExecution) // Persist failure.
 		return exception.NewBatchError(s.id, "Failed to open Tasklet", err, false, false)
 	}
-	// Ensure the tasklet is closed when the step execution finishes, regardless of success or failure.
-	defer func() {
-		if closeErr := s.tasklet.Close(ctx, stepExecution); closeErr != nil {
-			logger.Errorf("TaskletStep '%s': Failed to close Tasklet: %v", s.id, closeErr)
-			// If Close fails, and no other error has occurred, this error might be propagated.
-			// However, the primary error should be from Execute if it failed.
-			// This defer is mainly for resource cleanup.
-		}
-	}()
 
 	// 4. Listener notification (BeforeStep).
 	s.notifyBeforeStep(ctx, stepExecution)
@@ -265,7 +256,20 @@ func (s *TaskletStep) Execute(ctx context.Context, jobExecution *model.JobExecut
 	// 8. Listener notification (AfterStep).
 	s.notifyAfterStep(ctx, stepExecution)
 
-	// 9. Persistence (executed within the StepExecutor's transaction).
+	// 9. Close the tasklet explicitly.
+	if closeErr := s.tasklet.Close(ctx, stepExecution); closeErr != nil {
+		logger.Errorf("TaskletStep '%s': Failed to close Tasklet: %v", s.id, closeErr)
+		// If Close fails, and no other error has occurred, this error might be propagated.
+		if err == nil {
+			err = closeErr
+		}
+	}
+
+	// 10. Retrieve Tasklet Execution Context again (in case Close updated it).
+	taskletEC = s.tasklet.GetExecutionContext()
+	stepExecution.ExecutionContext = taskletEC
+
+	// 11. Persistence (executed within the StepExecutor's transaction).
 	// This updates the final state of the StepExecution in the repository.
 	if updateErr := s.jobRepository.UpdateStepExecution(ctx, stepExecution); updateErr != nil {
 		logger.Errorf("TaskletStep '%s': Failed to update final StepExecution state: %v", s.id, updateErr)
