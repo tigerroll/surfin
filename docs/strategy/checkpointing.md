@@ -42,3 +42,17 @@
 -- 現在の設計では、ExecutionContextは batch_step_execution テーブルの execution_context カラムに保存されます。
 SELECT id, step_name, execution_context FROM batch_metadata.batch_step_execution;
 ```
+
+## 6. Design Contract
+
+チェックポイント機構を実装する際、コンポーネントとコンテナ（ChunkStep）は以下の契約を遵守しなければならない。
+
+### 6.1. Component Contract (ItemStream)
+*   **Idempotency:** `Update` メソッドは、複数回呼び出されても副作用が累積しないように実装すること。
+*   **Memory-Only:** `Update` メソッド内で外部リソース（DB等）への書き込みを行ってはならない。
+*   **Namespace:** `ExecutionContext` に保存するキーは、コンポーネント名（例: `reader.offset`）をプレフィックスとして使用し、衝突を避けること。
+
+### 6.2. Container Contract (ChunkStep)
+*   **Persistence Responsibility:** `saveCheckpoint` は、トランザクションコミット直後に呼び出し、永続化の成否を監視すること。
+*   **Error Propagation:** `saveCheckpoint` が失敗した場合、そのエラーは握りつぶさず、ステップの失敗として伝播させ、ジョブを `FAILED` 状態に遷移させること。
+*   **Finalization:** `Close` メソッドは、正常終了・異常終了に関わらず必ず呼び出され、最終的なチェックポイントを保存すること。
