@@ -57,6 +57,9 @@ type ChunkStep struct {
 	// dbResolver is used to resolve database connections dynamically.
 	dbResolver       coreAdapter.ResourceConnectionResolver
 	txManagerFactory tx.TransactionManagerFactory // Transaction manager factory for creating transaction managers.
+
+	// currentStepExecution holds the current step execution for checkpointing in Close.
+	currentStepExecution *model.StepExecution
 }
 
 // Verify that [ChunkStep] implements the [port.Step] interface.
@@ -393,6 +396,7 @@ func (s *ChunkStep) notifySkipWrite(ctx context.Context, stepExecution *model.St
 //
 //	error: An error if the step execution encounters a fatal issue or exceeds retry/skip limits.
 func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution) error {
+	s.currentStepExecution = stepExecution // Set current step execution for checkpointing in Close.
 
 	logger.Infof("ChunkStep '%s' executing.", s.id)
 
@@ -817,6 +821,26 @@ EndChunkLoop:
 
 	logger.Infof("ChunkStep '%s' finished. ExitStatus: %s", s.id, stepExecution.ExitStatus)
 	return chunkError
+}
+
+// Close finalizes the step execution by saving the final checkpoint.
+//
+// Parameters:
+//
+//	ctx: The context for the operation.
+//
+// Returns:
+//
+//	error: An error if saving the checkpoint fails.
+func (s *ChunkStep) Close(ctx context.Context) error {
+	if s.currentStepExecution != nil {
+		logger.Debugf("ChunkStep '%s': Finalizing checkpoint in Close.", s.id)
+		if err := s.saveCheckpoint(ctx, s.currentStepExecution, s.currentStepExecution.ReadCount, s.currentStepExecution.WriteCount); err != nil {
+			logger.Errorf("ChunkStep '%s': Failed to save final checkpoint in Close: %v", s.id, err)
+			return err
+		}
+	}
+	return nil
 }
 
 // saveCheckpoint retrieves the state of the Reader/Writer and saves it to the JobRepository.

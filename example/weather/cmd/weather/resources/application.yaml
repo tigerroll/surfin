@@ -9,7 +9,7 @@ surfin:
         database: "main"
         user: "weather"
         password: file:///run/secrets/database
-        schema: "public"
+        schema: "batch_metadata"
         sslmode: "disable"
         # Connection pool settings
         pool:

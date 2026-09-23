@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tigerroll/surfin/pkg/batch/adapter/database"         // Imports the database package.
-	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
+	"github.com/tigerroll/surfin/pkg/batch/adapter/database"
+	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter"
 	"github.com/tigerroll/surfin/pkg/batch/core/config"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
@@ -16,13 +16,16 @@ import (
 	"go.uber.org/fx"
 )
 
-// SQLJobRepository implements the repository.JobRepository interface.
+// SQLJobRepository implements the repository.JobRepository interface using SQL database operations.
 type SQLJobRepository struct {
-	dbResolver coreAdapter.ResourceConnectionResolver // dbResolver is used to resolve database connections. It is expected to resolve to a database.DBConnectionResolver.
+	// dbResolver is used to resolve database connections dynamically.
+	dbResolver coreAdapter.ResourceConnectionResolver
 	// TxManager is the transaction manager for the database.
 	TxManager tx.TransactionManager
-	// dbName is the name of the database connection used by this JobRepository (e.g., "metadata").
+	// dbName is the name of the database connection used by this repository.
 	dbName string
+	// schema is the database schema name.
+	schema string
 }
 
 // NewSQLJobRepository creates a new instance of SQLJobRepository.
@@ -31,27 +34,37 @@ type SQLJobRepository struct {
 //
 //	dbResolver: The database connection resolver.
 //	txManager: The transaction manager for the database.
-//	dbName: The name of the database connection to be used by this repository (e.g., "metadata").
+//	dbName: The name of the database connection to be used by this repository.
+//	schema: The database schema name.
 //
 // Returns:
 //
 //	A new instance of repository.JobRepository.
-func NewSQLJobRepository( // Line 39
+func NewSQLJobRepository(
 	dbResolver coreAdapter.ResourceConnectionResolver,
 	txManager tx.TransactionManager,
 	dbName string,
+	schema string,
 ) repository.JobRepository {
 	return &SQLJobRepository{
 		dbResolver: dbResolver,
 		TxManager:  txManager,
 		dbName:     dbName,
+		schema:     schema,
 	}
 }
 
-// getDBConnection is a helper function to get the DBConnection used by JobRepository.
+// getFullTableName returns the table name prefixed with the schema if configured.
+func (r *SQLJobRepository) getFullTableName(tableName string) string {
+	if r.schema != "" {
+		return fmt.Sprintf("%s.%s", r.schema, tableName)
+	}
+	return tableName
+}
+
+// getDBConnection retrieves the DBConnection used by the JobRepository.
 // This is used for operations that do not require an active transaction (e.g., ExecuteQuery, Count, Pluck).
 func (r *SQLJobRepository) getDBConnection(ctx context.Context) (database.DBConnection, error) {
-	// Use ResourceConnectionResolver to always get the latest ResourceConnection.
 	connAsResource, err := r.dbResolver.ResolveConnection(ctx, r.dbName)
 	if err != nil {
 		return nil, exception.NewBatchError("SQLJobRepository", fmt.Sprintf("Failed to resolve DB connection '%s'", r.dbName), err, false, false)
@@ -63,20 +76,19 @@ func (r *SQLJobRepository) getDBConnection(ctx context.Context) (database.DBConn
 	return conn, nil
 }
 
-// getTxExecutor checks if a Tx exists in the context.
-// If a transaction is found in the context, it returns the Tx (which implements TxExecutor); otherwise, it returns the DBConnection (which also implements TxExecutor).
-// This is used for operations within a transaction (ExecuteUpdate, ExecuteUpsert).
+// getTxExecutor returns a TxExecutor.
+// If a transaction exists in the context, it returns the Tx; otherwise, it returns the DBConnection.
+// This is used for operations within a transaction (e.g., ExecuteUpdate, ExecuteUpsert).
 func (r *SQLJobRepository) getTxExecutor(ctx context.Context) (tx.TxExecutor, error) {
-	// Get Tx from context.
 	if t, ok := tx.TxFromContext(ctx); ok {
-		return t, nil // If a transaction exists in the context, use it.
+		return t, nil
 	}
-	// If no transaction is found in the context, use the direct DBConnection.
 	return r.getDBConnection(ctx)
 }
 
 // --- JobInstance implementation ---
 
+// SaveJobInstance persists a new JobInstance.
 func (r *SQLJobRepository) SaveJobInstance(ctx context.Context, instance *model.JobInstance) error {
 	const op = "SQLJobRepository.SaveJobInstance"
 	entity := fromDomainJobInstance(instance)
@@ -86,18 +98,15 @@ func (r *SQLJobRepository) SaveJobInstance(ctx context.Context, instance *model.
 		return err
 	}
 
-	_, err = executor.ExecuteUpdate(ctx, entity, "CREATE", entity.TableName(), nil)
+	_, err = executor.ExecuteUpdate(ctx, entity, "CREATE", r.getFullTableName(entity.TableName()), nil)
 
 	if err != nil {
-		if executor.IsTableNotExistError(err) { // If the table does not exist, it means migrations haven't been run yet.
-			// In this case, we ignore the error and return nil, as the table will be created later.
-			return nil
-		}
 		return exception.NewBatchError(op, fmt.Sprintf("failed to save JobInstance (ID: %s)", instance.ID), err, true, false)
 	}
 	return nil
 }
 
+// UpdateJobInstance updates the state of an existing JobInstance.
 func (r *SQLJobRepository) UpdateJobInstance(ctx context.Context, instance *model.JobInstance) error {
 	const op = "SQLJobRepository.UpdateJobInstance"
 
@@ -105,7 +114,7 @@ func (r *SQLJobRepository) UpdateJobInstance(ctx context.Context, instance *mode
 	instance.Version++
 	entity := fromDomainJobInstance(instance)
 
-	tableName := entity.TableName()
+	tableName := r.getFullTableName(entity.TableName())
 	executor, err := r.getTxExecutor(ctx)
 	if err != nil {
 		return err
@@ -119,21 +128,17 @@ func (r *SQLJobRepository) UpdateJobInstance(ctx context.Context, instance *mode
 		map[string]interface{}{"version": originalVersion},
 	)
 	if err != nil {
-		if executor.IsTableNotExistError(err) {
-			// Ignore if table does not exist (e.g., before migrations are run).
-			instance.Version = originalVersion // Rollback version
-			return nil
-		}
-		instance.Version = originalVersion // Rollback version
+		instance.Version = originalVersion
 		return exception.NewBatchError(op, fmt.Sprintf("failed to update JobInstance (ID: %s)", instance.ID), err, true, false)
 	}
 	if rowsAffected == 0 {
-		instance.Version = originalVersion // Rollback version
+		instance.Version = originalVersion
 		return exception.NewOptimisticLockingFailureException("repository", fmt.Sprintf("JobInstance (ID: %s) with version %d not found for update", instance.ID, originalVersion), nil)
 	}
 	return nil
 }
 
+// FindJobInstanceByJobNameAndParameters finds a JobInstance by job name and parameters.
 func (r *SQLJobRepository) FindJobInstanceByJobNameAndParameters(ctx context.Context, jobName string, params model.JobParameters) (*model.JobInstance, error) {
 	const op = "SQLJobRepository.FindJobInstanceByJobNameAndParameters"
 	hash, err := params.Hash()
@@ -151,10 +156,9 @@ func (r *SQLJobRepository) FindJobInstanceByJobNameAndParameters(ctx context.Con
 	err = conn.ExecuteQuery(ctx, &entities, map[string]interface{}{"job_name": jobName, "parameters_hash": hash})
 
 	if err != nil {
-		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
+		if conn.IsTableNotExistError(err) {
 			return nil, repository.ErrJobInstanceNotFound
 		}
-		// ExecuteQuery (Find) does not return ErrRecordNotFound, so only check for other DB errors here.
 		return nil, exception.NewBatchError(op, "failed to find JobInstance", err, true, false)
 	}
 
@@ -162,7 +166,6 @@ func (r *SQLJobRepository) FindJobInstanceByJobNameAndParameters(ctx context.Con
 		return nil, repository.ErrJobInstanceNotFound
 	}
 
-	// Iterate through retrieved instances to find the one with an exact parameter match.
 	for _, entity := range entities {
 		domainInstance := toDomainJobInstance(&entity)
 		if domainInstance.Parameters.Equal(params) {
@@ -171,9 +174,10 @@ func (r *SQLJobRepository) FindJobInstanceByJobNameAndParameters(ctx context.Con
 		logger.Warnf("%s: JobInstance (ID: %s) hash matched but parameters mismatched. Possible hash collision.", op, domainInstance.ID)
 	}
 
-	return nil, repository.ErrJobInstanceNotFound // No instance found with exactly matching parameters.
+	return nil, repository.ErrJobInstanceNotFound
 }
 
+// FindJobInstanceByID finds a JobInstance by its ID.
 func (r *SQLJobRepository) FindJobInstanceByID(ctx context.Context, id string) (*model.JobInstance, error) {
 	const op = "SQLJobRepository.FindJobInstanceByID"
 	var entity JobInstanceEntity
@@ -186,14 +190,12 @@ func (r *SQLJobRepository) FindJobInstanceByID(ctx context.Context, id string) (
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"id": id}, "", 1)
 
 	if err != nil {
-		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
+		if conn.IsTableNotExistError(err) {
 			return nil, repository.ErrJobInstanceNotFound
 		}
-		// ExecuteQuery (Find) does not return ErrRecordNotFound, so only catch other DB errors here.
 		return nil, exception.NewBatchError(op, fmt.Sprintf("failed to find JobInstance by ID: %s", id), err, true, false)
 	}
 
-	// If no record found
 	if entity.ID == "" {
 		return nil, repository.ErrJobInstanceNotFound
 	}
@@ -201,7 +203,7 @@ func (r *SQLJobRepository) FindJobInstanceByID(ctx context.Context, id string) (
 	return toDomainJobInstance(&entity), nil
 }
 
-// FindJobInstancesByJobNameAndPartialParameters implements repository.JobInstance.
+// FindJobInstancesByJobNameAndPartialParameters finds JobInstances by job name and partial parameters.
 func (r *SQLJobRepository) FindJobInstancesByJobNameAndPartialParameters(ctx context.Context, jobName string, partialParams model.JobParameters) ([]*model.JobInstance, error) {
 	const op = "SQLJobRepository.FindJobInstancesByJobNameAndPartialParameters"
 	var entities []JobInstanceEntity
@@ -216,7 +218,7 @@ func (r *SQLJobRepository) FindJobInstancesByJobNameAndPartialParameters(ctx con
 	err = conn.ExecuteQueryAdvanced(ctx, &entities, query, "create_time desc", 0)
 
 	if err != nil {
-		if conn.IsTableNotExistError(err) { // If the table does not exist, return an empty slice.
+		if conn.IsTableNotExistError(err) {
 			return []*model.JobInstance{}, nil
 		}
 		return nil, exception.NewBatchError(op, "failed to find JobInstances by job name", err, true, false)
@@ -237,7 +239,7 @@ func (r *SQLJobRepository) FindJobInstancesByJobNameAndPartialParameters(ctx con
 	return matchingInstances, nil
 }
 
-// GetJobInstanceCount implements repository.JobInstance.
+// GetJobInstanceCount returns the count of JobInstances for a given job name.
 func (r *SQLJobRepository) GetJobInstanceCount(ctx context.Context, jobName string) (int, error) {
 	const op = "SQLJobRepository.GetJobInstanceCount"
 
@@ -255,7 +257,7 @@ func (r *SQLJobRepository) GetJobInstanceCount(ctx context.Context, jobName stri
 	return int(count), nil
 }
 
-// GetJobNames implements repository.JobInstance.
+// GetJobNames returns a list of all job names.
 func (r *SQLJobRepository) GetJobNames(ctx context.Context) ([]string, error) {
 	const op = "SQLJobRepository.GetJobNames"
 	var jobNames []string
@@ -277,6 +279,7 @@ func (r *SQLJobRepository) GetJobNames(ctx context.Context) ([]string, error) {
 
 // --- JobExecution implementation ---
 
+// SaveJobExecution persists a new JobExecution.
 func (r *SQLJobRepository) SaveJobExecution(ctx context.Context, jobExecution *model.JobExecution) error {
 	const op = "SQLJobRepository.SaveJobExecution"
 	entity := fromDomainJobExecution(jobExecution)
@@ -286,18 +289,15 @@ func (r *SQLJobRepository) SaveJobExecution(ctx context.Context, jobExecution *m
 		return err
 	}
 
-	_, err = executor.ExecuteUpdate(ctx, entity, "CREATE", entity.TableName(), nil)
+	_, err = executor.ExecuteUpdate(ctx, entity, "CREATE", r.getFullTableName(entity.TableName()), nil)
 
 	if err != nil {
-		if executor.IsTableNotExistError(err) { // If the table does not exist, ignore the error.
-			// This can happen if the JobRepository is accessed before migrations are run.
-			return nil
-		}
 		return exception.NewBatchError(op, fmt.Sprintf("failed to save JobExecution (ID: %s)", jobExecution.ID), err, true, false)
 	}
 	return nil
 }
 
+// UpdateJobExecution updates the state of an existing JobExecution.
 func (r *SQLJobRepository) UpdateJobExecution(ctx context.Context, jobExecution *model.JobExecution) error {
 	const op = "SQLJobRepository.UpdateJobExecution"
 
@@ -306,7 +306,7 @@ func (r *SQLJobRepository) UpdateJobExecution(ctx context.Context, jobExecution 
 	jobExecution.LastUpdated = time.Now()
 	entity := fromDomainJobExecution(jobExecution)
 
-	tableName := entity.TableName()
+	tableName := r.getFullTableName(entity.TableName())
 	executor, err := r.getTxExecutor(ctx)
 	if err != nil {
 		return err
@@ -320,10 +320,6 @@ func (r *SQLJobRepository) UpdateJobExecution(ctx context.Context, jobExecution 
 		map[string]interface{}{"version": originalVersion},
 	)
 	if err != nil {
-		if executor.IsTableNotExistError(err) { // If table does not exist, ignore.
-			jobExecution.Version = originalVersion
-			return nil
-		}
 		jobExecution.Version = originalVersion
 		return exception.NewBatchError(op, fmt.Sprintf("failed to update JobExecution (ID: %s)", jobExecution.ID), err, true, false)
 	}
@@ -334,6 +330,7 @@ func (r *SQLJobRepository) UpdateJobExecution(ctx context.Context, jobExecution 
 	return nil
 }
 
+// FindJobExecutionByID finds a JobExecution by its ID.
 func (r *SQLJobRepository) FindJobExecutionByID(ctx context.Context, executionID string) (*model.JobExecution, error) {
 	const op = "SQLJobRepository.FindJobExecutionByID"
 	var entity JobExecutionEntity
@@ -346,8 +343,7 @@ func (r *SQLJobRepository) FindJobExecutionByID(ctx context.Context, executionID
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"id": executionID}, "", 1)
 
 	if err != nil {
-		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
-			// This can happen if the JobRepository is accessed before migrations are run.
+		if conn.IsTableNotExistError(err) {
 			return nil, repository.ErrJobExecutionNotFound
 		}
 		return nil, exception.NewBatchError(op, fmt.Sprintf("failed to find JobExecution by ID: %s", executionID), err, true, false)
@@ -382,8 +378,7 @@ func (r *SQLJobRepository) FindStepExecutionsByJobExecutionID(ctx context.Contex
 	err = conn.ExecuteQueryAdvanced(ctx, &entities, map[string]interface{}{"job_execution_id": jobExecutionID}, "start_time asc", 0)
 
 	if err != nil {
-		if conn.IsTableNotExistError(err) { // If the table does not exist, return an empty slice.
-			// This can happen if the JobRepository is accessed before migrations are run.
+		if conn.IsTableNotExistError(err) {
 			return []*model.StepExecution{}, nil
 		}
 		return nil, exception.NewBatchError(op, fmt.Sprintf("failed to find StepExecutions by JobExecution ID: %s", jobExecutionID), err, true, false)
@@ -397,6 +392,7 @@ func (r *SQLJobRepository) FindStepExecutionsByJobExecutionID(ctx context.Contex
 	return domainExecutions, nil
 }
 
+// FindLatestRestartableJobExecution finds the latest restartable JobExecution for a given JobInstance.
 func (r *SQLJobRepository) FindLatestRestartableJobExecution(ctx context.Context, jobInstanceID string) (*model.JobExecution, error) {
 	const op = "SQLJobRepository.FindLatestRestartableJobExecution"
 	var entity JobExecutionEntity
@@ -409,7 +405,7 @@ func (r *SQLJobRepository) FindLatestRestartableJobExecution(ctx context.Context
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"job_instance_id": jobInstanceID}, "create_time desc", 1)
 
 	if err != nil {
-		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
+		if conn.IsTableNotExistError(err) {
 			return nil, repository.ErrJobExecutionNotFound
 		}
 		return nil, exception.NewBatchError(op, fmt.Sprintf("failed to find latest JobExecution for JobInstance ID: %s", jobInstanceID), err, true, false)
@@ -432,10 +428,10 @@ func (r *SQLJobRepository) FindLatestRestartableJobExecution(ctx context.Context
 		return domainExecution, nil
 	}
 
-	// If running or completed, return nil.
 	return nil, repository.ErrJobExecutionNotFound
 }
 
+// FindJobExecutionsByJobInstance finds all JobExecutions for a given JobInstance.
 func (r *SQLJobRepository) FindJobExecutionsByJobInstance(ctx context.Context, jobInstance *model.JobInstance) ([]*model.JobExecution, error) {
 	const op = "SQLJobRepository.FindJobExecutionsByJobInstance"
 	var entities []JobExecutionEntity
@@ -445,12 +441,10 @@ func (r *SQLJobRepository) FindJobExecutionsByJobInstance(ctx context.Context, j
 		return nil, err
 	}
 
-	// Filter by JobInstanceID and retrieve all associated JobExecution entities, ordered by creation time descending.
 	err = conn.ExecuteQueryAdvanced(ctx, &entities, map[string]interface{}{"job_instance_id": jobInstance.ID}, "create_time desc", 0)
 
 	if err != nil {
-		if conn.IsTableNotExistError(err) { // If the table does not exist, return an empty slice.
-			// This can happen if the JobRepository is accessed before migrations are run.
+		if conn.IsTableNotExistError(err) {
 			return []*model.JobExecution{}, nil
 		}
 		return nil, exception.NewBatchError(op, fmt.Sprintf("failed to find JobExecutions for JobInstance ID: %s", jobInstance.ID), err, true, false)
@@ -465,13 +459,12 @@ func (r *SQLJobRepository) FindJobExecutionsByJobInstance(ctx context.Context, j
 		domainExecutions[i] = toDomainJobExecution(&entity)
 	}
 
-	// StepExecution entities are not loaded here to avoid N+1 queries.
-	// Use FindJobExecutionByID if StepExecution details are required.
 	return domainExecutions, nil
 }
 
 // --- StepExecution implementation ---
 
+// SaveStepExecution persists a new StepExecution.
 func (r *SQLJobRepository) SaveStepExecution(ctx context.Context, stepExecution *model.StepExecution) error {
 	const op = "SQLJobRepository.SaveStepExecution"
 	entity := fromDomainStepExecution(stepExecution)
@@ -481,17 +474,15 @@ func (r *SQLJobRepository) SaveStepExecution(ctx context.Context, stepExecution 
 		return err
 	}
 
-	_, err = executor.ExecuteUpdate(ctx, entity, "CREATE", entity.TableName(), nil)
+	_, err = executor.ExecuteUpdate(ctx, entity, "CREATE", r.getFullTableName(entity.TableName()), nil)
 
 	if err != nil {
-		if executor.IsTableNotExistError(err) { // If table does not exist, ignore.
-			return nil
-		}
 		return exception.NewBatchError(op, fmt.Sprintf("failed to save StepExecution (ID: %s)", stepExecution.ID), err, true, false)
 	}
 	return nil
 }
 
+// UpdateStepExecution updates the state of an existing StepExecution.
 func (r *SQLJobRepository) UpdateStepExecution(ctx context.Context, stepExecution *model.StepExecution) error {
 	const op = "SQLJobRepository.UpdateStepExecution"
 
@@ -500,7 +491,7 @@ func (r *SQLJobRepository) UpdateStepExecution(ctx context.Context, stepExecutio
 	stepExecution.LastUpdated = time.Now()
 	entity := fromDomainStepExecution(stepExecution)
 
-	tableName := entity.TableName()
+	tableName := r.getFullTableName(entity.TableName())
 	executor, err := r.getTxExecutor(ctx)
 	if err != nil {
 		return err
@@ -514,10 +505,6 @@ func (r *SQLJobRepository) UpdateStepExecution(ctx context.Context, stepExecutio
 		map[string]interface{}{"version": originalVersion},
 	)
 	if err != nil {
-		if executor.IsTableNotExistError(err) { // If table does not exist, ignore.
-			stepExecution.Version = originalVersion
-			return nil
-		}
 		stepExecution.Version = originalVersion
 		return exception.NewBatchError(op, fmt.Sprintf("failed to update StepExecution (ID: %s)", stepExecution.ID), err, true, false)
 	}
@@ -528,6 +515,7 @@ func (r *SQLJobRepository) UpdateStepExecution(ctx context.Context, stepExecutio
 	return nil
 }
 
+// FindStepExecutionByID finds a StepExecution by its ID.
 func (r *SQLJobRepository) FindStepExecutionByID(ctx context.Context, executionID string) (*model.StepExecution, error) {
 	const op = "SQLJobRepository.FindStepExecutionByID"
 	var entity StepExecutionEntity
@@ -540,8 +528,7 @@ func (r *SQLJobRepository) FindStepExecutionByID(ctx context.Context, executionI
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"id": executionID}, "", 1)
 
 	if err != nil {
-		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
-			// This can happen if the JobRepository is accessed before migrations are run.
+		if conn.IsTableNotExistError(err) {
 			return nil, repository.ErrStepExecutionNotFound
 		}
 		return nil, exception.NewBatchError(op, fmt.Sprintf("failed to find StepExecution by ID: %s", executionID), err, true, false)
@@ -556,6 +543,7 @@ func (r *SQLJobRepository) FindStepExecutionByID(ctx context.Context, executionI
 
 // --- CheckpointData implementation ---
 
+// SaveCheckpointData persists CheckpointData.
 func (r *SQLJobRepository) SaveCheckpointData(ctx context.Context, data *model.CheckpointData) error {
 	const op = "SQLJobRepository.SaveCheckpointData"
 
@@ -572,18 +560,15 @@ func (r *SQLJobRepository) SaveCheckpointData(ctx context.Context, data *model.C
 	conflictCols := []string{"step_execution_id"}
 	updateCols := []string{"execution_context", "last_updated"}
 
-	_, err = executor.ExecuteUpsert(ctx, entity, entity.TableName(), conflictCols, updateCols)
+	_, err = executor.ExecuteUpsert(ctx, entity, r.getFullTableName(entity.TableName()), conflictCols, updateCols)
 
 	if err != nil {
-		if executor.IsTableNotExistError(err) { // If the table does not exist, ignore the error.
-			// The checkpoint data will be saved once the table is created.
-			return nil
-		}
 		return exception.NewBatchError(op, fmt.Sprintf("failed to save CheckpointData for StepExecution (ID: %s)", data.StepExecutionID), err, true, false)
 	}
 	return nil
 }
 
+// FindCheckpointData finds CheckpointData by StepExecution ID.
 func (r *SQLJobRepository) FindCheckpointData(ctx context.Context, stepExecutionID string) (*model.CheckpointData, error) {
 	const op = "SQLJobRepository.FindCheckpointData"
 	var entity CheckpointDataEntity
@@ -596,8 +581,7 @@ func (r *SQLJobRepository) FindCheckpointData(ctx context.Context, stepExecution
 	err = conn.ExecuteQueryAdvanced(ctx, &entity, map[string]interface{}{"step_execution_id": stepExecutionID}, "", 1)
 
 	if err != nil {
-		if conn.IsTableNotExistError(err) { // If the table does not exist, treat it as not found.
-			// This can happen if the JobRepository is accessed before migrations are run.
+		if conn.IsTableNotExistError(err) {
 			return nil, repository.ErrCheckpointDataNotFound
 		}
 		return nil, exception.NewBatchError(op, fmt.Sprintf("failed to find CheckpointData by StepExecution ID: %s", stepExecutionID), err, true, false)
@@ -610,10 +594,8 @@ func (r *SQLJobRepository) FindCheckpointData(ctx context.Context, stepExecution
 	return toDomainCheckpointData(&entity), nil
 }
 
-// Close implements repository.JobRepository.
+// Close releases resources used by the repository.
 func (r *SQLJobRepository) Close() error {
-	// The underlying DBConnection is managed by the DBProvider and its lifecycle,
-	// so it is not closed directly by the repository.
 	return nil
 }
 
@@ -623,7 +605,7 @@ var _ repository.JobRepository = (*SQLJobRepository)(nil)
 // JobRepositoryParams defines the dependencies required to create a NewJobRepository.
 type JobRepositoryParams struct {
 	fx.In
-	DBResolver coreAdapter.ResourceConnectionResolver // DBResolver is used to resolve database connections.
+	DBResolver coreAdapter.ResourceConnectionResolver
 	// MetadataTxManager is the transaction manager for the metadata database.
 	MetadataTxManager tx.TransactionManager `name:"metadata"`
 	// Cfg is the application configuration.
@@ -633,12 +615,19 @@ type JobRepositoryParams struct {
 // NewJobRepository creates and returns a JobRepository instance.
 // This function is intended to be used as an Fx provider.
 func NewJobRepository(p JobRepositoryParams) repository.JobRepository {
-	// Determine the database connection name for the JobRepository.
-	// It defaults to "metadata" if not explicitly configured in Infrastructure.JobRepositoryDBRef.
 	dbName := p.Cfg.Surfin.Infrastructure.JobRepositoryDBRef
 	if dbName == "" {
 		dbName = "metadata"
 	}
 
-	return NewSQLJobRepository(p.DBResolver, p.MetadataTxManager, dbName)
+	var schema string
+	if dbConfigs, ok := p.Cfg.Surfin.AdapterConfigs["database"].(map[string]interface{}); ok {
+		if dbConfig, ok := dbConfigs[dbName].(map[string]interface{}); ok {
+			if s, ok := dbConfig["schema"].(string); ok {
+				schema = s
+			}
+		}
+	}
+
+	return NewSQLJobRepository(p.DBResolver, p.MetadataTxManager, dbName, schema)
 }
