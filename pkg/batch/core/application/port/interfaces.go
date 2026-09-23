@@ -17,6 +17,16 @@ var ErrNoMoreItems = errors.New("no more items to read")
 // ErrExecutionContextNotSupported is returned when a component does not support getting or setting ExecutionContext.
 var ErrExecutionContextNotSupported = errors.New("execution context not supported by this component")
 
+// ItemStream defines the lifecycle for components that need to maintain state (checkpointing).
+type ItemStream interface {
+	// Open initializes the component and restores state.
+	Open(ctx context.Context, ec model.ExecutionContext) error
+	// Update updates the state (checkpoint) after a chunk is committed.
+	Update(ctx context.Context, ec model.ExecutionContext) error
+	// Close releases resources.
+	Close(ctx context.Context) error
+}
+
 // FlowElement is the basic interface representing an element (Step, Decision, Split) in a job flow.
 // Each flow element has a unique ID.
 type FlowElement interface {

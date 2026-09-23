@@ -643,6 +643,7 @@ RetryChunk: // Jump here on write retry
 					// 2. Skippable error (chunk splitting)
 					if s.skipPolicy.ShouldSkip(writeErr) && stepExecution.SkipWriteCount < s.skipPolicy.GetSkipLimit() {
 						s.skipPolicy.IncrementSkipCount()
+						stepExecution.SkipWriteCount++
 						stepExecution.AddFailureException(writeErr)
 						logger.Warnf("ChunkStep '%s': Item write failed (Skip Count: %d/%d). Triggering chunk splitting.", s.id, s.skipPolicy.GetSkipCount(), s.skipPolicy.GetSkipLimit())
 
@@ -700,19 +701,37 @@ RetryChunk: // Jump here on write retry
 		}
 		commitCount++
 
+		// 3.5. Update ItemStream state (Update hook)
+		// After successful commit, update the state of ItemStream components.
+		if stream, ok := s.reader.(port.ItemStream); ok {
+			if err := stream.Update(txCtx, stepExecution.ExecutionContext); err != nil {
+				logger.Warnf("ChunkStep '%s': Failed to update ItemReader state: %v", s.id, err)
+			}
+		}
+		if stream, ok := s.processor.(port.ItemStream); ok {
+			if err := stream.Update(txCtx, stepExecution.ExecutionContext); err != nil {
+				logger.Warnf("ChunkStep '%s': Failed to update ItemProcessor state: %v", s.id, err)
+			}
+		}
+		if stream, ok := s.writer.(port.ItemStream); ok {
+			if err := stream.Update(txCtx, stepExecution.ExecutionContext); err != nil {
+				logger.Warnf("ChunkStep '%s': Failed to update ItemWriter state: %v", s.id, err)
+			}
+		}
+
 		// Listener notification (AfterChunk - successful)
 		for _, l := range s.chunkListeners {
 			l.AfterChunk(txCtx, stepExecution)
 		}
 
-		// 3.5. Save checkpoint (T1/T2 Step 1.1.2)
+		// 3.6. Save checkpoint (T1/T2 Step 1.1.2)
 		// After successful commit, save Reader/Writer state and statistics
 		if err := s.saveCheckpoint(ctx, stepExecution, readCount, writeCount); err != nil {
 			logger.Errorf("ChunkStep '%s': Failed to save checkpoint after commit: %v", s.id, err)
 			// Checkpoint save failure is not fatal, but log it
 		}
 
-		// 3.6. Determine end of chunk processing
+		// 3.7. Determine end of chunk processing
 		if isEOF {
 			// If read ended with EOF
 			logger.Debugf("ChunkStep '%s': Reached EOF. Exiting chunk loop.", s.id)

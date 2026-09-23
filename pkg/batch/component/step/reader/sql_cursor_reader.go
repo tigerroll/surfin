@@ -75,6 +75,13 @@ func (r *SqlCursorReader[T]) Open(ctx context.Context, ec model.ExecutionContext
 	return nil
 }
 
+// Update updates the state (checkpoint) after a chunk is committed.
+func (r *SqlCursorReader[T]) Update(ctx context.Context, ec model.ExecutionContext) error {
+	// Persist the current read count to the ExecutionContext
+	ec[r.name+".readCount"] = r.readCount
+	return nil
+}
+
 // Read reads the next data item.
 // It returns io.EOF if no more data is available. The context can be used for cancellation.
 func (r *SqlCursorReader[T]) Read(ctx context.Context) (T, error) {
@@ -158,3 +165,6 @@ func (r *SqlCursorReader[T]) SetExecutionContext(ctx context.Context, ec model.E
 
 // Verify that SqlCursorReader implements the port.ItemReader interface at compile time.
 var _ port.ItemReader[any] = (*SqlCursorReader[any])(nil)
+
+// Verify that SqlCursorReader implements the port.ItemStream interface at compile time.
+var _ port.ItemStream = (*SqlCursorReader[any])(nil)

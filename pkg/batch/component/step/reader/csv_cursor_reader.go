@@ -7,6 +7,7 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 )
 
@@ -96,6 +97,13 @@ func (r *CsvCursorReader[T]) Open(ctx context.Context, ec model.ExecutionContext
 	return nil
 }
 
+// Update updates the state (checkpoint) after a chunk is committed.
+func (r *CsvCursorReader[T]) Update(ctx context.Context, ec model.ExecutionContext) error {
+	// Persist the current read count to the ExecutionContext
+	ec[readCountKey] = strconv.Itoa(r.readCount)
+	return nil
+}
+
 // Read reads the next record, maps it to type T using the provided mapper,
 // and updates the internal read count in the ExecutionContext.
 func (r *CsvCursorReader[T]) Read(ctx context.Context) (T, error) {
@@ -125,3 +133,20 @@ func (r *CsvCursorReader[T]) Close(ctx context.Context) error {
 	}
 	return nil
 }
+
+// SetExecutionContext sets the state of the ItemReader to the [model.ExecutionContext].
+func (r *CsvCursorReader[T]) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
+	r.ec = ec
+	return nil
+}
+
+// GetExecutionContext retrieves the current state of the ItemReader as [model.ExecutionContext].
+func (r *CsvCursorReader[T]) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
+	return r.ec, nil
+}
+
+// Verify that CsvCursorReader implements the port.ItemReader interface at compile time.
+var _ port.ItemReader[any] = (*CsvCursorReader[any])(nil)
+
+// Verify that CsvCursorReader implements the port.ItemStream interface at compile time.
+var _ port.ItemStream = (*CsvCursorReader[any])(nil)
