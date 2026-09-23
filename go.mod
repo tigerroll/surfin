@@ -1,6 +1,6 @@
 module github.com/tigerroll/surfin
 
-go 1.25.0
+go 1.27
 
 require (
 	cloud.google.com/go/storage v1.39.1
