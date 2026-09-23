@@ -984,9 +984,11 @@ func (je *JobExecution) MarkAsCompleted() {
 
 // MarkAsFailed updates the JobExecution status to FAILED and adds error information.
 func (je *JobExecution) MarkAsFailed(err error) {
-	if err := je.TransitionTo(BatchStatusFailed); err != nil {
-		logger.Warnf("Could not update JobExecution (ID: %s) status to FAILED: %v", je.ID, err)
-		je.Status = BatchStatusFailed
+	if je.Status != BatchStatusFailed {
+		if err := je.TransitionTo(BatchStatusFailed); err != nil {
+			logger.Warnf("Could not update JobExecution (ID: %s) status to FAILED: %v", je.ID, err)
+			je.Status = BatchStatusFailed
+		}
 	}
 	je.ExitStatus = ExitStatusFailed
 	now := time.Now()
@@ -1109,9 +1111,11 @@ func (se *StepExecution) MarkAsCompleted() {
 
 // MarkAsFailed updates the StepExecution status to FAILED and adds error information.
 func (se *StepExecution) MarkAsFailed(err error) {
-	if err := se.TransitionTo(BatchStatusFailed); err != nil {
-		logger.Warnf("Could not update StepExecution (ID: %s) status to FAILED: %v", se.ID, err)
-		se.Status = BatchStatusFailed
+	if se.Status != BatchStatusFailed {
+		if err := se.TransitionTo(BatchStatusFailed); err != nil {
+			logger.Warnf("Could not update StepExecution (ID: %s) status to FAILED: %v", se.ID, err)
+			se.Status = BatchStatusFailed
+		}
 	}
 	se.ExitStatus = ExitStatusFailed
 	now := time.Now()

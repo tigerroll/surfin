@@ -145,6 +145,11 @@ func (w *ParquetWriter[T]) Open(ctx context.Context, ec model.ExecutionContext) 
 	return nil
 }
 
+// Update updates the state (checkpoint) after a chunk is committed.
+func (w *ParquetWriter[T]) Update(ctx context.Context, ec model.ExecutionContext) error {
+	return nil
+}
+
 // Write buffers items for later writing. It does not perform I/O operations until Flush is called.
 func (w *ParquetWriter[T]) Write(ctx context.Context, items []T) error {
 	if w.bufferedItems == nil {
@@ -343,3 +348,6 @@ var _ port.ItemWriter[any] = (*ParquetWriter[any])(nil)
 
 // Verify that [ParquetWriter] satisfies the [port.ItemFlusher] interface at compile time.
 var _ port.ItemFlusher = (*ParquetWriter[any])(nil)
+
+// Verify that [ParquetWriter] satisfies the [port.ItemStream] interface at compile time.
+var _ port.ItemStream = (*ParquetWriter[any])(nil)

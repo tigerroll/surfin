@@ -53,6 +53,9 @@ func NewSqlBulkWriter[T any](name string, bulkSize int, tableName string, confli
 // Verify that [SqlBulkWriter] implements the [port.ItemWriter] interface at compile time.
 var _ port.ItemWriter[any] = (*SqlBulkWriter[any])(nil)
 
+// Verify that [SqlBulkWriter] implements the [port.ItemStream] interface at compile time.
+var _ port.ItemStream = (*SqlBulkWriter[any])(nil)
+
 // Open initializes the writer.
 // As [tx.Tx] interface handles internal statement management, no specific initialization
 // or prepared statement creation is required within this method.
@@ -69,6 +72,11 @@ var _ port.ItemWriter[any] = (*SqlBulkWriter[any])(nil)
 func (w *SqlBulkWriter[T]) Open(ctx context.Context, ec model.ExecutionContext) error {
 	logger.Infof("SqlBulkWriter '%s': Opened.", w.name)
 	w.stepExecutionContext = ec // Store the ExecutionContext for potential use by the framework.
+	return nil
+}
+
+// Update updates the state (checkpoint) after a chunk is committed.
+func (w *SqlBulkWriter[T]) Update(ctx context.Context, ec model.ExecutionContext) error {
 	return nil
 }
 
