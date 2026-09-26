@@ -78,6 +78,7 @@ Failure Matrixの各ケースは、`test/semantics/` 配下に「Executable Spec
 再実行性および冪等性を安全に担保するため、以下のリスナーアーキテクチャを実装する。
 *   **StepExecutionListener:** ステップ全体のセットアップ（BeforeStep）およびクリーンアップ（AfterStep）を担う。
 *   **ChunkListener:** トランザクション境界での処理（BeforeChunk, AfterChunk, OnError）を担う。
+*   **ItemListener (Read/Process/Write):** 各アイテム処理の前後およびエラー・スキップ時のフックを担う。
 *   **重要性:** これらのフックは、ユーザーが冪等性担保ロジック（リソースのクリーンアップ等）を記述するための「安全な場所」を提供する。
 
 ## 5. Development Roadmap (EPIC)
