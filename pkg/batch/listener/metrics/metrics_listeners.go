@@ -70,6 +70,10 @@ func (l *MetricsChunkListener) AfterChunk(ctx context.Context, stepExecution *mo
 	// but here only chunk commits are recorded.
 }
 
+func (l *MetricsChunkListener) OnError(ctx context.Context, stepExecution *model.StepExecution, err error) {
+	l.recorder.RecordExecutionError(ctx, err)
+}
+
 var _ port.ChunkListener = (*MetricsChunkListener)(nil)
 
 // --- Item Read Listener ---
