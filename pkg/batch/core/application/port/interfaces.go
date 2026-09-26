@@ -427,6 +427,8 @@ type ChunkListener interface {
 	BeforeChunk(ctx context.Context, stepExecution *model.StepExecution)
 	// AfterChunk is called after chunk processing completes (after commit or rollback).
 	AfterChunk(ctx context.Context, stepExecution *model.StepExecution)
+	// OnError is called if an error occurs during chunk processing.
+	OnError(ctx context.Context, stepExecution *model.StepExecution, err error)
 }
 
 // JobExecutionListener is an interface for handling job execution events.

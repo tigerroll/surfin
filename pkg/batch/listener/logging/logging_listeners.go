@@ -66,6 +66,10 @@ func (l *LoggingChunkListener) AfterChunk(ctx context.Context, stepExecution *mo
 	logger.Debugf("ChunkListener: AfterChunk - StepName: %s, Read: %d, Write: %d", stepExecution.StepName, stepExecution.ReadCount, stepExecution.WriteCount)
 }
 
+func (l *LoggingChunkListener) OnError(ctx context.Context, stepExecution *model.StepExecution, err error) {
+	logger.Errorf("ChunkListener: OnError - StepName: %s, Error: %v", stepExecution.StepName, err)
+}
+
 var _ port.ChunkListener = (*LoggingChunkListener)(nil)
 
 // --- Item Read Listener ---

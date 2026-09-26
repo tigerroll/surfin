@@ -587,6 +587,11 @@ RetryChunk: // Jump here on write retry
 			// If an error occurred during read or process, rollback the transaction
 			currentTxManager.Rollback(txAdapter)
 
+			// Listener notification (OnError)
+			for _, l := range s.chunkListeners {
+				l.OnError(txCtx, stepExecution, chunkError)
+			}
+
 			// Listener notification (AfterChunk - failed)
 			for _, l := range s.chunkListeners {
 				l.AfterChunk(txCtx, stepExecution)
@@ -691,6 +696,11 @@ RetryChunk: // Jump here on write retry
 		// 3.4. Commit transaction
 		if commitErr := currentTxManager.Commit(txAdapter); commitErr != nil {
 			chunkError = exception.NewBatchError(s.id, "Failed to commit transaction for chunk", commitErr, false, false)
+
+			// Listener notification (OnError)
+			for _, l := range s.chunkListeners {
+				l.OnError(txCtx, stepExecution, chunkError)
+			}
 
 			// Listener notification (AfterChunk - failed)
 			for _, l := range s.chunkListeners {
