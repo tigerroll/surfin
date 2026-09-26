@@ -55,3 +55,9 @@ type IdempotentWriter[I any] interface {
 *   **Writer:** 冪等性を担保できないWriterは、その旨をドキュメントに明記し、再実行時の挙動（例: 「再実行不可」）を定義すること。
 *   **Processor:** 状態を持つProcessor（ステートフルProcessor）は、必ず `ItemStream` インターフェースを実装し、状態の保存・復元をサポートすること。
 *   **ExecutionContext:** キーの衝突を避けるため、`component.name.key` のような階層構造（`PutNested`）を使用すること。
+
+## 7. Common Pitfalls (よくある落とし穴)
+
+*   **非決定的なプロセッサ (Non-deterministic Processors):** `time.Now()` や乱数生成器をプロセッサ内で使用しないでください。リトライ時に異なる結果が生成され、冪等性が損なわれます。
+*   **外部副作用 (External Side Effects):** プロセッサ内で外部API呼び出しやファイルシステム操作を直接行わないでください。これらはトランザクション管理外であり、リトライ時に二重実行されるリスクがあります。
+*   **不完全な状態更新:** `ItemStream.Update` で保存する状態が、実際にコミットされたデータと同期していない場合、再開時にデータ不整合が発生します。

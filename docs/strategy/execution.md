@@ -78,31 +78,21 @@ Failure Matrixの各ケースは、`test/semantics/` 配下に「Executable Spec
 再実行性および冪等性を安全に担保するため、以下のリスナーアーキテクチャを実装する。
 *   **StepExecutionListener:** ステップ全体のセットアップ（BeforeStep）およびクリーンアップ（AfterStep）を担う。
 *   **ChunkListener:** トランザクション境界での処理（BeforeChunk, AfterChunk, OnError）を担う。JSR-352仕様に完全準拠。
-*   **ItemListener (Read/Process/Write):** 各アイテム処理の前後およびエラー・スキップ時のフックを担う。
-*   **重要性:** これらのフックは、ユーザーが冪等性担保ロジック（リソースのクリーンアップ等）を記述するための「安全な場所」を提供する。
+*   **ItemListener (Read/Process/Write):** 各アイテムの処理前後のフックを提供。
 
-## 5. Development Roadmap (EPIC)
-Surfinの実行モデルを堅牢化するため、以下のフェーズで開発を進めます。
+## 5. Development Roadmap
 
-1.  **Document execution lifecycle** (完了)
-2.  **Add normal lifecycle integration tests** (完了)
-3.  **Add restart integration tests** (完了)
-4.  **Add failure matrix tests** (完了)
-5.  **Define Update / saveCheckpoint failure policy** (完了)
-6.  **Harden ExecutionContext contract** (完了)
-7.  **Implement Lifecycle Listeners (Step/Chunk/Item)** (完了)
-8.  **Define idempotency / duplicate processing semantics** (Next)
-9.  **Stateful Processor / Tasklet semantics**
-10. **Partition execution semantics**
-11. **Batch execution observability**
+### 5.1. Target v1.0 (Current)
+*   Chunk-oriented processing の安定化。
+*   基本的なトランザクション管理とチェックポイント機構の確立。
+*   JSR-352 互換のリスナーアーキテクチャの実装。
 
-## 6. Target: Batch Execution Semantics v1 (達成済み)
-以下の機能は実装およびテストによる保証が完了しています。
+### 5.2. Target v1.1
+*   リモートステップ実行（Remote Partitioning）のサポート強化。
+*   OpenTelemetry を活用した分散トレーシングの拡充。
+*   動的なフロー制御（Decision/Split）の最適化。
 
-*   Single-threaded Chunk
-*   Transaction Management
-*   ExecutionContext
-*   Checkpointing
-*   Restartability
-*   Failure Semantics (Failure Matrixの網羅)
-*   JSR-352 Compliant Lifecycle Listeners (Step/Chunk/Item)
+### 5.3. Future Considerations
+*   ストリーミング処理への対応。
+*   マルチテナント環境におけるジョブ実行の分離。
+*   UI/CLI によるジョブ管理・監視ツールの提供。
