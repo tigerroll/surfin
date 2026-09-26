@@ -78,6 +78,14 @@ func NewLoggingItemReadListener(properties map[string]interface{}) port.ItemRead
 	return &LoggingItemReadListener{properties: properties}
 }
 
+func (l *LoggingItemReadListener) BeforeRead(ctx context.Context) {
+	logger.Debugf("ItemReadListener: BeforeRead")
+}
+
+func (l *LoggingItemReadListener) AfterRead(ctx context.Context, item any) {
+	logger.Debugf("ItemReadListener: AfterRead - Item: %+v", item)
+}
+
 func (l *LoggingItemReadListener) OnReadError(ctx context.Context, err error) {
 	logger.Errorf("ItemReadListener: OnReadError - %v", err)
 }
@@ -92,6 +100,14 @@ type LoggingItemProcessListener struct {
 
 func NewLoggingItemProcessListener(properties map[string]interface{}) port.ItemProcessListener {
 	return &LoggingItemProcessListener{properties: properties}
+}
+
+func (l *LoggingItemProcessListener) BeforeProcess(ctx context.Context, item any) {
+	logger.Debugf("ItemProcessListener: BeforeProcess - Item: %+v", item)
+}
+
+func (l *LoggingItemProcessListener) AfterProcess(ctx context.Context, item any, result any) {
+	logger.Debugf("ItemProcessListener: AfterProcess - Item: %+v, Result: %+v", item, result)
 }
 
 func (l *LoggingItemProcessListener) OnProcessError(ctx context.Context, item interface{}, err error) {
@@ -112,6 +128,14 @@ type LoggingItemWriteListener struct {
 
 func NewLoggingItemWriteListener(properties map[string]interface{}) port.ItemWriteListener {
 	return &LoggingItemWriteListener{properties: properties}
+}
+
+func (l *LoggingItemWriteListener) BeforeWrite(ctx context.Context, items []any) {
+	logger.Debugf("ItemWriteListener: BeforeWrite - Items count: %d", len(items))
+}
+
+func (l *LoggingItemWriteListener) AfterWrite(ctx context.Context, items []any) {
+	logger.Debugf("ItemWriteListener: AfterWrite - Items count: %d", len(items))
 }
 
 func (l *LoggingItemWriteListener) OnWriteError(ctx context.Context, items []interface{}, err error) {

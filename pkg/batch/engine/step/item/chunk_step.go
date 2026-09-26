@@ -68,30 +68,31 @@ var _ port.Step = (*ChunkStep)(nil)
 // NewJSLAdaptedStep creates a new [ChunkStep] configured from JSL definitions.
 //
 // Parameters:
-//   id: Unique identifier for the step.
-//   reader: [port.ItemReader] for data input.
-//   processor: [port.ItemProcessor] for data transformation.
-//   writer: [port.ItemWriter] for data output.
-//   chunkSize: Maximum number of items per chunk.
-//   commitInterval: Interval for transaction commits.
-//   retryConfig: Configuration for chunk-level retries.
-//   itemRetryConfig: Configuration for item-level retries.
-//   itemSkipConfig: Configuration for item-level skips.
-//   jobRepository: Repository for persisting job metadata.
-//   stepExecutionListeners: Listeners for step lifecycle events.
-//   itemReadListeners: Listeners for read events.
-//   itemProcessListeners: Listeners for process events.
-//   itemWriteListeners: Listeners for write events.
-//   skipListeners: Listeners for skip events.
-//   retryItemListeners: Listeners for retry events.
-//   chunkListeners: Listeners for chunk lifecycle events.
-//   promotion: Settings for promoting execution context to job level.
-//   isolationLevel: Transaction isolation level string (e.g., "SERIALIZABLE").
-//   propagation: Transaction propagation attribute (e.g., "REQUIRED").
-//   txManagerFactory: Factory for creating transaction managers.
-//   metricRecorder: Recorder for step metrics.
-//   tracer: Tracer for distributed tracing.
-//   dbResolver: Resolver for dynamic database connections.
+//
+//	id: Unique identifier for the step.
+//	reader: [port.ItemReader] for data input.
+//	processor: [port.ItemProcessor] for data transformation.
+//	writer: [port.ItemWriter] for data output.
+//	chunkSize: Maximum number of items per chunk.
+//	commitInterval: Interval for transaction commits.
+//	retryConfig: Configuration for chunk-level retries.
+//	itemRetryConfig: Configuration for item-level retries.
+//	itemSkipConfig: Configuration for item-level skips.
+//	jobRepository: Repository for persisting job metadata.
+//	stepExecutionListeners: Listeners for step lifecycle events.
+//	itemReadListeners: Listeners for read events.
+//	itemProcessListeners: Listeners for process events.
+//	itemWriteListeners: Listeners for write events.
+//	skipListeners: Listeners for skip events.
+//	retryItemListeners: Listeners for retry events.
+//	chunkListeners: Listeners for chunk lifecycle events.
+//	promotion: Settings for promoting execution context to job level.
+//	isolationLevel: Transaction isolation level string (e.g., "SERIALIZABLE").
+//	propagation: Transaction propagation attribute (e.g., "REQUIRED").
+//	txManagerFactory: Factory for creating transaction managers.
+//	metricRecorder: Recorder for step metrics.
+//	tracer: Tracer for distributed tracing.
+//	dbResolver: Resolver for dynamic database connections.
 func NewJSLAdaptedStep(
 	id string,
 	reader port.ItemReader[any],
@@ -118,8 +119,6 @@ func NewJSLAdaptedStep(
 	tracer metrics.Tracer,
 	dbResolver coreAdapter.ResourceConnectionResolver,
 ) *ChunkStep {
-	// Item Retry Policy
-
 	// Item Retry Policy
 	itemRetryPolicy := retry.NewDefaultRetryPolicyFactory().Create(
 		itemRetryConfig.MaxAttempts,
@@ -168,7 +167,6 @@ func NewJSLAdaptedStep(
 		metricRecorder:         metricRecorder,
 		tracer:                 tracer,
 		dbResolver:             dbResolver,
-		// Note: Item retry logic is handled internally within the chunk loop using itemRetryPolicy
 	}
 }
 
@@ -274,12 +272,6 @@ func (s *ChunkStep) GetPropagation() string {
 }
 
 // notifyRetryRead notifies listeners that an item read operation is being retried.
-//
-// Parameters:
-//
-//	ctx: The context for the operation.
-//	stepExecution: The current StepExecution instance.
-//	err: The error that caused the retry.
 func (s *ChunkStep) notifyRetryRead(ctx context.Context, stepExecution *model.StepExecution, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemRetry(ctx, stepExecution, err)
@@ -289,12 +281,6 @@ func (s *ChunkStep) notifyRetryRead(ctx context.Context, stepExecution *model.St
 }
 
 // notifySkipRead notifies listeners that an item read operation is being skipped.
-//
-// Parameters:
-//
-//	ctx: The context for the operation.
-//	stepExecution: The current StepExecution instance.
-//	err: The error that caused the skip.
 func (s *ChunkStep) notifySkipRead(ctx context.Context, stepExecution *model.StepExecution, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemSkip(ctx, stepExecution, err)
@@ -304,13 +290,6 @@ func (s *ChunkStep) notifySkipRead(ctx context.Context, stepExecution *model.Ste
 }
 
 // notifyRetryProcess notifies listeners that an item process operation is being retried.
-//
-// Parameters:
-//
-//	ctx: The context for the operation.
-//	stepExecution: The current StepExecution instance.
-//	item: The item being processed.
-//	err: The error that caused the retry.
 func (s *ChunkStep) notifyRetryProcess(ctx context.Context, stepExecution *model.StepExecution, item any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemRetry(ctx, stepExecution, err)
@@ -320,13 +299,6 @@ func (s *ChunkStep) notifyRetryProcess(ctx context.Context, stepExecution *model
 }
 
 // notifySkipProcess notifies listeners that an item process operation is being skipped.
-//
-// Parameters:
-//
-//	ctx: The context for the operation.
-//	stepExecution: The current StepExecution instance.
-//	item: The item being processed.
-//	err: The error that caused the skip.
 func (s *ChunkStep) notifySkipProcess(ctx context.Context, stepExecution *model.StepExecution, item any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemSkip(ctx, stepExecution, err)
@@ -336,13 +308,6 @@ func (s *ChunkStep) notifySkipProcess(ctx context.Context, stepExecution *model.
 }
 
 // notifyRetryWrite notifies listeners that an item write operation is being retried.
-//
-// Parameters:
-//
-//	ctx: The context for the operation.
-//	stepExecution: The current StepExecution instance.
-//	items: The list of items being written.
-//	err: The error that caused the retry.
 func (s *ChunkStep) notifyRetryWrite(ctx context.Context, stepExecution *model.StepExecution, items []any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemRetry(ctx, stepExecution, err)
@@ -356,13 +321,6 @@ func (s *ChunkStep) notifyRetryWrite(ctx context.Context, stepExecution *model.S
 }
 
 // notifySkipWrite notifies listeners that an item write operation is being skipped.
-//
-// Parameters:
-//
-//	ctx: The context for the operation.
-//	stepExecution: The current StepExecution instance.
-//	item: The item being skipped.
-//	err: The error that caused the skip.
 func (s *ChunkStep) notifySkipWrite(ctx context.Context, stepExecution *model.StepExecution, item any, err error) {
 	s.tracer.RecordError(ctx, s.id, err)
 	s.metricRecorder.RecordItemSkip(ctx, stepExecution, err)
@@ -382,23 +340,25 @@ func (s *ChunkStep) notifySkipWrite(ctx context.Context, stepExecution *model.St
 // [model.StepExecution] status and persists checkpoint data upon completion.
 //
 // Parameters:
-//   ctx: Context for the operation.
-//   jobExecution: Current [model.JobExecution].
-//   stepExecution: Current [model.StepExecution].
+//
+//	ctx: Context for the operation.
+//	jobExecution: Current [model.JobExecution].
+//	stepExecution: Current [model.StepExecution].
 //
 // Returns:
-//   error: Returns an error if the step fails or exceeds retry/skip limits.
+//
+//	error: Returns an error if the step fails or exceeds retry/skip limits.
 func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution) error {
 	s.currentStepExecution = stepExecution // Set current step execution for checkpointing in Close.
 
-	// --- 追加: StepExecutionListener (AfterStep) ---
+	// Execute StepExecutionListeners (AfterStep)
 	defer func() {
 		for _, l := range s.stepExecutionListeners {
 			l.AfterStep(ctx, stepExecution)
 		}
 	}()
 
-	// --- 追加: StepExecutionListener (BeforeStep) ---
+	// Execute StepExecutionListeners (BeforeStep)
 	for _, l := range s.stepExecutionListeners {
 		l.BeforeStep(ctx, stepExecution)
 	}
@@ -421,7 +381,7 @@ func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecutio
 		checkpointEC = checkpointData.ExecutionContext
 		logger.Infof("Checkpoint data loaded for step '%s'. Restoring state.", s.id)
 
-		// Restore statistics (T1/T2 Step 1.1.3)
+		// Restore statistics
 		if rc, ok := checkpointEC.GetInt("readCount"); ok {
 			stepExecution.ReadCount = rc
 		}
@@ -509,6 +469,9 @@ RetryChunk: // Jump here on write retry
 
 			// Retry loop (Read)
 			for {
+				for _, l := range s.itemReadListeners {
+					l.BeforeRead(txCtx)
+				}
 				item, readErr = s.reader.Read(txCtx)
 
 				if readErr != nil {
@@ -537,11 +500,17 @@ RetryChunk: // Jump here on write retry
 					}
 
 					// Fatal error or retry/skip limit exceeded
+					for _, l := range s.itemReadListeners {
+						l.OnReadError(txCtx, readErr)
+					}
 					chunkError = exception.NewBatchError(s.id, "Item read failed (Fatal or limit reached)", readErr, false, false)
 					goto EndChunkLoop // Exit the entire chunk processing
 				}
 
 				// Read successful
+				for _, l := range s.itemReadListeners {
+					l.AfterRead(txCtx, item)
+				}
 				s.metricRecorder.RecordItemRead(txCtx, stepExecution, 1) // Record metric
 				break
 			}
@@ -555,6 +524,9 @@ RetryChunk: // Jump here on write retry
 
 			// Process retry loop
 			for {
+				for _, l := range s.itemProcessListeners {
+					l.BeforeProcess(txCtx, item)
+				}
 				processedItem, processErr = s.processor.Process(txCtx, item)
 
 				if processErr != nil {
@@ -577,15 +549,24 @@ RetryChunk: // Jump here on write retry
 						stepExecution.AddFailureException(processErr)
 						logger.Warnf("ChunkStep '%s': Item process skipped (Skip Count: %d/%d): %v", s.id, s.skipPolicy.GetSkipCount(), s.skipPolicy.GetSkipLimit(), processErr)
 						s.notifySkipProcess(txCtx, stepExecution, item, processErr)
+						for _, l := range s.itemProcessListeners {
+							l.OnSkipInProcess(txCtx, item, processErr)
+						}
 						goto NextItemRead // Go to next item
 					}
 
 					// Fatal error or retry/skip limit exceeded
+					for _, l := range s.itemProcessListeners {
+						l.OnProcessError(txCtx, item, processErr)
+					}
 					chunkError = exception.NewBatchError(s.id, "Item process failed (Fatal or limit reached)", processErr, false, false)
 					goto EndReadLoop // Exit the entire chunk processing
 				}
 
 				// Process successful
+				for _, l := range s.itemProcessListeners {
+					l.AfterProcess(txCtx, item, processedItem)
+				}
 				s.metricRecorder.RecordItemProcess(txCtx, stepExecution, 1) // Record metric
 				break
 			}
@@ -631,6 +612,9 @@ RetryChunk: // Jump here on write retry
 
 			// Write retry loop (Chunk Retry / Chunk Splitting)
 			for { // This loop is for retrying the entire chunk write operation.
+				for _, l := range s.itemWriteListeners {
+					l.BeforeWrite(txCtx, itemsToWrite)
+				}
 				writeErr = s.writer.Write(txCtx, itemsToWrite)
 
 				if writeErr != nil {
@@ -676,12 +660,18 @@ RetryChunk: // Jump here on write retry
 
 					// 3. Fatal error or retry/skip limit exceeded
 					// If a write error occurs, rollback the transaction
+					for _, l := range s.itemWriteListeners {
+						l.OnWriteError(txCtx, itemsToWrite, writeErr)
+					}
 					currentTxManager.Rollback(txAdapter)
 					chunkError = exception.NewBatchError(s.id, "Item write failed (Fatal or limit reached)", writeErr, false, false)
 					goto EndChunkLoop // Exit the entire chunk processing
 				}
 
 				// Write successful
+				for _, l := range s.itemWriteListeners {
+					l.AfterWrite(txCtx, itemsToWrite)
+				}
 				s.metricRecorder.RecordItemWrite(txCtx, stepExecution, int64(len(itemsToWrite))) // Record metric
 				break
 			}
@@ -733,7 +723,7 @@ RetryChunk: // Jump here on write retry
 			l.AfterChunk(txCtx, stepExecution)
 		}
 
-		// 3.6. Save checkpoint (T1/T2 Step 1.1.2)
+		// 3.6. Save checkpoint
 		// After successful commit, save Reader/Writer state and statistics
 		if err := s.saveCheckpoint(ctx, stepExecution, readCount, writeCount); err != nil {
 			logger.Errorf("ChunkStep '%s': Failed to save checkpoint after commit: %v", s.id, err)
@@ -853,13 +843,15 @@ func (s *ChunkStep) Close(ctx context.Context) error {
 // ensure restartability.
 //
 // Parameters:
-//   ctx: Context for the operation.
-//   stepExecution: Current [model.StepExecution].
-//   readCount: Total items read.
-//   writeCount: Total items written.
+//
+//	ctx: Context for the operation.
+//	stepExecution: Current [model.StepExecution].
+//	readCount: Total items read.
+//	writeCount: Total items written.
 //
 // Returns:
-//   error: Returns an error if checkpoint persistence fails.
+//
+//	error: Returns an error if checkpoint persistence fails.
 func (s *ChunkStep) saveCheckpoint(ctx context.Context, stepExecution *model.StepExecution, readCount, writeCount int) error {
 	currentEC := model.NewExecutionContext()
 
@@ -908,14 +900,16 @@ func (s *ChunkStep) saveCheckpoint(ctx context.Context, stepExecution *model.Ste
 // item, allowing the remaining items in the chunk to be committed.
 //
 // Parameters:
-//   ctx: Context for the operation.
-//   originalItems: Items that caused the write failure.
-//   stepExecution: Current [model.StepExecution].
-//   currentTxManager: Transaction manager for the current chunk.
+//
+//	ctx: Context for the operation.
+//	originalItems: Items that caused the write failure.
+//	stepExecution: Current [model.StepExecution].
+//	currentTxManager: Transaction manager for the current chunk.
 //
 // Returns:
-//   []any: Empty slice (all items are either committed or skipped).
-//   error: Returns a fatal error if splitting fails or skip limits are exceeded.
+//
+//	[]any: Empty slice (all items are either committed or skipped).
+//	error: Returns a fatal error if splitting fails or skip limits are exceeded.
 func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalItems []any, stepExecution *model.StepExecution, currentTxManager tx.TransactionManager) ([]any, error) {
 	taskletName := s.id
 

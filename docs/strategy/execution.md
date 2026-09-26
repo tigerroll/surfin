@@ -89,8 +89,8 @@ Surfinの実行モデルを堅牢化するため、以下のフェーズで開�
 4.  **Add failure matrix tests** (完了)
 5.  **Define Update / saveCheckpoint failure policy** (完了)
 6.  **Harden ExecutionContext contract** (完了)
-7.  **Implement Lifecycle Listeners (Step/Chunk)** (Next)
-8.  **Define idempotency / duplicate processing semantics**
+7.  **Implement Lifecycle Listeners (Step/Chunk/Item)** (Completed)
+8.  **Define idempotency / duplicate processing semantics** (Next)
 9.  **Stateful Processor / Tasklet semantics**
 10. **Partition execution semantics**
 11. **Batch execution observability**
@@ -104,3 +104,4 @@ Surfinの実行モデルを堅牢化するため、以下のフェーズで開�
 *   Checkpointing
 *   Restartability
 *   Failure Semantics (Failure Matrixの網羅)
+*   Lifecycle Listeners (Step/Chunk/Item)

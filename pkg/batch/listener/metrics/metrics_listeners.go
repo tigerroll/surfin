@@ -82,6 +82,10 @@ func NewMetricsItemReadListener(recorder metrics.MetricRecorder) port.ItemReadLi
 	return &MetricsItemReadListener{recorder: recorder}
 }
 
+func (l *MetricsItemReadListener) BeforeRead(ctx context.Context) {}
+
+func (l *MetricsItemReadListener) AfterRead(ctx context.Context, item any) {}
+
 func (l *MetricsItemReadListener) OnReadError(ctx context.Context, err error) {
 	// Metrics are recorded directly within ChunkStep, so no action is taken here.
 }
@@ -97,6 +101,10 @@ type MetricsItemProcessListener struct {
 func NewMetricsItemProcessListener(recorder metrics.MetricRecorder) port.ItemProcessListener {
 	return &MetricsItemProcessListener{recorder: recorder}
 }
+
+func (l *MetricsItemProcessListener) BeforeProcess(ctx context.Context, item any) {}
+
+func (l *MetricsItemProcessListener) AfterProcess(ctx context.Context, item any, result any) {}
 
 func (l *MetricsItemProcessListener) OnProcessError(ctx context.Context, item interface{}, err error) {
 	// Metrics are recorded directly within ChunkStep, so no action is taken here.
@@ -117,6 +125,10 @@ type MetricsItemWriteListener struct {
 func NewMetricsItemWriteListener(recorder metrics.MetricRecorder) port.ItemWriteListener {
 	return &MetricsItemWriteListener{recorder: recorder}
 }
+
+func (l *MetricsItemWriteListener) BeforeWrite(ctx context.Context, items []any) {}
+
+func (l *MetricsItemWriteListener) AfterWrite(ctx context.Context, items []any) {}
 
 func (l *MetricsItemWriteListener) OnWriteError(ctx context.Context, items []interface{}, err error) {
 	// Metrics are recorded directly within ChunkStep, so no action is taken here.
