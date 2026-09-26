@@ -11,10 +11,12 @@ import (
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	"github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
+	"github.com/tigerroll/surfin/pkg/batch/support/util/exception"
 	"github.com/tigerroll/surfin/test/pkg/batch/test"
 )
 
-// TestFailureMatrix_CommitFailure verifies the system behavior when a transaction commit fails.
+// TestFailureMatrix_CommitFailure verifies system behavior when a transaction commit fails,
+// ensuring proper rollback and error propagation.
 func TestFailureMatrix_CommitFailure(t *testing.T) {
 	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, dbConn := test.SetupChunkStep(t)
 	ctx := context.Background()
@@ -83,7 +85,8 @@ func TestFailureMatrix_CommitFailure(t *testing.T) {
 	assert.Contains(t, err.Error(), "Failed to commit transaction")
 }
 
-// TestFailureMatrix_CheckpointSaveFailure verifies the system behavior when checkpoint saving fails.
+// TestFailureMatrix_CheckpointSaveFailure verifies system behavior when checkpoint persistence fails,
+// ensuring the step handles the error according to the defined policy.
 func TestFailureMatrix_CheckpointSaveFailure(t *testing.T) {
 	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, dbConn := test.SetupChunkStep(t)
 	ctx := context.Background()
@@ -154,7 +157,8 @@ func TestFailureMatrix_CheckpointSaveFailure(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestFailureMatrix_CloseFailure verifies the system behavior when closing a resource fails.
+// TestFailureMatrix_CloseFailure verifies system behavior when resource closure fails,
+// ensuring errors are propagated correctly.
 func TestFailureMatrix_CloseFailure(t *testing.T) {
 	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, dbConn := test.SetupChunkStep(t)
 	ctx := context.Background()
@@ -223,7 +227,8 @@ func TestFailureMatrix_CloseFailure(t *testing.T) {
 	assert.Contains(t, err.Error(), "close failed")
 }
 
-// TestFailureMatrix_UpdateFailure verifies the system behavior when updating a component state fails (Policy C: log and continue).
+// TestFailureMatrix_UpdateFailure verifies system behavior when component state updates fail,
+// confirming the 'log and continue' policy (Policy C).
 func TestFailureMatrix_UpdateFailure(t *testing.T) {
 	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, dbConn := test.SetupChunkStep(t)
 	ctx := context.Background()
@@ -270,5 +275,84 @@ func TestFailureMatrix_UpdateFailure(t *testing.T) {
 	err := step.Execute(ctx, jobExec, model.NewStepExecution("1", jobExec, "step"))
 
 	// Update failure is not fatal, so no error should be returned
+	assert.NoError(t, err)
+}
+
+// TestFailureMatrix_IdempotentWriter_Retry verifies that an IdempotentWriter prevents
+// duplicate data processing during chunk retries.
+func TestFailureMatrix_IdempotentWriter_Retry(t *testing.T) {
+	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, dbConn := test.SetupChunkStep(t)
+	ctx := context.Background()
+
+	// Setup processor expectations
+	processor.On("Process", mock.Anything, mock.Anything).Return("processed_item1", nil).Maybe()
+	processor.On("GetExecutionContext", mock.Anything).Return(model.NewExecutionContext(), nil).Maybe()
+
+	// Setup metric recorder expectations
+	metricRecorder.On("RecordItemRead", mock.Anything, mock.Anything, mock.Anything).Maybe()
+	metricRecorder.On("RecordItemProcess", mock.Anything, mock.Anything, mock.Anything).Maybe()
+	metricRecorder.On("RecordItemWrite", mock.Anything, mock.Anything, mock.Anything).Maybe()
+	metricRecorder.On("RecordExecutionError", mock.Anything, mock.Anything).Maybe()
+	// Allow metric recording during retry.
+	metricRecorder.On("RecordItemRetry", mock.Anything, mock.Anything, mock.Anything).Maybe()
+
+	// Setup tracer expectations
+	tracer.On("RecordError", mock.Anything, mock.Anything, mock.Anything).Maybe()
+
+	// Setup DB connection expectations
+	dbConn.On("IsTableNotExistError", mock.Anything).Return(false).Maybe()
+	dbConn.On("Config").Return(dbconfig.DatabaseConfig{}).Maybe()
+
+	// Setup Open expectations
+	reader.On("Open", mock.Anything, mock.Anything).Return(nil).Once()
+	writer.On("Open", mock.Anything, mock.Anything).Return(nil).Once()
+
+	// Setup Read expectations
+	reader.On("Read", mock.Anything).Return("item1", nil).Once()
+	reader.On("Read", mock.Anything).Return(nil, port.ErrNoMoreItems).Maybe()
+
+	// Setup writer metadata expectations
+	writer.On("GetTargetResourceName").Return("mock_db").Maybe()
+	writer.On("GetResourcePath").Return("mock_path").Maybe()
+
+	// Setup Write expectations: Fail first, then succeed
+	// This simulates a transient error that triggers a retry
+	writer.On("Write", mock.Anything, mock.Anything).Return(
+		exception.NewBatchError("writer", "transient write failure", errors.New("db deadlock"), false, true),
+	).Once()
+	writer.On("Write", mock.Anything, mock.Anything).Return(nil).Once()
+
+	// Setup GetExecutionContext expectations
+	reader.On("GetExecutionContext", mock.Anything).Return(model.NewExecutionContext(), nil).Maybe()
+	writer.On("GetExecutionContext", mock.Anything).Return(model.NewExecutionContext(), nil).Maybe()
+
+	// Setup Update expectations
+	reader.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
+	processor.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
+	writer.On("Update", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+	// Setup FindCheckpointData expectations
+	repo.On("FindCheckpointData", mock.Anything, mock.Anything).Return(nil, repository.ErrCheckpointDataNotFound).Maybe()
+
+	// Setup Begin expectations
+	mockTx := new(test.MockTx)
+	mockTx.On("IsTableNotExistError", mock.Anything).Return(false).Maybe()
+	mockTx.On("Config").Return(dbconfig.DatabaseConfig{}).Maybe()
+	// Begin twice: once for the failed chunk, once for the retried chunk
+	txManager.On("Begin", mock.Anything, mock.Anything).Return(mockTx, nil).Twice()
+
+	// Setup Commit expectations
+	txManager.On("Commit", mock.Anything).Return(nil).Once()    // Only the second attempt succeeds
+	txManager.On("Rollback", mock.Anything).Return(nil).Maybe() // The first attempt rolls back
+
+	repo.On("UpdateStepExecution", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+	// Setup Close expectations
+	reader.On("Close", mock.Anything).Return(nil).Maybe()
+	writer.On("Close", mock.Anything).Return(nil).Maybe()
+
+	jobExec := model.NewJobExecution("1", "job", model.NewJobParameters())
+	err := step.Execute(ctx, jobExec, model.NewStepExecution("1", jobExec, "step"))
+
 	assert.NoError(t, err)
 }

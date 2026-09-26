@@ -53,8 +53,16 @@ func NewSqlBulkWriter[T any](name string, bulkSize int, tableName string, confli
 // Verify that [SqlBulkWriter] implements the [port.ItemWriter] interface at compile time.
 var _ port.ItemWriter[any] = (*SqlBulkWriter[any])(nil)
 
+// Verify that [SqlBulkWriter] implements the [port.IdempotentWriter] interface at compile time.
+var _ port.IdempotentWriter[any] = (*SqlBulkWriter[any])(nil)
+
 // Verify that [SqlBulkWriter] implements the [port.ItemStream] interface at compile time.
 var _ port.ItemStream = (*SqlBulkWriter[any])(nil)
+
+// IsIdempotent returns true because SqlBulkWriter uses UPSERT operations.
+func (w *SqlBulkWriter[T]) IsIdempotent() bool {
+	return true
+}
 
 // Open initializes the writer.
 // As [tx.Tx] interface handles internal statement management, no specific initialization

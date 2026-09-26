@@ -95,6 +95,14 @@ func NewNoOpItemWriter[I any]() port.ItemWriter[I] {
 	}
 }
 
+// Verify that [NoOpItemWriter] implements the [port.IdempotentWriter] interface at compile time.
+var _ port.IdempotentWriter[any] = (*NoOpItemWriter[any])(nil)
+
+// IsIdempotent returns true because NoOpItemWriter performs no operations.
+func (w *NoOpItemWriter[I]) IsIdempotent() bool {
+	return true
+}
+
 // Open initializes the writer with the given [model.ExecutionContext].
 //
 // Parameters:
