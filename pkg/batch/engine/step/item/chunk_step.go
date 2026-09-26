@@ -22,9 +22,9 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/adapter/database" // Required for type assertion.
 )
 
-// ChunkStep is an implementation of the [port.Step] interface designed for chunk-oriented processing.
-// It orchestrates the reading of items, their processing, and writing them in chunks,
-// managing transactions, checkpointing, and handling retries and skips for individual items and the chunk itself.
+// ChunkStep implements the [port.Step] interface for chunk-oriented batch processing.
+// It orchestrates item reading, processing, and writing, while managing transactions,
+// checkpointing, and fault tolerance (retries and skips).
 type ChunkStep struct {
 	id                     string
 	reader                 port.ItemReader[any]
@@ -65,38 +65,33 @@ type ChunkStep struct {
 // Verify that [ChunkStep] implements the [port.Step] interface.
 var _ port.Step = (*ChunkStep)(nil)
 
-// NewJSLAdaptedStep creates a new [ChunkStep] instance configured from JSL (Job Specification Language) definitions.
+// NewJSLAdaptedStep creates a new [ChunkStep] configured from JSL definitions.
 //
 // Parameters:
-//
-//	id: The unique identifier for the step.
-//	reader: An implementation of the [port.ItemReader] interface for reading items.
-//	processor: An implementation of the [port.ItemProcessor] interface for processing items.
-//	writer: An implementation of the [port.ItemWriter] interface for writing items.
-//	chunkSize: The maximum number of items to process at once.
-//	commitInterval: The interval at which transactions are committed, typically matching [chunkSize].
-//	retryConfig: Configuration for retrying the entire chunk operation at the step level.
-//	itemRetryConfig: Configuration for retrying individual item read/process operations.
-//	itemSkipConfig: Configuration for skipping individual item read/process/write operations.
-//	jobRepository: The job repository for persisting job metadata.
-//	stepExecutionListeners: Listeners to be notified during step execution.
-//	itemReadListeners: Listeners to be notified during item read operations.
-//	itemProcessListeners: Listeners to be notified during item process operations.
-//	itemWriteListeners: Listeners to be notified during item write operations.
-//	skipListeners: Listeners to be notified when items are skipped.
-//	retryItemListeners: Listeners to be notified when item operations are retried.
-//	chunkListeners: Listeners to be notified during chunk processing.
-//	promotion: Settings for promoting execution context from [model.StepExecution] to [model.JobExecution].
-//	isolationLevel: The transaction isolation level (e.g., "SERIALIZABLE") as specified in JSL.
-//	propagation: The transaction propagation attribute (e.g., "REQUIRED") as specified in JSL.
-//	txManagerFactory: Factory for creating transaction managers.
-//	metricRecorder: Metric recorder for capturing step metrics.
-//	tracer: Tracer for distributed tracing.
-//	dbResolver: Database connection resolver for dynamic database access.
-//
-// Returns:
-//
-//	*ChunkStep: A new [ChunkStep] instance.
+//   id: Unique identifier for the step.
+//   reader: [port.ItemReader] for data input.
+//   processor: [port.ItemProcessor] for data transformation.
+//   writer: [port.ItemWriter] for data output.
+//   chunkSize: Maximum number of items per chunk.
+//   commitInterval: Interval for transaction commits.
+//   retryConfig: Configuration for chunk-level retries.
+//   itemRetryConfig: Configuration for item-level retries.
+//   itemSkipConfig: Configuration for item-level skips.
+//   jobRepository: Repository for persisting job metadata.
+//   stepExecutionListeners: Listeners for step lifecycle events.
+//   itemReadListeners: Listeners for read events.
+//   itemProcessListeners: Listeners for process events.
+//   itemWriteListeners: Listeners for write events.
+//   skipListeners: Listeners for skip events.
+//   retryItemListeners: Listeners for retry events.
+//   chunkListeners: Listeners for chunk lifecycle events.
+//   promotion: Settings for promoting execution context to job level.
+//   isolationLevel: Transaction isolation level string (e.g., "SERIALIZABLE").
+//   propagation: Transaction propagation attribute (e.g., "REQUIRED").
+//   txManagerFactory: Factory for creating transaction managers.
+//   metricRecorder: Recorder for step metrics.
+//   tracer: Tracer for distributed tracing.
+//   dbResolver: Resolver for dynamic database connections.
 func NewJSLAdaptedStep(
 	id string,
 	reader port.ItemReader[any],
@@ -382,21 +377,31 @@ func (s *ChunkStep) notifySkipWrite(ctx context.Context, stepExecution *model.St
 	}
 }
 
-// Execute runs the main business logic of the chunk-oriented step.
-// It orchestrates the reading, processing, and writing of items in chunks,
-// managing transactions, checkpointing, and error handling including retries and skips.
+// Execute runs the chunk-oriented step. It manages the read-process-write loop,
+// transaction boundaries, and fault tolerance policies. It updates the
+// [model.StepExecution] status and persists checkpoint data upon completion.
 //
 // Parameters:
-//
-//	ctx: The context for the operation.
-//	jobExecution: The current [model.JobExecution] instance.
-//	stepExecution: The current [model.StepExecution] instance.
+//   ctx: Context for the operation.
+//   jobExecution: Current [model.JobExecution].
+//   stepExecution: Current [model.StepExecution].
 //
 // Returns:
-//
-//	error: An error if the step execution encounters a fatal issue or exceeds retry/skip limits.
+//   error: Returns an error if the step fails or exceeds retry/skip limits.
 func (s *ChunkStep) Execute(ctx context.Context, jobExecution *model.JobExecution, stepExecution *model.StepExecution) error {
 	s.currentStepExecution = stepExecution // Set current step execution for checkpointing in Close.
+
+	// --- 追加: StepExecutionListener (AfterStep) ---
+	defer func() {
+		for _, l := range s.stepExecutionListeners {
+			l.AfterStep(ctx, stepExecution)
+		}
+	}()
+
+	// --- 追加: StepExecutionListener (BeforeStep) ---
+	for _, l := range s.stepExecutionListeners {
+		l.BeforeStep(ctx, stepExecution)
+	}
 
 	logger.Infof("ChunkStep '%s' executing.", s.id)
 
@@ -843,19 +848,18 @@ func (s *ChunkStep) Close(ctx context.Context) error {
 	return nil
 }
 
-// saveCheckpoint retrieves the state of the Reader/Writer and saves it to the JobRepository.
-// This function is typically called after a successful chunk commit to persist the progress.
+// saveCheckpoint persists the current state of the reader and writer to the
+// [repository.JobRepository]. It is called after successful chunk commits to
+// ensure restartability.
 //
 // Parameters:
-//
-//	ctx: The context for the operation.
-//	stepExecution: The current [model.StepExecution].
-//	readCount: The number of items read so far.
-//	writeCount: The number of items written so far.
+//   ctx: Context for the operation.
+//   stepExecution: Current [model.StepExecution].
+//   readCount: Total items read.
+//   writeCount: Total items written.
 //
 // Returns:
-//
-//	error: An error if saving the checkpoint fails, or if retrieving execution context from components fails.
+//   error: Returns an error if checkpoint persistence fails.
 func (s *ChunkStep) saveCheckpoint(ctx context.Context, stepExecution *model.StepExecution, readCount, writeCount int) error {
 	currentEC := model.NewExecutionContext()
 
@@ -899,21 +903,19 @@ func (s *ChunkStep) saveCheckpoint(ctx context.Context, stepExecution *model.Ste
 	return nil
 }
 
-// HandleSkippableWriteFailure re-writes items one by one when a skippable write error occurs,
-// skipping the item that caused the error and attempting to commit the remaining items.
-// This mechanism is known as "chunk splitting".
+// HandleSkippableWriteFailure implements chunk splitting. When a skippable write
+// error occurs, it re-writes items individually to isolate and skip the faulty
+// item, allowing the remaining items in the chunk to be committed.
 //
 // Parameters:
-//
-//	ctx: The context for the operation.
-//	originalItems: The original list of items that caused the write failure.
-//	stepExecution: The current [model.StepExecution].
-//	currentTxManager: The current [tx.TransactionManager].
+//   ctx: Context for the operation.
+//   originalItems: Items that caused the write failure.
+//   stepExecution: Current [model.StepExecution].
+//   currentTxManager: Transaction manager for the current chunk.
 //
 // Returns:
-//
-//	[]any: An empty slice, as all items are either committed or skipped by the end of this function.
-//	error: A fatal error if one occurs during splitting (e.g., if a non-skippable error occurs or skip limit is exceeded), otherwise nil.
+//   []any: Empty slice (all items are either committed or skipped).
+//   error: Returns a fatal error if splitting fails or skip limits are exceeded.
 func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalItems []any, stepExecution *model.StepExecution, currentTxManager tx.TransactionManager) ([]any, error) {
 	taskletName := s.id
 
