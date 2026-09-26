@@ -77,7 +77,7 @@ Failure Matrixの各ケースは、`test/semantics/` 配下に「Executable Spec
 ### 4.4. Lifecycle Hooks & Listener Architecture
 再実行性および冪等性を安全に担保するため、以下のリスナーアーキテクチャを実装する。
 *   **StepExecutionListener:** ステップ全体のセットアップ（BeforeStep）およびクリーンアップ（AfterStep）を担う。
-*   **ChunkListener:** トランザクション境界での処理（BeforeChunk, AfterChunk, OnError）を担う。
+*   **ChunkListener:** トランザクション境界での処理（BeforeChunk, AfterChunk, OnError）を担う。JSR-352仕様に完全準拠。
 *   **ItemListener (Read/Process/Write):** 各アイテム処理の前後およびエラー・スキップ時のフックを担う。
 *   **重要性:** これらのフックは、ユーザーが冪等性担保ロジック（リソースのクリーンアップ等）を記述するための「安全な場所」を提供する。
 
@@ -105,4 +105,4 @@ Surfinの実行モデルを堅牢化するため、以下のフェーズで開�
 *   Checkpointing
 *   Restartability
 *   Failure Semantics (Failure Matrixの網羅)
-*   Lifecycle Listeners (Step/Chunk/Item)
+*   JSR-352 Compliant Lifecycle Listeners (Step/Chunk/Item)
