@@ -38,7 +38,7 @@ type ParquetWriterConfig struct {
 	TableName string `mapstructure:"tableName"`
 }
 
-// ParquetWriter implements port.ItemWriter to buffer items in memory, partition them,
+// ParquetWriter implements [port.ItemWriter] to buffer items in memory, partition them,
 // and write them to Parquet files upon flushing.
 type ParquetWriter[T any] struct {
 	name                      string
@@ -53,6 +53,13 @@ type ParquetWriter[T any] struct {
 }
 
 // NewParquetWriter initializes a new ParquetWriter instance with the provided configuration and dependencies.
+//
+// Parameters:
+//   - name: A unique name for the writer instance.
+//   - properties: Configuration properties for the writer.
+//   - storageConnectionResolver: Resolver to obtain the storage connection.
+//   - itemPrototype: A prototype instance of the item type T.
+//   - partitionKeyFunc: A function to determine the partition key for an item.
 func NewParquetWriter[T any](
 	name string,
 	properties map[string]interface{},
@@ -106,6 +113,11 @@ func NewParquetWriter[T any](
 }
 
 // NewParquetWriterBuilder returns a builder function for creating ParquetWriter instances.
+//
+// Parameters:
+//   - storageConnectionResolver: Resolver to obtain the storage connection.
+//   - itemPrototype: A prototype instance of the item type T.
+//   - partitionKeyFunc: A function to determine the partition key for an item.
 func NewParquetWriterBuilder[T any](
 	storageConnectionResolver storage.StorageConnectionResolver,
 	itemPrototype *T,
@@ -122,7 +134,19 @@ func NewParquetWriterBuilder[T any](
 	}
 }
 
+// Verify that [ParquetWriter] implements the [port.IdempotentWriter] interface at compile time.
+var _ port.IdempotentWriter[any] = (*ParquetWriter[any])(nil)
+
+// IsIdempotent returns false because ParquetWriter does not guarantee idempotency by default.
+func (w *ParquetWriter[T]) IsIdempotent() bool {
+	return false
+}
+
 // Open resolves the storage connection and prepares internal buffers.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - ec: The ExecutionContext associated with the current step.
 func (w *ParquetWriter[T]) Open(ctx context.Context, ec model.ExecutionContext) error {
 	logger.Debugf("ParquetWriter '%s': Open called.", w.name)
 
@@ -146,11 +170,19 @@ func (w *ParquetWriter[T]) Open(ctx context.Context, ec model.ExecutionContext) 
 }
 
 // Update updates the state (checkpoint) after a chunk is committed.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - ec: The ExecutionContext associated with the current step.
 func (w *ParquetWriter[T]) Update(ctx context.Context, ec model.ExecutionContext) error {
 	return nil
 }
 
 // Write buffers items for later writing. It does not perform I/O operations until Flush is called.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - items: A slice of items to be buffered.
 func (w *ParquetWriter[T]) Write(ctx context.Context, items []T) error {
 	if w.bufferedItems == nil {
 		w.bufferedItems = make(map[string][]T)
@@ -178,6 +210,9 @@ func (w *ParquetWriter[T]) Write(ctx context.Context, items []T) error {
 // Flush writes all buffered items to Parquet files in the configured storage.
 // It partitions items based on the partitionKeyFunc, generates files, and uploads them.
 // If an error occurs during writing or uploading, it returns a multierror containing all encountered errors.
+//
+// Parameters:
+//   - ctx: The context for the operation.
 func (w *ParquetWriter[T]) Flush(ctx context.Context) error {
 	logger.Debugf("ParquetWriter '%s' Flush called. Items in buffer: %d.", w.name, len(w.bufferedItems))
 
@@ -213,141 +248,99 @@ func (w *ParquetWriter[T]) Flush(ctx context.Context) error {
 
 		if _, err := pw.Write(items); err != nil {
 			logger.Errorf("ParquetWriter '%s': Failed to write items to Parquet for partition '%s': %v", w.name, partitionKey, err)
-			multiErr = multierror.Append(multiErr, exception.NewBatchError(
-				"writer",
-				fmt.Sprintf("Failed to write items to Parquet for partition '%s' in ParquetWriter '%s': %v", partitionKey, w.name, err),
-				err,
-				false,
-				false,
-			))
+			multiErr = multierror.Append(multiErr, err)
 			writeSuccessful = false
 		}
 
-		// Close the writer to finalize the file. This writes the footer and metadata.
-		// We perform strict error handling; if closing fails, mark the write as unsuccessful.
+		if err := pw.Close(); err != nil {
+			logger.Errorf("ParquetWriter '%s': Failed to close Parquet writer for partition '%s': %v", w.name, partitionKey, err)
+			multiErr = multierror.Append(multiErr, err)
+			writeSuccessful = false
+		}
+
 		if writeSuccessful {
-			if err := pw.Close(); err != nil {
-				logger.Errorf("ParquetWriter '%s': Failed to close Parquet writer for partition '%s': %v", w.name, partitionKey, err)
-				multiErr = multierror.Append(multiErr, exception.NewBatchError(
-					"writer",
-					fmt.Sprintf("Failed to close Parquet writer for partition '%s' in ParquetWriter '%s': %v", partitionKey, w.name, err),
-					err,
-					false,
-					false,
-				))
-				writeSuccessful = false
-			}
-		}
+			// Generate file name
+			fileName := w.generateFileName(partitionKey)
+			fullPath := filepath.Join(w.config.OutputBaseDir, fileName)
 
-		// Generate the output file name based on the configured format.
-		fileName := w.config.FileNameFormat
-		if fileName == "" {
-			fileName = "data_#{timestamp}_#{random}.parquet"
-		}
-
-		fileName = strings.ReplaceAll(fileName, "#{tablename}", w.config.TableName)
-		fileName = strings.ReplaceAll(fileName, "#{timestamp}", time.Now().Format("20060102150405"))
-		fileName = strings.ReplaceAll(fileName, "#{random}", generateRandomString(8))
-		fileName = strings.ReplaceAll(fileName, "#{uuid}", uuid.New().String())
-
-		w.partitionSequence[partitionKey]++
-		fileName = strings.ReplaceAll(fileName, "#{sequence}", fmt.Sprintf("%05d", w.partitionSequence[partitionKey]))
-
-		objectName := filepath.Join(w.config.OutputBaseDir, partitionKey, fileName)
-
-		// Upload the generated Parquet file to the configured storage.
-		targetBucketName := w.storageConn.Config().BucketName
-		logger.Debugf("ParquetWriter '%s': Uploading %d bytes to %s/%s", w.name, buf.Len(), targetBucketName, objectName)
-		if writeSuccessful && buf.Len() > 0 {
-			if err := w.storageConn.Upload(ctx, targetBucketName, objectName, buf, "application/octet-stream"); err != nil {
-				multiErr = multierror.Append(multiErr, exception.NewBatchError(
-					"writer",
-					fmt.Sprintf("Failed to upload Parquet file for partition '%s' to '%s' in ParquetWriter '%s': %v", partitionKey, objectName, w.name, err),
-					err,
-					false,
-					false,
-				))
+			// Upload to storage
+			if err := w.storageConn.Upload(ctx, "", fullPath, buf, "application/x-parquet"); err != nil {
+				logger.Errorf("ParquetWriter '%s': Failed to upload Parquet file '%s': %v", w.name, fullPath, err)
+				multiErr = multierror.Append(multiErr, err)
 			} else {
-				logger.Infof("ParquetWriter '%s': Successfully uploaded Parquet file for partition '%s' to %s", w.name, partitionKey, objectName)
+				logger.Infof("ParquetWriter '%s': Successfully uploaded Parquet file '%s'.", w.name, fullPath)
 			}
-		} else {
-			logger.Warnf("ParquetWriter '%s': Skipping upload for partition '%s' due to unsuccessful write or empty buffer.", w.name, partitionKey)
 		}
 	}
 
+	// Clear buffer after flush
 	w.bufferedItems = make(map[string][]T)
 
 	return multiErr
 }
 
-// Close finalizes the writing process by flushing remaining data and closing the storage connection.
+// generateFileName generates a file name based on the configured format.
+func (w *ParquetWriter[T]) generateFileName(partitionKey string) string {
+	format := w.config.FileNameFormat
+	if format == "" {
+		format = "#{tablename}_#{timestamp}_#{uuid}.parquet"
+	}
+
+	// Replace placeholders
+	format = strings.ReplaceAll(format, "#{tablename}", w.config.TableName)
+	format = strings.ReplaceAll(format, "#{timestamp}", time.Now().Format("20060102150405"))
+	format = strings.ReplaceAll(format, "#{uuid}", uuid.New().String())
+	format = strings.ReplaceAll(format, "#{random}", fmt.Sprintf("%d", rand.Intn(10000)))
+	format = strings.ReplaceAll(format, "#{sequence}", fmt.Sprintf("%d", w.partitionSequence[partitionKey]))
+
+	w.partitionSequence[partitionKey]++
+
+	return format
+}
+
+// Close releases resources.
+//
+// Parameters:
+//   - ctx: The context for the operation.
 func (w *ParquetWriter[T]) Close(ctx context.Context) error {
-	logger.Debugf("ParquetWriter '%s' Close called.", w.name)
-
-	var flushErr error
-	if err := w.Flush(ctx); err != nil {
-		flushErr = err
-		logger.Errorf("ParquetWriter '%s': Error during final Flush in Close: %v", w.name, err)
-	}
-
-	var closeErr error
-	if w.storageConn != nil {
-		if err := w.storageConn.Close(); err != nil {
-			closeErr = exception.NewBatchError(
-				"writer",
-				fmt.Sprintf("Failed to close storage connection for ParquetWriter '%s': %v", w.name, err),
-				err,
-				false,
-				false,
-			)
-		}
-	}
-
-	if flushErr != nil {
-		return flushErr
-	}
-	return closeErr
+	logger.Debugf("ParquetWriter '%s': Close called.", w.name)
+	return nil
 }
 
-// generateRandomString generates a random alphanumeric string of the specified length.
-func generateRandomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[seededRand.Intn(len(charset))]
-	}
-	return string(b)
-}
-
-// SetExecutionContext sets the execution context for the writer.
+// SetExecutionContext sets the ExecutionContext.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//   - ec: The ExecutionContext to set.
 func (w *ParquetWriter[T]) SetExecutionContext(ctx context.Context, ec model.ExecutionContext) error {
-	logger.Debugf("ParquetWriter '%s': SetExecutionContext called.", w.name)
 	w.stepExecutionContext = ec
 	return nil
 }
 
-// GetExecutionContext retrieves the current execution context.
+// GetExecutionContext retrieves the ExecutionContext.
+//
+// Parameters:
+//   - ctx: The context for the operation.
+//
+// Returns:
+//   - model.ExecutionContext: The current ExecutionContext.
+//   - error: An error if retrieval fails.
 func (w *ParquetWriter[T]) GetExecutionContext(ctx context.Context) (model.ExecutionContext, error) {
-	logger.Debugf("ParquetWriter '%s': GetExecutionContext called.", w.name)
 	return w.stepExecutionContext, nil
 }
 
-// GetTargetResourceName returns the name of the target storage resource.
+// GetTargetResourceName returns the target storage name.
+//
+// Returns:
+//   - string: The name of the target storage.
 func (w *ParquetWriter[T]) GetTargetResourceName() string {
 	return w.config.StorageRef
 }
 
-// GetResourcePath returns the base path within the target resource.
+// GetResourcePath returns the base directory path.
+//
+// Returns:
+//   - string: The base directory path.
 func (w *ParquetWriter[T]) GetResourcePath() string {
 	return w.config.OutputBaseDir
 }
-
-// Verify that [ParquetWriter] satisfies the [port.ItemWriter] interface at compile time.
-var _ port.ItemWriter[any] = (*ParquetWriter[any])(nil)
-
-// Verify that [ParquetWriter] satisfies the [port.ItemFlusher] interface at compile time.
-var _ port.ItemFlusher = (*ParquetWriter[any])(nil)
-
-// Verify that [ParquetWriter] satisfies the [port.ItemStream] interface at compile time.
-var _ port.ItemStream = (*ParquetWriter[any])(nil)

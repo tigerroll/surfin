@@ -251,6 +251,12 @@ func (s *TaskletStep) Execute(ctx context.Context, jobExecution *model.JobExecut
 		now := time.Now()
 		stepExecution.EndTime = &now
 		stepExecution.LastUpdated = now
+
+		// 7.1. Save checkpoint after successful execution.
+		if saveErr := s.saveCheckpoint(ctx, stepExecution); saveErr != nil {
+			logger.Errorf("TaskletStep '%s': Failed to save checkpoint: %v", s.id, saveErr)
+			// Checkpoint save failure is not fatal, but log it.
+		}
 	}
 
 	// 8. Listener notification (AfterStep).
@@ -280,6 +286,19 @@ func (s *TaskletStep) Execute(ctx context.Context, jobExecution *model.JobExecut
 
 	logger.Infof("TaskletStep '%s' finished. ExitStatus: %s", s.id, stepExecution.ExitStatus)
 	return err
+}
+
+// saveCheckpoint persists the current state of the tasklet to the [repository.JobRepository].
+func (s *TaskletStep) saveCheckpoint(ctx context.Context, stepExecution *model.StepExecution) error {
+	ec := s.tasklet.GetExecutionContext()
+
+	checkpointData := &model.CheckpointData{
+		StepExecutionID:  stepExecution.ID,
+		ExecutionContext: ec,
+		LastUpdated:      time.Now(),
+	}
+
+	return s.jobRepository.SaveCheckpointData(ctx, checkpointData)
 }
 
 // GetExecutionContextPromotion returns the ExecutionContext promotion settings for this step.
