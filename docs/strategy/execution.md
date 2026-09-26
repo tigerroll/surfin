@@ -8,11 +8,13 @@ Surfin Batch Frameworkにおけるステップ実行の標準的なライフサ�
 ```text
 Job Start
   ↓
-Step Start
+Step Start (BeforeStep Listener)
   ↓
 Open (State Restoration)
   ↓
-Chunk Loop (Read → Process → Write)
+Chunk Loop (BeforeChunk Listener)
+  ↓
+Read → Process → Write
   ↓
 Transaction Commit
   ↓
@@ -20,11 +22,13 @@ ItemStream.Update (Memory Update)
   ↓
 saveCheckpoint (Repository Persistence)
   ↓
+AfterChunk Listener
+  ↓
 ... (Loop)
   ↓
 Close (Final Persistence)
   ↓
-Step Complete
+Step Complete (AfterStep Listener)
   ↓
 Job Complete
 ```
@@ -70,6 +74,12 @@ Failure Matrixの各ケースは、`test/semantics/` 配下に「Executable Spec
 ### 4.3. ExecutionContext Contract
 `ExecutionContext` は型安全なアクセサとネスト構造をサポートしており、実行状態の永続化およびコンポーネント間のデータ共有において、この堅牢な契約を遵守すること。
 
+### 4.4. Lifecycle Hooks & Listener Architecture
+再実行性および冪等性を安全に担保するため、以下のリスナーアーキテクチャを実装する。
+*   **StepExecutionListener:** ステップ全体のセットアップ（BeforeStep）およびクリーンアップ（AfterStep）を担う。
+*   **ChunkListener:** トランザクション境界での処理（BeforeChunk, AfterChunk, OnError）を担う。
+*   **重要性:** これらのフックは、ユーザーが冪等性担保ロジック（リソースのクリーンアップ等）を記述するための「安全な場所」を提供する。
+
 ## 5. Development Roadmap (EPIC)
 Surfinの実行モデルを堅牢化するため、以下のフェーズで開発を進めます。
 
@@ -79,10 +89,11 @@ Surfinの実行モデルを堅牢化するため、以下のフェーズで開�
 4.  **Add failure matrix tests** (完了)
 5.  **Define Update / saveCheckpoint failure policy** (完了)
 6.  **Harden ExecutionContext contract** (完了)
-7.  **Define idempotency / duplicate processing semantics** (Next)
-8.  **Stateful Processor / Tasklet semantics**
-9.  **Partition execution semantics**
-10. **Batch execution observability**
+7.  **Implement Lifecycle Listeners (Step/Chunk)** (Next)
+8.  **Define idempotency / duplicate processing semantics**
+9.  **Stateful Processor / Tasklet semantics**
+10. **Partition execution semantics**
+11. **Batch execution observability**
 
 ## 6. Target: Batch Execution Semantics v1 (達成済み)
 以下の機能は実装およびテストによる保証が完了しています。
