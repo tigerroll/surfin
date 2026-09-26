@@ -439,6 +439,10 @@ type JobExecutionListener interface {
 
 // ItemReadListener is an interface for handling item read events.
 type ItemReadListener interface {
+	// BeforeRead is called before an item is read.
+	BeforeRead(ctx context.Context)
+	// AfterRead is called after an item is successfully read.
+	AfterRead(ctx context.Context, item any)
 	// OnReadError is called after an error occurs during item reading.
 	// ctx: The context.
 	// err: The error that occurred.
@@ -447,6 +451,10 @@ type ItemReadListener interface {
 
 // ItemProcessListener is an interface for handling item process events.
 type ItemProcessListener interface {
+	// BeforeProcess is called before an item is processed.
+	BeforeProcess(ctx context.Context, item any)
+	// AfterProcess is called after an item is successfully processed.
+	AfterProcess(ctx context.Context, item any, result any)
 	// OnProcessError is called after an error occurs during item processing.
 	OnProcessError(ctx context.Context, item interface{}, err error)
 	// OnSkipInProcess is called after a skip occurs during processing.
@@ -457,6 +465,10 @@ type ItemProcessListener interface {
 
 // ItemWriteListener is an interface for handling item write events.
 type ItemWriteListener interface {
+	// BeforeWrite is called before items are written.
+	BeforeWrite(ctx context.Context, items []any)
+	// AfterWrite is called after items are successfully written.
+	AfterWrite(ctx context.Context, items []any)
 	// OnWriteError is called after an error occurs during item writing.
 	// ctx: The context.
 	// items: The list of items for which an error occurred during writing.
