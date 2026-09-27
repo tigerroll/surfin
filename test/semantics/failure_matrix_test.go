@@ -20,7 +20,7 @@ import (
 // ensuring proper rollback and error propagation.
 // This test corresponds to the "Write | Fatal Failure" case in the Failure Matrix.
 func TestFailureMatrix_CommitFailure(t *testing.T) {
-	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, dbConn := test.SetupChunkStep(t)
+	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, dbConn, _ := test.SetupChunkStep(t)
 
 	// Set timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -97,7 +97,7 @@ func TestFailureMatrix_CommitFailure(t *testing.T) {
 // TestFailureMatrix_Write_TransientError verifies that a transient write error triggers a chunk retry.
 // This test corresponds to the "Write | Transient Failure" case in the Failure Matrix.
 func TestFailureMatrix_Write_TransientError(t *testing.T) {
-	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, _ := test.SetupChunkStep(t)
+	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, _, _ := test.SetupChunkStep(t)
 
 	// Set timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -180,7 +180,7 @@ func TestFailureMatrix_Write_TransientError(t *testing.T) {
 // TestFailureMatrix_CheckpointSaveFailure verifies system behavior when checkpoint persistence fails,
 // ensuring the step handles the error according to the defined policy.
 func TestFailureMatrix_CheckpointSaveFailure(t *testing.T) {
-	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, dbConn := test.SetupChunkStep(t)
+	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, dbConn, _ := test.SetupChunkStep(t)
 
 	// Set timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

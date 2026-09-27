@@ -59,7 +59,7 @@ func TestChunkStep_Integration_Restart(t *testing.T) {
 	data := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 
 	// Build ChunkStep using the test helper
-	_, _, _, _, repo, _, _, _, _, _ := test.SetupChunkStep(t)
+	_, _, _, _, repo, _, _, _, _, _, _ := test.SetupChunkStep(t)
 	repo.On("Close").Return(nil).Maybe()
 	defer repo.Close()
 
@@ -81,7 +81,7 @@ func TestChunkStep_Integration_Restart(t *testing.T) {
 // TestChunkStep_ChunkSplittingOnSkippableWriteFailure verifies that the ChunkStep correctly
 // triggers chunk splitting logic when a skippable write error occurs.
 func TestChunkStep_ChunkSplittingOnSkippableWriteFailure(t *testing.T) {
-	_, _, _, _, repo, _, _, _, _, _ := test.SetupChunkStep(t)
+	_, _, _, _, repo, _, _, _, _, _, _ := test.SetupChunkStep(t)
 	repo.On("Close").Return(nil).Maybe()
 	defer repo.Close()
 

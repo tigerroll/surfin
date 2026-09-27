@@ -13,6 +13,7 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	"github.com/tigerroll/surfin/pkg/batch/core/tx"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/item"
+	testretry "github.com/tigerroll/surfin/test/pkg/batch/engine/step/retry"
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -463,7 +464,7 @@ func (m *MockDBConnectionResolver) ResolveConnection(ctx context.Context, name s
 	return args.Get(0).(coreadapter.ResourceConnection), args.Error(1)
 }
 
-func SetupChunkStep(t *testing.T) (*item.ChunkStep, *MockItemReader, *MockItemProcessor, *MockItemWriter, *MockJobRepository, *MockTransactionManager, *MockMetricRecorder, *MockTracer, *MockDBConnectionResolver, *MockDBConnection) {
+func SetupChunkStep(t *testing.T) (*item.ChunkStep, *MockItemReader, *MockItemProcessor, *MockItemWriter, *MockJobRepository, *MockTransactionManager, *MockMetricRecorder, *MockTracer, *MockDBConnectionResolver, *MockDBConnection, *testretry.MockBackoffWaiter) {
 	reader := new(MockItemReader)
 	processor := new(MockItemProcessor)
 	writer := new(MockItemWriter)
@@ -476,6 +477,7 @@ func SetupChunkStep(t *testing.T) (*item.ChunkStep, *MockItemReader, *MockItemPr
 	metricRecorder := new(MockMetricRecorder)
 	tracer := new(MockTracer)
 	dbConn := new(MockDBConnection)
+	mockBackoff := new(testretry.MockBackoffWaiter)
 
 	dbConnResolver := new(MockDBConnectionResolver)
 	dbConnResolver.On("ResolveConnectionName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("mock_db", nil)
@@ -504,10 +506,11 @@ func SetupChunkStep(t *testing.T) (*item.ChunkStep, *MockItemReader, *MockItemPr
 		metricRecorder,
 		tracer,
 		dbConnResolver,
+		mockBackoff,
 	)
 	assert.NotNil(t, step)
 
-	return step, reader, processor, writer, repo, txManager, metricRecorder, tracer, dbConnResolver, dbConn
+	return step, reader, processor, writer, repo, txManager, metricRecorder, tracer, dbConnResolver, dbConn, mockBackoff
 }
 
 type MockTransactionManagerFactory struct {
