@@ -631,9 +631,16 @@ RetryChunk: // Jump here on write retry
 						logger.Warnf("ChunkStep '%s': Item write failed (Attempt %d/%d). Retrying chunk: %v", s.id, writeAttempts, s.itemRetryPolicy.GetMaxAttempts(), writeErr)
 						s.notifyRetryWrite(txCtx, stepExecution, itemsToWrite, writeErr)
 
-						// Rollback transaction and continue outer chunk loop (retry).
+						// Rollback transaction
 						currentTxManager.Rollback(txAdapter)
 						stepExecution.RollbackCount++
+
+						// Reset reader to ensure consistent state for retry
+						if s.reader != nil {
+							s.reader.Close(txCtx)
+							s.reader.Open(txCtx, stepExecution.ExecutionContext)
+						}
+
 						// TODO: Backoff wait
 						goto RetryChunk // Go to outer chunk loop
 					}
@@ -737,7 +744,8 @@ RetryChunk: // Jump here on write retry
 		// After successful commit, save Reader/Writer state and statistics
 		if err := s.saveCheckpoint(ctx, stepExecution, readCount, writeCount); err != nil {
 			logger.Errorf("ChunkStep '%s': Failed to save checkpoint after commit: %v", s.id, err)
-			// Checkpoint save failure is not fatal, but log it
+			chunkError = exception.NewBatchError(s.id, "Failed to save checkpoint after commit", err, false, false)
+			break
 		}
 
 		// 3.7. Determine end of chunk processing
@@ -763,6 +771,8 @@ EndChunkLoop:
 		logger.Warnf("ChunkStep '%s': Failed to close ItemReader: %v", s.id, closeErr)
 		if chunkError == nil {
 			chunkError = closeErr
+		} else {
+			chunkError = errors.Join(chunkError, closeErr)
 		}
 	}
 	if s.writer != nil {
@@ -770,6 +780,8 @@ EndChunkLoop:
 			logger.Warnf("ChunkStep '%s': Failed to close ItemWriter: %v", s.id, closeErr)
 			if chunkError == nil {
 				chunkError = closeErr
+			} else {
+				chunkError = errors.Join(chunkError, closeErr)
 			}
 		}
 	}
