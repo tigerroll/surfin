@@ -18,7 +18,7 @@ import (
 
 // TestFailureMatrix_CommitFailure verifies system behavior when a transaction commit fails,
 // ensuring proper rollback and error propagation.
-// This test corresponds to the "Write | 致命的障害" case in the Failure Matrix.
+// This test corresponds to the "Write | Fatal Failure" case in the Failure Matrix.
 func TestFailureMatrix_CommitFailure(t *testing.T) {
 	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, dbConn := test.SetupChunkStep(t)
 
@@ -95,7 +95,7 @@ func TestFailureMatrix_CommitFailure(t *testing.T) {
 }
 
 // TestFailureMatrix_Write_TransientError verifies that a transient write error triggers a chunk retry.
-// This test corresponds to the "Write | 一時的障害" case in the Failure Matrix.
+// This test corresponds to the "Write | Transient Failure" case in the Failure Matrix.
 func TestFailureMatrix_Write_TransientError(t *testing.T) {
 	step, reader, processor, writer, repo, txManager, metricRecorder, tracer, _, _ := test.SetupChunkStep(t)
 
