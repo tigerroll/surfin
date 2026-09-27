@@ -1,65 +1,124 @@
-# Strategy Document: Partition Execution Strategy
+# Partition Execution Strategy
 
 ## 1. 目的
-現在の `PartitionStep` 実装は既に並列実行を実現していますが、大規模バッチ処理におけるリソース制御や、将来的なリモート実行への対応を見据え、実行ロジックを抽象化・戦略化することを目的とします。本戦略により、テスト容易性の向上と、環境に応じた柔軟な実行制御を実現します。
+Surfin の `PartitionStep` は、1つの Step を複数の Partition に分割し、それぞれを独立した Worker として実行する。現在の実装では `StepExecutor` インターフェースにより「実行場所（ローカル/リモート）」の抽象化は実現されているが、並行実行の制御ロジックをより Go らしいシンプルな構造に刷新する。
 
-## 2. 設計原則
-*   **意味論の不変性 (Semantics Preservation)**: リファクタリング前後でジョブの実行結果や障害時の振る舞い（Failure Matrix）を一切変更しない。
-*   **安全性優先 (Safety First / Serial by Default)**: 外部APIのレートリミットやDB負荷を考慮し、デフォルトでは直列実行（Serial）を推奨する。並列実行はスループット向上のための「オプション」として位置づける。
-*   **責務の分離**: `PartitionStep` は「パーティションの生成と結果集約」に集中し、「実行戦略（直列/並列/リモート）」は `PartitionExecutor` に委譲する。
-*   **論理と物理の分離**: 「パーティション数（論理的な分割数）」と「同時実行数（物理的なリソース制御）」を分離し、環境に応じたチューニングを可能にする。
+本戦略により、以下の目的を達成する。
+* Partition 数が多い場合でもリソース使用量を制御できるようにする
+* Partition 間の並行実行数を設定可能にする
+* Go の concurrency primitive (`errgroup`, `semaphore`) を活用し、複雑な Executor 階層を避ける
 
-## 3. 現状の課題
-*   **リソース制御の欠如:** 現在の並列実行は `go func()` を無制限に起動するため、大規模なジョブにおいてリソース枯渇（DB接続数超過やメモリ不足）のリスクがあります。
-*   **責務の混在:** `PartitionStep` が「パーティション生成」「実行制御」「結果集約」のすべてを担っており、コードが肥大化しています。
-*   **実行戦略の固定:** 並列実行がハードコードされており、外部APIのレートリミット（429エラー）やDBロック競合が発生した際に、即座にシリアル実行へ切り替えることが困難です。
+## 2. 設計原則 (Design Principles)
 
-## 4. 提案するアーキテクチャ
-Strategy パターンを導入し、実行ロジックを `PartitionExecutor` インターフェースとして分離します。
+Surfin の Partition Execution は以下の原則に従う。
 
-### 4.1. 抽象化レイヤー
+1.  **Serial First (Safety First)**: 外部APIのレートリミットやDB負荷を考慮し、デフォルトでは直列実行（Serial）を推奨する。並列実行はスループット向上のための「オプション」として位置づける。
+2.  **意味論の不変性 (Semantics Preservation)**: リファクタリング前後でジョブの実行結果や障害時の振る舞い（Failure Matrix）を一切変更しない。
+3.  **Go らしい並行処理**: Goroutine は「並行実行（Concurrency）」の基本単位であり、これを Go の primitive (`errgroup`, `semaphore`) で制御する。独自 Executor 階層を増やす抽象化は行わない。
+4.  **Failure Matrix を実行仕様とする**: 障害対応の振る舞いはドキュメントだけでなく、テストコード（Executable Specification）として実装し、常に検証可能にする。
+
+## 3. アーキテクチャの分離
+「実行場所」と「並行実行制御」を明確に分離する。
+
+* **Execution Location (Where)**: `port.StepExecutor` インターフェースが担う。
+    * `SimpleStepExecutor`: ローカル環境での実行。
+    * `RemoteStepExecutor`: リモート環境への委譲。
+* **Concurrency Control (How)**: `PartitionStep` 内部のループ処理が担う。
+    * `concurrency` 設定値に基づき、`semaphore` で同時実行数を制限する。
+
+## 4. Go らしい Partition Execution
+`PartitionStep` は独自の非同期実行モデルを作るのではなく、Go が提供する concurrency primitive を組み合わせる。
+
+### 4.1. 実装モデル
 ```go
-type PartitionExecutor interface {
-    Execute(
-        ctx context.Context,
-        partitions map[string]model.ExecutionContext,
-        workerStep port.Step,
-        jobExecution *model.JobExecution,
-        controllerExecution *model.StepExecution,
-    ) (<-chan *model.StepExecution, <-chan error)
+sem := semaphore.NewWeighted(int64(maxConcurrency))
+g, ctx := errgroup.WithContext(ctx)
+
+for name, executionContext := range partitions {
+    g.Go(func() error {
+        if err := sem.Acquire(ctx, 1); err != nil { return err }
+        defer sem.Release(1)
+        
+        // StepExecutor を介して実行（ローカル/リモートを意識しない）
+        _, err := s.stepExecutor.ExecuteStep(ctx, s.workerStep, jobExecution, workerExec)
+        return err
+    })
 }
+return g.Wait()
 ```
 
-### 4.2. 実装戦略のバリエーション
-*   **`SerialPartitionExecutor`**: **【推奨デフォルト】** 本番環境での安定稼働および外部APIのレートリミット回避のための戦略。パーティションを順次実行し、決定論的な挙動を保証します。
-*   **`ParallelPartitionExecutor`**: スループット向上が必要な場合のオプション戦略。セマフォ（`golang.org/x/sync/semaphore`）を用いて同時実行数を制御し、リソース枯渇を防ぎます。
-*   **`RemotePartitionExecutor`**: 将来的な拡張用。リモートエンジンへジョブを委譲します。
+### 4.2. 並行実行制御フロー
+```mermaid
+graph TD
+    PS[PartitionStep] --> PG[Partition Generation]
+    PS --> PE[Partition Execution]
+    PE --> EG[errgroup]
+    EG --> SEM{semaphore}
+    SEM -->|Acquire| W1[Worker A]
+    SEM -->|Acquire| W2[Worker B]
+    SEM -->|Acquire| W3[Worker C]
+    W1 -->|Release| SEM
+    W2 -->|Release| SEM
+    W3 -->|Release| SEM
+```
 
-## 5. 実装ロードマップ
+### 4.3. 使用する primitive
+| Primitive | 役割 |
+| :--- | :--- |
+| `context.Context` | cancellation / deadline の伝播 |
+| `errgroup` | goroutine のライフサイクルとエラー集約 |
+| `semaphore` | Partition の並行実行数の制限 |
+| goroutine | Partition Worker の並行実行 |
 
-### Phase 1: リファクタリング（意味論の維持）
-*   **目的**: 既存の `PartitionStep` 内の並列実行ロジックを `PartitionExecutor` へ移行する。
-*   **内容**:
-    *   `PartitionExecutor` インターフェースの定義。
-    *   既存の `go func()` による並列実行ロジックを `ParallelPartitionExecutor` へ移動。
-    *   `PartitionStep` が `ParallelPartitionExecutor` をデフォルトで使用するように注入。
-*   **制約**: 挙動を一切変えないこと。Failure Matrix に影響を与えないことを最優先とする。
+## 5. Serial Execution の扱い
+Serial Execution は独立した Executor 型として実装しない。
+`concurrency = 1` を設定することで、Partition を1つずつ実行する。これにより、同じ Execution Model の中で実行環境に応じた並行実行数を選択できる。
 
-### Phase 2: 実行制御の強化と戦略の拡充
-*   **目的**: リソース制約環境への対応と、実行戦略の切り替えを実現する。
-*   **内容**:
-    *   **セマフォの導入**: `ParallelPartitionExecutor` に同時実行数制限を実装。
-    *   **Serial 戦略の実装**: `SerialPartitionExecutor` を実装し、1つずつ逐次実行する戦略を追加。
-    *   **Fx 統合**: Fx のプロバイダー設定により、環境変数や設定ファイルに基づいて `Serial` / `Parallel` を動的に切り替え可能にする。
+## 6. Partition Failure Semantics
+Partition Execution では、Worker ごとに独立した実行結果が発生する。Controller Step は、`errgroup` から返されるエラーと、各 Worker の `StepExecution` 状態を集約し、最終的な状態を決定する。
 
-### Phase 3: リモート実行への拡張
-*   **目的**: 分散環境での実行サポート。
-*   **内容**:
-    *   `RemotePartitionExecutor` の実装。
-    *   既存の `RemoteJobSubmitter` との統合。
+* **Cancellation**: 1つの Partition が致命的なエラーを返した場合、`errgroup` と `context.Context` を利用して他の Partition に cancellation を伝播する。
+* **Restart**: 各 Partition は独立した `StepExecution` を持つため、失敗した Partition のみを特定して再実行可能な状態を維持する。
 
-## 6. 期待される効果
-*   **運用上の安全性:** 外部APIのレートリミット（429エラー）やDBのロック競合を、コード変更なしで設定変更（Serialへの切り替え）のみで回避可能。
-*   **テスト容易性:** `SerialPartitionExecutor` を使用することで、並列処理特有の競合を排除した単体テストが可能になります。
-*   **安定性:** セマフォによる同時実行数制限により、システム全体の負荷を予測可能にします。
-*   **拡張性:** 新しい実行エンジン（リモート実行等）を追加する際、`PartitionStep` 本体を修正することなく、新しい Executor を実装するだけで対応可能になります。
+## 7. Failure Matrix (Executable Specification)
+Partition Execution の状態・失敗パターンを Failure Matrix として整理し、テストコードで検証する。
+
+| 状況 | Worker | Controller | Restart |
+| :--- | :--- | :--- | :--- |
+| 全 Partition 成功 | COMPLETE | COMPLETE | 不要 |
+| 一部 Partition 失敗 | FAILED | FAILED | 必要 |
+| Context cancellation | STOPPED | STOPPED | 必要 |
+
+## 8. Implementation Roadmap
+
+### Phase 1 — リファクタリング（意味論の維持）
+* 既存の `StepExecutor` インターフェースを維持し、実行場所の切り替え機能はそのまま活用する。
+* `PartitionStep` 内の `sync.WaitGroup` を `errgroup` に置き換え、エラー集約を簡素化する。
+* **制約**: 挙動を一切変えないこと。Failure Matrix に影響を与えないことを最優先とする。
+
+### Phase 2 — Concurrency Control の導入
+* `maxConcurrency` 設定を導入。
+* `semaphore` によるリソース制御を実装。
+* `concurrency = 1` による Serial Execution の動作確認。
+
+### Phase 3 — Partition Execution Semantics の確立
+* Worker の状態遷移、Partial Failure、Cancellation、Restart の挙動を明文化し、テストコードで網羅する。
+
+### Phase 4 — Observability
+* Execution Semantics 確立後、OpenTelemetry を用いて Partition 単位のメトリクス（実行時間、並行数、成功/失敗）を追加する。
+
+## 9. Summary
+Surfin の Partition Execution は、Java/Spring の Executor/Strategy Pattern をそのまま Go に移植するのではなく、**JSR-352 の Partitioning が持つ実行意味論を維持しながら、Go の concurrency model で実装する**ことを基本方針とする。
+
+```mermaid
+graph TD
+    PS[PartitionStep] --> PG[Partition Generation]
+    PS --> PE[Partition Execution]
+    PE --> EG[errgroup]
+    EG --> SEM{semaphore}
+    SEM -->|concurrency=1| W1[Worker A]
+    SEM -->|concurrency=N| WN[Worker N]
+    W1 --> RES[Partition Results]
+    WN --> RES
+    RES --> CS[Controller Step]
+```
