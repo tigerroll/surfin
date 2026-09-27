@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	coreAdapter "github.com/tigerroll/surfin/pkg/batch/core/adapter" // Imports the core adapter package.
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
@@ -58,6 +59,9 @@ type ChunkStep struct {
 	dbResolver       coreAdapter.ResourceConnectionResolver
 	txManagerFactory tx.TransactionManagerFactory // Transaction manager factory for creating transaction managers.
 
+	// backoffWaiter is used for retries.
+	backoffWaiter retry.BackoffWaiter
+
 	// currentStepExecution holds the current step execution for checkpointing in Close.
 	currentStepExecution *model.StepExecution
 }
@@ -93,6 +97,7 @@ var _ port.Step = (*ChunkStep)(nil)
 //	metricRecorder: Recorder for step metrics.
 //	tracer: Tracer for distributed tracing.
 //	dbResolver: Resolver for dynamic database connections.
+//	backoffWaiter: Waiter for retry backoff.
 func NewJSLAdaptedStep(
 	id string,
 	reader port.ItemReader[any],
@@ -118,6 +123,7 @@ func NewJSLAdaptedStep(
 	metricRecorder metrics.MetricRecorder,
 	tracer metrics.Tracer,
 	dbResolver coreAdapter.ResourceConnectionResolver,
+	backoffWaiter retry.BackoffWaiter,
 ) *ChunkStep {
 	// Item Retry Policy
 	itemRetryPolicy := retry.NewDefaultRetryPolicyFactory().Create(
@@ -167,6 +173,7 @@ func NewJSLAdaptedStep(
 		metricRecorder:         metricRecorder,
 		tracer:                 tracer,
 		dbResolver:             dbResolver,
+		backoffWaiter:          backoffWaiter,
 	}
 }
 
@@ -485,7 +492,14 @@ RetryChunk: // Jump here on write retry
 						readAttempts++
 						logger.Warnf("ChunkStep '%s': Item read failed (Attempt %d/%d). Retrying: %v", s.id, readAttempts, s.itemRetryPolicy.GetMaxAttempts(), readErr)
 						s.notifyRetryRead(txCtx, stepExecution, readErr)
-						// TODO: Backoff wait
+
+						backoff := s.itemRetryPolicy.GetBackoffInterval(readAttempts)
+						if backoff > 0 {
+							if err := s.backoffWaiter.Wait(txCtx, time.Duration(backoff)*time.Millisecond); err != nil {
+								chunkError = err
+								goto EndChunkLoop
+							}
+						}
 						continue // Retry
 					}
 
@@ -537,7 +551,14 @@ RetryChunk: // Jump here on write retry
 						processAttempts++
 						logger.Warnf("ChunkStep '%s': Item process failed (Attempt %d/%d). Retrying: %v", s.id, processAttempts, s.itemRetryPolicy.GetMaxAttempts(), processErr)
 						s.notifyRetryProcess(txCtx, stepExecution, item, processErr)
-						// TODO: Backoff wait
+
+						backoff := s.itemRetryPolicy.GetBackoffInterval(processAttempts)
+						if backoff > 0 {
+							if err := s.backoffWaiter.Wait(txCtx, time.Duration(backoff)*time.Millisecond); err != nil {
+								chunkError = err
+								goto EndChunkLoop
+							}
+						}
 						continue // Retry
 					}
 
@@ -641,7 +662,13 @@ RetryChunk: // Jump here on write retry
 							s.reader.Open(txCtx, stepExecution.ExecutionContext)
 						}
 
-						// TODO: Backoff wait
+						backoff := s.itemRetryPolicy.GetBackoffInterval(writeAttempts)
+						if backoff > 0 {
+							if err := s.backoffWaiter.Wait(txCtx, time.Duration(backoff)*time.Millisecond); err != nil {
+								chunkError = err
+								goto EndChunkLoop
+							}
+						}
 						goto RetryChunk // Go to outer chunk loop
 					}
 
@@ -942,7 +969,7 @@ func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalIte
 	var fatalError error
 
 	// 1. Re-write items one by one to identify errors
-	for i, item := range originalItems {
+	for _, item := range originalItems {
 		// 1.1. Begin transaction for a single item
 		txAdapter, err := currentTxManager.Begin(ctx, s.GetTransactionOptions())
 		if err != nil {
@@ -962,36 +989,28 @@ func (s *ChunkStep) HandleSkippableWriteFailure(ctx context.Context, originalIte
 				s.skipPolicy.IncrementSkipCount()
 				stepExecution.SkipWriteCount++
 				stepExecution.AddFailureException(writeErr)
+				logger.Warnf("ChunkStep '%s': Item write skipped during chunk splitting (Skip Count: %d/%d): %v", s.id, s.skipPolicy.GetSkipCount(), s.skipPolicy.GetSkipLimit(), writeErr)
 				s.notifySkipWrite(txCtx, stepExecution, item, writeErr)
 
-				// Rollback
+				// Rollback the failed single-item transaction
 				currentTxManager.Rollback(txAdapter)
-				logger.Warnf("ChunkStep '%s': Item skipped during chunk splitting: %+v", taskletName, item)
-
-				// This item was skipped, so do not add to remainingItems
-			} else {
-				// Skip limit exceeded or fatal error
-				currentTxManager.Rollback(txAdapter)
-				fatalError = exception.NewBatchError(taskletName, fmt.Sprintf("Item write failed during chunk splitting (Fatal or limit reached) for item index %d", i), writeErr, false, false)
-				break
-			}
-		} else {
-			// 1.4. Write successful: Commit
-			if commitErr := currentTxManager.Commit(txAdapter); commitErr != nil {
-				fatalError = exception.NewBatchError(taskletName, "Failed to commit transaction during chunk splitting", commitErr, false, false)
-				break
+				continue // Skip this item and continue
 			}
 
-			// Do not add successful items to remainingItems (as they are already persisted)
-			writeCount := stepExecution.WriteCount + 1
-			stepExecution.WriteCount = writeCount
-			s.metricRecorder.RecordItemWrite(txCtx, stepExecution, 1)
+			// Fatal error or skip limit exceeded
+			currentTxManager.Rollback(txAdapter)
+			fatalError = exception.NewBatchError(taskletName, "Item write failed during chunk splitting (Fatal or limit reached)", writeErr, false, false)
+			break
 		}
-	}
 
-	// At the completion of chunk splitting, all items from the original chunk are considered processed.
-	// Successful items were committed, and failed items were skipped.
-	// Therefore, this function returns an empty remainingItems and fatalError.
+		// 1.4. Write successful: Commit
+		if commitErr := currentTxManager.Commit(txAdapter); commitErr != nil {
+			currentTxManager.Rollback(txAdapter)
+			fatalError = exception.NewBatchError(taskletName, "Failed to commit transaction during chunk splitting", commitErr, false, false)
+			break
+		}
+		stepExecution.WriteCount++
+	}
 
 	return remainingItems, fatalError
 }

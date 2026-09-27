@@ -16,6 +16,7 @@ import (
 	"github.com/tigerroll/surfin/pkg/batch/core/support/expression"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/factory"
 	"github.com/tigerroll/surfin/pkg/batch/engine/step/partition"
+	"github.com/tigerroll/surfin/pkg/batch/engine/step/retry"
 	"github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
@@ -28,6 +29,7 @@ var Module = fx.Options(
 	expression.Module, // Provides the ExpressionResolver.
 
 	// Engine Components: Provides Step Factory, StepExecutor, Retry Module, Skip Module.
+	retry.Module,
 	factory.Module,
 	partition.Module,
 

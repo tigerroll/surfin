@@ -10,6 +10,7 @@ import (
 	tx "github.com/tigerroll/surfin/pkg/batch/core/tx"
 	itemstep "github.com/tigerroll/surfin/pkg/batch/engine/step/item"
 	partitionstep "github.com/tigerroll/surfin/pkg/batch/engine/step/partition"
+	"github.com/tigerroll/surfin/pkg/batch/engine/step/retry"
 	taskletstep "github.com/tigerroll/surfin/pkg/batch/engine/step/tasklet"
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 	"go.uber.org/fx"
@@ -127,22 +128,24 @@ type DefaultStepFactory struct {
 	jobRepository        repository.JobRepository
 	stepExecutor         port.StepExecutor
 	metricRecorder       metrics.MetricRecorder
-	tracer               metrics.Tracer                         // Line 131
-	dbConnectionResolver coreAdapter.ResourceConnectionResolver // `dbConnectionResolver` is used to resolve database connections for steps.
-	txManagerFactory     tx.TransactionManagerFactory           // `txManagerFactory` is the transaction manager factory for creating transaction managers.
+	tracer               metrics.Tracer
+	dbConnectionResolver coreAdapter.ResourceConnectionResolver
+	txManagerFactory     tx.TransactionManagerFactory
+	backoffWaiter        retry.BackoffWaiter // BackoffWaiter is used for retry backoff logic
 }
 
 // DefaultStepFactoryParams defines the parameters that the `NewDefaultStepFactory` function
 // receives via dependency injection (Fx).
 type DefaultStepFactoryParams struct {
-	fx.In             // Line 144
+	fx.In
 	JobRepository     repository.JobRepository
-	MetadataTxManager tx.TransactionManager `name:"metadata"` // Requests the metadata TxManager (used by JobRepository).
+	MetadataTxManager tx.TransactionManager `name:"metadata"`
 	StepExecutor      port.StepExecutor
-	MetricRecorder    metrics.MetricRecorder                 // Line 147
-	Tracer            metrics.Tracer                         // Line 148
-	DBResolver        coreAdapter.ResourceConnectionResolver // `DBResolver` is the database connection resolver.
-	TxFactory         tx.TransactionManagerFactory           // `TxFactory` is the transaction manager factory.
+	MetricRecorder    metrics.MetricRecorder
+	Tracer            metrics.Tracer
+	DBResolver        coreAdapter.ResourceConnectionResolver
+	TxFactory         tx.TransactionManagerFactory
+	BackoffWaiter     retry.BackoffWaiter // BackoffWaiter is the waiter for retry backoff
 }
 
 // NewDefaultStepFactory creates a new instance of `DefaultStepFactory`.
@@ -160,8 +163,9 @@ func NewDefaultStepFactory(
 		stepExecutor:         p.StepExecutor,
 		metricRecorder:       p.MetricRecorder,
 		tracer:               p.Tracer,
-		dbConnectionResolver: p.DBResolver, // Injected DBConnectionResolver
-		txManagerFactory:     p.TxFactory,  // Injected TransactionManagerFactory
+		dbConnectionResolver: p.DBResolver,
+		txManagerFactory:     p.TxFactory,
+		backoffWaiter:        p.BackoffWaiter,
 	}
 }
 
@@ -231,14 +235,15 @@ func (f *DefaultStepFactory) CreateChunkStep(
 		itemWriteListeners,
 		skipListeners,
 		retryItemListeners,
-		chunkListeners, // Chunk-specific listeners
+		chunkListeners,
 		promotion,
 		isolationLevel,
 		propagation,
-		f.txManagerFactory, // Injected TransactionManagerFactory
+		f.txManagerFactory,
 		f.metricRecorder,
 		f.tracer,
 		f.dbConnectionResolver,
+		f.backoffWaiter,
 	)
 	logger.Debugf("Chunk Step '%s' built.", name)
 	return step, nil
@@ -267,8 +272,8 @@ func (f *DefaultStepFactory) CreateTaskletStep(
 ) (port.Step, error) {
 	step := taskletstep.NewTaskletStep(
 		name,
-		tasklet,         // The tasklet to execute
-		f.jobRepository, // Use StepFactory dependency
+		tasklet,
+		f.jobRepository,
 		stepExecutionListeners,
 		promotion,
 		isolationLevel,
