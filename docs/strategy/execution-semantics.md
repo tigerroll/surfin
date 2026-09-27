@@ -79,6 +79,35 @@ Transaction Commit → ItemStream.Update → AfterChunk → Checkpoint Persisten
 * ListenerはSurfinのExecution Lifecycleを構成する要素である。
 * 各Listener（Job, Step, Chunk, ItemRead/Process/Write, Skip, Retry）について、成功/失敗/Panic/Retry/Transaction前後/Checkpoint前後での呼び出しを保証する。
 
+### 3.5 Retry Backoff Strategy (リトライバックオフ戦略)
+
+リトライ発生時、システム負荷の軽減と成功率の向上を目的として、バックオフ（待機時間）を導入する。Surfin におけるバックオフは、単なる待機ではなく「実行意味論の一部」として以下の仕様を遵守する。
+
+#### 3.5.1 基本仕様
+
+| 項目 | 仕様 |
+| :--- | :--- |
+| **タイミング** | Retry attempt の**前**に待機する。 |
+| **初回リトライ** | `attempt=1` のバックオフ時間を適用する。 |
+| **Context 尊重** | 待機中であっても `context.Context` のキャンセルを監視し、即座に中断する。 |
+| **Skipとの関係** | Skip される場合はバックオフを行わない。 |
+
+#### 3.5.2 設計パターン: BackoffWaiter
+
+テスト容易性を担保するため、実際の待機処理は `BackoffWaiter` インターフェースを介して注入する。これにより、プロダクション環境では実時間待機を行い、テスト環境では即時完了するモックを利用可能とする。
+
+```go
+// BackoffWaiter は、リトライ間の待機処理を抽象化するインターフェースです。
+type BackoffWaiter interface {
+    // Wait は、指定された期間待機します。Context がキャンセルされた場合は即座にエラーを返します。
+    Wait(ctx context.Context, duration time.Duration) error
+}
+```
+
+#### 3.5.3 実装上の注意
+* `time.Sleep()` を直接使用してはならない。必ず `BackoffWaiter` を経由し、`context.Context` を尊重すること。
+* バックオフ計算ロジックと待機処理（副作用）を分離し、テスト時には待機時間をスキップできるように設計すること。
+
 ## 4. 技術的課題とロードマップ (Semantic Gaps & Roadmap)
 
 ### 4.1 未解決の技術的課題 (Semantic Gaps)
