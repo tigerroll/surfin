@@ -261,7 +261,7 @@ func (w *ParquetWriter[T]) Flush(ctx context.Context) error {
 		if writeSuccessful {
 			// Generate file name
 			fileName := w.generateFileName(partitionKey)
-			fullPath := filepath.Join(w.config.OutputBaseDir, fileName)
+			fullPath := filepath.Join(w.config.OutputBaseDir, partitionKey, fileName)
 
 			// Upload to storage
 			if err := w.storageConn.Upload(ctx, "", fullPath, buf, "application/x-parquet"); err != nil {
