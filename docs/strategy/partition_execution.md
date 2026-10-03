@@ -230,7 +230,8 @@ PartitionExecutor
 
 Partition Execution では、Worker ごとに独立した実行結果が発生する。
 
-基本的なモデルは以下とする。
+### 8.1. Partition Worker の状態遷移
+Worker（各パーティション）は、独立した `StepExecution` として扱われる。
 
 ```text
 Partition Worker
@@ -249,13 +250,23 @@ Partition Result Aggregation
 Controller StepExecution
 ```
 
-Partition の並行実行と、Step Execution の状態管理は分離して考える。
+| 状態 | 定義 |
+| :--- | :--- |
+| **STARTING** | Controller がパーティションを生成し、リポジトリに保存した直後。 |
+| **STARTED** | Worker が `ExecuteStep` を開始した状態。 |
+| **COMPLETED** | 正常終了。 |
+| **FAILED** | 業務エラーまたはシステムエラーで終了。 |
+| **STOPPED** | 外部からのキャンセル要求（`context.CancelFunc`）により停止。 |
 
 ---
 
 ## 9. Cancellation
 
+### 9.1. Cancellation の伝播
 1つの Partition がエラーを返した場合、`errgroup` と `context.Context` を利用して、他の Partition に cancellation を伝播できる構造とする。
+
+### 9.2. Cancellation (キャンセル)
+*   **挙動**: Controller がキャンセルされた場合、`context.Context` を通じて全 Worker にキャンセルを伝播させる。
 
 ```text
 Partition A ── COMPLETE
@@ -269,13 +280,7 @@ Partition B ── FAILED
           Partition D
 ```
 
-ただし、
-
-* Worker が業務エラーによって `FAILED` になる
-* Controller が cancellation を受け取る
-* Worker が cancellation によって終了する
-
-ことは、それぞれ異なる状態として Execution Semantics 上で扱う。
+*   **状態**: キャンセルされた Worker は `STOPPED` となる。
 
 ---
 

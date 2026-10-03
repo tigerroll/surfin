@@ -1,3 +1,4 @@
+// Package partition provides the PartitionStep implementation for the batch engine.
 package partition
 
 import (
@@ -19,7 +20,7 @@ import (
 )
 
 // PartitionStep is an implementation of core.Step that executes a worker step in parallel partitions.
-// This acts as the Controller Step.
+// It acts as a controller step, managing the lifecycle of worker partitions and aggregating their results.
 type PartitionStep struct {
 	id          string
 	partitioner port.Partitioner
@@ -31,24 +32,11 @@ type PartitionStep struct {
 	stepExecutionListeners []port.StepExecutionListener
 	promotion              *model.ExecutionContextPromotion
 	stepExecutor           port.StepExecutor // SimpleStepExecutor or RemoteStepExecutor
-	// Fields to satisfy Step interface requirements (PartitionStep itself usually doesn't record, but holds to pass to Worker)
-	metricRecorder metrics.MetricRecorder
-	tracer         metrics.Tracer
+	metricRecorder         metrics.MetricRecorder
+	tracer                 metrics.Tracer
 }
 
 // NewPartitionStep creates a new PartitionStep instance.
-//
-// Parameters:
-//
-//	id: The unique identifier for the step.
-//	partitioner: The partitioner used to generate partitions.
-//	workerStep: The step to be executed in each partition.
-//	gridSize: The number of partitions to generate.
-//	concurrency: The maximum number of partitions to execute in parallel.
-//	jobRepository: The repository for persisting job metadata.
-//	stepExecutionListeners: Listeners for step execution events.
-//	promotion: Configuration for promoting execution context.
-//	stepExecutor: The executor used to run the worker step.
 func NewPartitionStep(
 	id string,
 	partitioner port.Partitioner,
@@ -70,64 +58,64 @@ func NewPartitionStep(
 		stepExecutionListeners: stepExecutionListeners,
 		promotion:              promotion,
 		stepExecutor:           stepExecutor,
+		tracer:                 metrics.NewNoOpTracer(),
+		metricRecorder:         metrics.NewNoOpMetricRecorder(),
 	}
 }
 
-// SetMetricRecorder implements port.Step.
+// SetMetricRecorder implements the port.Step interface.
 func (s *PartitionStep) SetMetricRecorder(recorder metrics.MetricRecorder) {
 	s.metricRecorder = recorder
 }
 
-// SetTracer implements port.Step.
+// SetTracer implements the port.Step interface.
 func (s *PartitionStep) SetTracer(tracer metrics.Tracer) {
 	s.tracer = tracer
 }
 
-// GetExecutionContextPromotion implements port.Step.
-// PartitionStep does not have its own ExecutionContextPromotion, so it returns nil.
+// GetExecutionContextPromotion implements the port.Step interface.
+// PartitionStep does not support execution context promotion directly.
 func (s *PartitionStep) GetExecutionContextPromotion() *model.ExecutionContextPromotion {
 	return nil
 }
 
-// ID returns the step ID.
+// ID returns the unique identifier of the step.
 func (s *PartitionStep) ID() string {
 	return s.id
 }
 
-// StepName returns the step name.
+// StepName returns the logical name of the step.
 func (s *PartitionStep) StepName() string {
 	return s.id
 }
 
 // GetTransactionOptions returns the transaction options for this step.
-// PartitionStep is a controller step and does not require a transaction boundary for its execution.
+// PartitionStep is a controller and does not require a transaction boundary.
 func (s *PartitionStep) GetTransactionOptions() *sql.TxOptions {
-	// PartitionStep is a controller and does not require a transaction for itself, so it returns nil.
 	return nil
 }
 
 // GetPropagation returns the transaction propagation attribute.
-// PartitionStep is a controller step and does not require a transaction boundary for its execution.
+// PartitionStep is a controller and does not require a transaction boundary.
 func (s *PartitionStep) GetPropagation() string {
-	// JSL does not define a propagation attribute for Partition Step itself, so it returns an empty string.
 	return ""
 }
 
-// notifyBeforeStep calls the BeforeStep method of registered StepExecutionListeners.
+// notifyBeforeStep triggers the BeforeStep event for all registered listeners.
 func (s *PartitionStep) notifyBeforeStep(ctx context.Context, stepExecution *model.StepExecution) {
 	for _, l := range s.stepExecutionListeners {
 		l.BeforeStep(ctx, stepExecution)
 	}
 }
 
-// notifyAfterStep calls the AfterStep method of registered StepExecutionListeners.
+// notifyAfterStep triggers the AfterStep event for all registered listeners.
 func (s *PartitionStep) notifyAfterStep(ctx context.Context, stepExecution *model.StepExecution) {
 	for _, l := range s.stepExecutionListeners {
 		l.AfterStep(ctx, stepExecution)
 	}
 }
 
-// Execute runs the partitioning logic.
+// Execute runs the partitioning logic, managing worker execution, concurrency, and result aggregation.
 func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExecution, controllerExecution *model.StepExecution) (err error) {
 	logger.Infof("PartitionStep '%s' executing (GridSize: %d, Concurrency: %d).", s.id, s.gridSize, s.concurrency)
 
@@ -184,31 +172,39 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 
 		logger.Debugf("PartitionStep '%s': Starting worker '%s' (Worker StepExecution ID: %s).", s.id, partitionName, workerExecutionID)
 
-		go func(workerExec *model.StepExecution) {
+		go func(workerExec *model.StepExecution, pName string) {
 			defer wg.Done()
+
+			// Start Span for the worker
+			workerCtx, finishSpan := s.tracer.StartStepSpan(ctx, workerExec)
+			defer finishSpan()
+			s.tracer.RecordEvent(workerCtx, "partition_worker_start", map[string]interface{}{"partition.name": pName})
 
 			// Acquire semaphore only if enabled
 			if sem != nil {
-				if err := sem.Acquire(ctx, 1); err != nil {
+				if err := sem.Acquire(workerCtx, 1); err != nil {
 					errChan <- err
+					s.tracer.RecordError(workerCtx, "partition_step", err)
 					return
 				}
 				defer sem.Release(1)
 			}
 
 			// Execute the Worker Step using the StepExecutor.
-			completedWorkerExec, execErr := s.stepExecutor.ExecuteStep(ctx, s.workerStep, jobExecution, workerExec)
+			completedWorkerExec, execErr := s.stepExecutor.ExecuteStep(workerCtx, s.workerStep, jobExecution, workerExec)
 
 			if execErr != nil {
 				logger.Errorf("PartitionStep '%s': Worker '%s' failed: %v", s.id, workerExec.StepName, execErr)
 				errChan <- execErr
+				s.tracer.RecordError(workerCtx, "partition_step", execErr)
 			} else {
 				logger.Infof("PartitionStep '%s': Worker '%s' completed with status: %s", s.id, workerExec.StepName, completedWorkerExec.Status)
+				s.tracer.RecordEvent(workerCtx, "partition_worker_success", map[string]interface{}{"status": completedWorkerExec.Status.String()})
 			}
 
 			// Send the completed Worker StepExecution for aggregation.
 			workerExecutions <- completedWorkerExec
-		}(workerExecution)
+		}(workerExecution, partitionName)
 	}
 
 	logger.Debugf("PartitionStep '%s': Waiting for workers to finish.", s.id)
