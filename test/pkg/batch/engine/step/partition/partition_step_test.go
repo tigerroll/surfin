@@ -268,6 +268,7 @@ func TestPartitionStep_Aggregation(t *testing.T) {
 		mockPartitioner,
 		workerStep,
 		3, // gridSize
+		1, // concurrency
 		mockRepo,
 		[]port.StepExecutionListener{},
 		promotion,

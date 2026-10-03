@@ -104,6 +104,7 @@ type StepFactory interface {
 	//   workerStep: An implementation of the `port.Step` interface to be executed in each partition.
 	//               This represents the actual work unit that will be distributed.
 	//   gridSize: The number of partitions to generate (or the maximum number if the partitioner generates fewer).
+	//   concurrency: The maximum number of partitions to execute in parallel.
 	//   jobRepository: An implementation of the `repository.JobRepository` interface for persisting job metadata.
 	//   stepExecutionListeners: A list of `port.StepExecutionListener` to apply to this step.
 	//   promotion: Promotion settings from `StepExecutionContext` to `JobExecutionContext`.
@@ -116,6 +117,7 @@ type StepFactory interface {
 		partitioner port.Partitioner,
 		workerStep port.Step,
 		gridSize int,
+		concurrency int,
 		jobRepository repository.JobRepository,
 		stepExecutionListeners []port.StepExecutionListener,
 		promotion *model.ExecutionContextPromotion,
@@ -294,6 +296,7 @@ func (f *DefaultStepFactory) CreateTaskletStep(
 // partitioner: An implementation of the Partitioner interface for generating partitions.
 // workerStep: An implementation of the Step interface to be executed in each partition.
 // gridSize: The number of partitions to generate (or the maximum number if the partitioner generates fewer).
+// concurrency: The maximum number of partitions to execute in parallel.
 // jobRepository: An implementation of the JobRepository interface for persisting job metadata.
 // stepExecutionListeners: A list of StepExecutionListeners to apply to this step.
 // promotion: Promotion settings from StepExecutionContext to JobExecutionContext.
@@ -306,6 +309,7 @@ func (f *DefaultStepFactory) CreatePartitionStep(
 	partitioner port.Partitioner,
 	workerStep port.Step,
 	gridSize int,
+	concurrency int,
 	jobRepository repository.JobRepository,
 	stepExecutionListeners []port.StepExecutionListener,
 	promotion *model.ExecutionContextPromotion,
@@ -315,6 +319,7 @@ func (f *DefaultStepFactory) CreatePartitionStep(
 		partitioner,
 		workerStep,
 		gridSize,
+		concurrency,
 		jobRepository,
 		stepExecutionListeners,
 		promotion,

@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/semaphore"
+
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
 	model "github.com/tigerroll/surfin/pkg/batch/core/domain/model"
 	repository "github.com/tigerroll/surfin/pkg/batch/core/domain/repository"
@@ -19,10 +21,12 @@ import (
 // PartitionStep is an implementation of core.Step that executes a worker step in parallel partitions.
 // This acts as the Controller Step.
 type PartitionStep struct {
-	id                     string
-	partitioner            port.Partitioner
-	workerStep             port.Step
-	gridSize               int
+	id          string
+	partitioner port.Partitioner
+	workerStep  port.Step
+	gridSize    int
+	// concurrency specifies the maximum number of partitions to execute in parallel.
+	concurrency            int
 	jobRepository          repository.JobRepository
 	stepExecutionListeners []port.StepExecutionListener
 	promotion              *model.ExecutionContextPromotion
@@ -33,11 +37,24 @@ type PartitionStep struct {
 }
 
 // NewPartitionStep creates a new PartitionStep instance.
+//
+// Parameters:
+//
+//	id: The unique identifier for the step.
+//	partitioner: The partitioner used to generate partitions.
+//	workerStep: The step to be executed in each partition.
+//	gridSize: The number of partitions to generate.
+//	concurrency: The maximum number of partitions to execute in parallel.
+//	jobRepository: The repository for persisting job metadata.
+//	stepExecutionListeners: Listeners for step execution events.
+//	promotion: Configuration for promoting execution context.
+//	stepExecutor: The executor used to run the worker step.
 func NewPartitionStep(
 	id string,
 	partitioner port.Partitioner,
 	workerStep port.Step,
 	gridSize int,
+	concurrency int,
 	jobRepository repository.JobRepository,
 	stepExecutionListeners []port.StepExecutionListener,
 	promotion *model.ExecutionContextPromotion,
@@ -48,6 +65,7 @@ func NewPartitionStep(
 		partitioner:            partitioner,
 		workerStep:             workerStep,
 		gridSize:               gridSize,
+		concurrency:            concurrency,
 		jobRepository:          jobRepository,
 		stepExecutionListeners: stepExecutionListeners,
 		promotion:              promotion,
@@ -111,7 +129,7 @@ func (s *PartitionStep) notifyAfterStep(ctx context.Context, stepExecution *mode
 
 // Execute runs the partitioning logic.
 func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExecution, controllerExecution *model.StepExecution) (err error) {
-	logger.Infof("PartitionStep '%s' executing (GridSize: %d).", s.id, s.gridSize)
+	logger.Infof("PartitionStep '%s' executing (GridSize: %d, Concurrency: %d).", s.id, s.gridSize, s.concurrency)
 
 	// 1. Update the status of the Controller StepExecution to STARTED.
 	controllerExecution.MarkAsStarted()
@@ -139,6 +157,12 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 	// List of Worker StepExecutions (for aggregation).
 	workerExecutions := make(chan *model.StepExecution, len(partitionContexts))
 
+	// Create semaphore only if concurrency is greater than 0
+	var sem *semaphore.Weighted
+	if s.concurrency > 0 {
+		sem = semaphore.NewWeighted(int64(s.concurrency))
+	}
+
 	for partitionName, partitionEC := range partitionContexts {
 		wg.Add(1)
 
@@ -162,6 +186,15 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 
 		go func(workerExec *model.StepExecution) {
 			defer wg.Done()
+
+			// Acquire semaphore only if enabled
+			if sem != nil {
+				if err := sem.Acquire(ctx, 1); err != nil {
+					errChan <- err
+					return
+				}
+				defer sem.Release(1)
+			}
 
 			// Execute the Worker Step using the StepExecutor.
 			completedWorkerExec, execErr := s.stepExecutor.ExecuteStep(ctx, s.workerStep, jobExecution, workerExec)
@@ -257,7 +290,7 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 			controllerExecution.MarkAsFailed(fmt.Errorf("partition execution resulted in aggregated status: %s", aggregatedExitStatus))
 		default:
 			// For other states (e.g., UNKNOWN), treat as failure.
-			controllerExecution.MarkAsFailed(fmt.Errorf("partition execution resulted in unexpected aggregated status: %s", aggregatedExitStatus))
+			controllerExecution.MarkAsFailed(fmt.Errorf("partition execution resulted in aggregated status: %s", aggregatedExitStatus))
 		}
 	}
 

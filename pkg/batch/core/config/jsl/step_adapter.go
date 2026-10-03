@@ -662,11 +662,18 @@ func ConvertJSLToCoreFlow(
 					return nil, exception.NewBatchError(module, fmt.Sprintf("Failed to build Worker Step '%s'", jslStep.Partition.Step), err, false, false)
 				}
 
+				// Apply default value (1 if nil)
+				concurrency := 1
+				if jslStep.Partition.Concurrency != nil {
+					concurrency = *jslStep.Partition.Concurrency
+				}
+
 				coreElement, err = stepFactory.CreatePartitionStep(
 					jslStep.ID,
 					tempInfo.Partitioner,
 					workerCoreStep,
 					jslStep.Partition.GridSize,
+					concurrency,
 					jobRepository,
 					tempInfo.StepExecListeners,
 					tempInfo.CoreECPromotion,

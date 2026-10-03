@@ -134,6 +134,8 @@ type Partition struct {
 	Step string `yaml:"step"`
 	// GridSize specifies the number of partitions to create.
 	GridSize int `yaml:"grid-size"`
+	// Concurrency specifies the maximum number of partitions to execute in parallel.
+	Concurrency *int `yaml:"concurrency,omitempty"`
 }
 
 // ComponentBuilder is a generic function type for building core components such as ItemReader, ItemProcessor, and ItemWriter.
