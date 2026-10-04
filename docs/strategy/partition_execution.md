@@ -114,8 +114,6 @@ Job
 
 現在の実装では、Partition はすべて生成され、それぞれに対応する goroutine が起動される。`concurrency` は、その中で**実際に処理を実行する Worker の数**を `semaphore` によって制御する。
 
-`concurrency` は goroutine の生成数ではなく、Partition Worker が実際に処理を実行している数の上限を表す。
-
 ```text
 100 Partitions (100 goroutines)
        │
