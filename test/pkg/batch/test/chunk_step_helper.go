@@ -378,6 +378,9 @@ func (m *MockMetricRecorder) RecordChunkCommit(ctx context.Context, stepExecutio
 func (m *MockMetricRecorder) RecordDuration(ctx context.Context, name string, duration float64, attrs ...attribute.KeyValue) {
 	m.Called(ctx, name, duration, attrs)
 }
+func (m *MockMetricRecorder) RecordGauge(ctx context.Context, name string, value float64, attrs ...attribute.KeyValue) {
+	m.Called(ctx, name, value, attrs)
+}
 func (m *MockMetricRecorder) RecordExecutionError(ctx context.Context, err error) {
 	m.Called(ctx, err)
 }

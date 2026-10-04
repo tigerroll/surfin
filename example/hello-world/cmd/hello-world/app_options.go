@@ -87,6 +87,8 @@ func (d *dummyMetricRecorder) RecordChunkCommit(ctx context.Context, stepExecuti
 }
 func (d *dummyMetricRecorder) RecordDuration(ctx context.Context, name string, duration float64, attrs ...attribute.KeyValue) {
 }
+func (d *dummyMetricRecorder) RecordGauge(ctx context.Context, name string, value float64, attrs ...attribute.KeyValue) {
+}
 func (d *dummyMetricRecorder) RecordExecutionError(ctx context.Context, err error) {}
 func (d *dummyMetricRecorder) RecordItemProcess(ctx context.Context, stepExecution *model.StepExecution, item int64) {
 }

@@ -97,6 +97,15 @@ type MetricRecorder interface {
 	//          Example: `attribute.String("api_name", "OpenMeteo"), attribute.String("status", "success")`
 	RecordDuration(ctx context.Context, name string, duration float64, attrs ...attribute.KeyValue)
 
+	// RecordGauge records a gauge metric.
+	//
+	// Parameters:
+	//   ctx: The context for the operation.
+	//   name: The name of the gauge metric.
+	//   value: The gauge value.
+	//   attrs: Optional OpenTelemetry attributes.
+	RecordGauge(ctx context.Context, name string, value float64, attrs ...attribute.KeyValue)
+
 	// RecordExecutionError records a general execution error.
 	//
 	// Parameters:
@@ -167,6 +176,11 @@ func (r *NoOpMetricRecorder) RecordChunkCommit(ctx context.Context, stepExecutio
 // RecordDuration implements the MetricRecorder interface for NoOpMetricRecorder.
 // It performs no operation.
 func (r *NoOpMetricRecorder) RecordDuration(ctx context.Context, name string, duration float64, attrs ...attribute.KeyValue) {
+}
+
+// RecordGauge implements the MetricRecorder interface for NoOpMetricRecorder.
+// It performs no operation.
+func (r *NoOpMetricRecorder) RecordGauge(ctx context.Context, name string, value float64, attrs ...attribute.KeyValue) {
 }
 
 // RecordExecutionError implements the MetricRecorder interface for NoOpMetricRecorder.

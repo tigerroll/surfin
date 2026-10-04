@@ -351,8 +351,16 @@ Partition Execution の Execution Semantics と concurrency control が確立し
 ### Phase 4 — Partition Failure Matrix
 * Partition Execution の状態・失敗パターンを Failure Matrix として整理し、自動テスト化する。
 
-### Phase 5 — OpenTelemetry
-* Partition 単位の Observability を追加する。
+### Phase 5 — Observability (可観測性)
+Partition Execution の並行実行状況を可視化し、障害時の原因特定を迅速化する。
+
+*   **Distributed Tracing (分散トレース)**:
+    *   `PartitionStep` (Controller) を親 Span とし、各 Worker の実行を子 Span として紐付ける。
+    *   Worker の Span には `partition.name` 属性を付与し、どのパーティションで遅延やエラーが発生したかを特定可能にする。
+*   **Metrics (メトリクス)**:
+    *   **Concurrency Saturation**: `concurrency` 設定値に対する現在の実行数（Gauge）を記録し、リソースのボトルネックを検知する。
+    *   **Worker Execution Time**: 各 Worker の実行時間をヒストグラムで記録し、パーティション間の処理時間の偏り（データスキュー）を検知する。
+    *   **Partition Failure Rate**: パーティションごとの成功/失敗率をカウントし、特定のパーティションのみが失敗していないかを監視する。
 
 ---
 
