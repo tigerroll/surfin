@@ -256,8 +256,12 @@ Worker（各パーティション）は、独立した `StepExecution` として
 Surfin における Cancellation は、`context.Context` を通じて上位の実行単位（Controller）から Worker へ停止信号を伝播させる仕組みである。
 
 ### 9.2. Graceful Cancellation Semantics
-Worker は `context.Done()` を受信した際、即座に終了するのではなく、以下の手順で「Graceful」に終了しなければならない。
+Worker は `context.Done()` を受信した際、即座に終了するのではなく、以下の手順で「Graceful」に終了することを目標とする。
 
+**現時点での実装:**
+Worker は `context.Canceled` を受け取った場合、即座に処理を中断し、`CANCELLED` 状態へ遷移する。
+
+**目標とする仕様:**
 1. **新しい処理の開始禁止**: 新しい Chunk や Tasklet の実行を開始しない。
 2. **現在の処理の完了**: 現在実行中の Chunk や Transaction をコミットまたはロールバックする。
 3. **Checkpoint の保存**: 可能な限り現在の状態を保存する。
@@ -266,12 +270,12 @@ Worker は `context.Done()` を受信した際、即座に終了するのでは�
 この手順により、再実行（Restart）時にデータの一貫性が保たれる。
 
 ### 9.3. STOPPED と CANCELLED の区別
-状態名から原因を読み取れるよう、以下の通り区別する。
+Surfin では、Execution State（内部状態）と ExitStatus（外部報告）を分離した2層構造を採用している。
 
-| 状態 | 意味 | 典型的な原因 |
-| :--- | :--- | :--- |
-| **STOPPED** | 明示的停止 | User / Controller による Stop 要求 |
-| **CANCELLED** | 上位キャンセルによる終了 | 親 Context の cancellation 伝播 |
+*   **Execution State**: `CANCELLED` は、親 Context からのキャンセル伝播によって終了したことを示す独立した状態である。
+*   **ExitStatus**: 既存の ExitStatus 体系との互換性を保つため、`CANCELLED` 状態の Worker は `STOPPED` として報告される。
+
+これにより、内部的には「明示的な停止(STOPPED)」と「キャンセル伝播(CANCELLED)」を区別しつつ、外部システムに対しては一貫した終了ステータスを提供できる。
 
 ---
 
@@ -300,7 +304,7 @@ Partition Execution についても、通常の ChunkStep と同様に Failure M
 | Cancel中にTransaction未Commit | `CANCELLED` | `CANCELLED` |
 | Cancel後Restart | `CANCELLED` → 再実行可能 | Job再実行 |
 
-**Failure Matrix は単なるテストケース一覧ではなく、Partition Execution Semantics の executable specification として扱う。**
+**Failure Matrix は単なるテストケース一覧ではなく、Partition Execution Semantics の executable specification として扱う。各ケースは対応するテストコードによって証明される。**
 
 ---
 
@@ -310,7 +314,7 @@ Partition Execution についても、通常の ChunkStep と同様に Failure M
 
 ただし、Remote Execution は Local Execution とは異なる性質を持つ。
 
-そのため、現時点で Remote Execution のための Executor abstraction を導入することはしない。
+したがって、現時点では Remote Execution のための Executor 抽象化は導入しない。
 
 まずは Local Partition Execution の Execution Semantics と concurrency control を確立する。
 

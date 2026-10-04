@@ -310,7 +310,7 @@ Partition Execution についても、通常の ChunkStep と同様に Failure M
 
 ただし、Remote Execution は Local Execution とは異なる性質を持つ。
 
-そのため、現時点で Remote Execution のための Executor abstraction を導入することはしない。
+したがって、現時点では Remote Execution のための Executor 抽象化は導入しない。
 
 まずは Local Partition Execution の Execution Semantics と concurrency control を確立する。
 
