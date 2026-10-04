@@ -34,6 +34,9 @@ type OtelMetricRecorder struct {
 	// Histograms
 	durationHistogram metric.Float64Histogram
 
+	// Gauges
+	gauge metric.Float64Gauge
+
 	itemSamplingRate float64
 }
 
@@ -145,6 +148,15 @@ func NewOtelMetricRecorder(meter metric.Meter, itemSamplingRate float64) (metric
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create durationHistogram: %w", err)
+	}
+
+	// Initialize Gauges
+	r.gauge, err = meter.Float64Gauge(
+		"surfin.batch.gauge",
+		metric.WithDescription("Generic gauge metric"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gauge: %w", err)
 	}
 
 	return r, nil
@@ -369,6 +381,14 @@ func (r *OtelMetricRecorder) RecordDuration(ctx context.Context, name string, du
 	copy(allAttrs[1:], attrs)
 
 	r.durationHistogram.Record(ctx, duration, metric.WithAttributes(allAttrs...))
+}
+
+// RecordGauge records a custom gauge metric.
+func (r *OtelMetricRecorder) RecordGauge(ctx context.Context, name string, value float64, attrs ...attribute.KeyValue) {
+	allAttrs := make([]attribute.KeyValue, len(attrs)+1)
+	allAttrs[0] = attribute.String("metric.name", name)
+	copy(allAttrs[1:], attrs)
+	r.gauge.Record(ctx, value, metric.WithAttributes(allAttrs...))
 }
 
 // RecordExecutionError records a general execution error.

@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/sync/semaphore"
 
 	port "github.com/tigerroll/surfin/pkg/batch/core/application/port"
@@ -19,8 +21,8 @@ import (
 	logger "github.com/tigerroll/surfin/pkg/batch/support/util/logger"
 )
 
-// PartitionStep is an implementation of core.Step that executes a worker step in parallel partitions.
-// It acts as a controller step, managing the lifecycle of worker partitions and aggregating their results.
+// PartitionStep acts as a controller step that executes a worker step across multiple parallel partitions.
+// It manages the lifecycle of worker partitions, enforces concurrency limits, and aggregates execution results.
 type PartitionStep struct {
 	id          string
 	partitioner port.Partitioner
@@ -36,7 +38,19 @@ type PartitionStep struct {
 	tracer                 metrics.Tracer
 }
 
-// NewPartitionStep creates a new PartitionStep instance.
+// NewPartitionStep initializes a new PartitionStep.
+//
+// Parameters:
+//
+//	id: The unique identifier for the step.
+//	partitioner: The component responsible for generating partitions.
+//	workerStep: The step to be executed within each partition.
+//	gridSize: The total number of partitions to create.
+//	concurrency: The maximum number of partitions to execute in parallel.
+//	jobRepository: The repository for persisting job metadata.
+//	stepExecutionListeners: Listeners to be notified during step execution.
+//	promotion: Configuration for promoting execution context to the job level.
+//	stepExecutor: The executor responsible for running the worker step.
 func NewPartitionStep(
 	id string,
 	partitioner port.Partitioner,
@@ -90,13 +104,13 @@ func (s *PartitionStep) StepName() string {
 }
 
 // GetTransactionOptions returns the transaction options for this step.
-// PartitionStep is a controller and does not require a transaction boundary.
+// As a controller step, PartitionStep does not require a transaction boundary.
 func (s *PartitionStep) GetTransactionOptions() *sql.TxOptions {
 	return nil
 }
 
 // GetPropagation returns the transaction propagation attribute.
-// PartitionStep is a controller and does not require a transaction boundary.
+// As a controller step, PartitionStep does not require a transaction boundary.
 func (s *PartitionStep) GetPropagation() string {
 	return ""
 }
@@ -115,8 +129,8 @@ func (s *PartitionStep) notifyAfterStep(ctx context.Context, stepExecution *mode
 	}
 }
 
-// determineAggregatedStatus determines the final status of the controller step based on the worker execution results,
-// following the defined Failure Matrix.
+// determineAggregatedStatus calculates the final status of the controller step based on the
+// execution results of all worker partitions, adhering to the defined Failure Matrix.
 func (s *PartitionStep) determineAggregatedStatus(workerExecutions []*model.StepExecution) (model.JobStatus, model.ExitStatus) {
 	hasFailed := false
 	hasStopped := false
@@ -142,8 +156,14 @@ func (s *PartitionStep) determineAggregatedStatus(workerExecutions []*model.Step
 	return model.BatchStatusCompleted, model.ExitStatusCompleted
 }
 
-// Execute runs the partitioning logic, managing worker execution, concurrency, and result aggregation.
+// Execute orchestrates the partitioning process. It generates partitions, manages worker
+// execution via goroutines with concurrency control, and aggregates the final status,
+// statistics, and execution context.
 func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExecution, controllerExecution *model.StepExecution) (err error) {
+	// Start the controller span for tracing.
+	ctx, finishSpan := s.tracer.StartStepSpan(ctx, controllerExecution)
+	defer finishSpan()
+
 	logger.Infof("PartitionStep '%s' executing (GridSize: %d, Concurrency: %d).", s.id, s.gridSize, s.concurrency)
 
 	// 1. Update the status of the Controller StepExecution to STARTED.
@@ -202,6 +222,12 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 		go func(workerExec *model.StepExecution, pName string) {
 			defer wg.Done()
 
+			// Start measuring the execution duration.
+			startTime := time.Now()
+
+			// Record the current concurrency as a gauge metric.
+			s.metricRecorder.RecordGauge(ctx, "partition_concurrency_active", float64(1), attribute.String("step.id", s.id))
+
 			// Start Span for the worker
 			workerCtx, finishSpan := s.tracer.StartStepSpan(ctx, workerExec)
 			defer finishSpan()
@@ -219,6 +245,12 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 
 			// Execute the Worker Step using the StepExecutor.
 			completedWorkerExec, execErr := s.stepExecutor.ExecuteStep(workerCtx, s.workerStep, jobExecution, workerExec)
+
+			// Record the execution duration.
+			duration := time.Since(startTime).Seconds()
+			s.metricRecorder.RecordDuration(workerCtx, "partition_worker_duration", duration,
+				attribute.String("partition.name", pName),
+				attribute.String("status", completedWorkerExec.Status.String()))
 
 			if execErr != nil {
 				// Treat context.Canceled as CANCELLED instead of FAILED.
@@ -323,7 +355,8 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 	return combinedError
 }
 
-// promoteExecutionContext handles the promotion of keys from StepExecutionContext to JobExecutionContext.
+// promoteExecutionContext propagates specific keys from the StepExecutionContext to the JobExecutionContext
+// based on the promotion configuration.
 func (s *PartitionStep) promoteExecutionContext(stepExecution *model.StepExecution, jobExecution *model.JobExecution) {
 	if s.promotion == nil {
 		return
