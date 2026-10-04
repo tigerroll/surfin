@@ -255,19 +255,16 @@ Worker（各パーティション）は、独立した `StepExecution` として
 ### 9.1. Cancellation のメカニズム
 Surfin における Cancellation は、`context.Context` を通じて上位の実行単位（Controller）から Worker へ停止信号を伝播させる仕組みである。
 
-### 9.2. Graceful Cancellation Semantics
+### 9.2. Graceful Cancellation Semantics (将来の目標)
 Worker は `context.Done()` を受信した際、即座に終了するのではなく、以下の手順で「Graceful」に終了することを目標とする。
 
-**現時点での実装:**
-Worker は `context.Canceled` を受け取った場合、即座に処理を中断し、`CANCELLED` 状態へ遷移する。
-
-**目標とする仕様:**
 1. **新しい処理の開始禁止**: 新しい Chunk や Tasklet の実行を開始しない。
 2. **現在の処理の完了**: 現在実行中の Chunk や Transaction をコミットまたはロールバックする。
 3. **Checkpoint の保存**: 可能な限り現在の状態を保存する。
 4. **状態遷移**: 最終的に `CANCELLED` 状態へ遷移する。
 
-この手順により、再実行（Restart）時にデータの一貫性が保たれる。
+**現時点での実装:**
+Worker 実行が `context.Canceled` を返した場合、PartitionStep はその Worker を `CANCELLED` として扱う。現時点では即時中断であり、Graceful Cancellation は未実装である。
 
 ### 9.3. STOPPED と CANCELLED の区別
 Surfin では、Execution State（内部状態）と ExitStatus（外部報告）を分離した2層構造を採用している。
@@ -298,13 +295,11 @@ Partition Execution についても、通常の ChunkStep と同様に Failure M
 | Worker 自身が成功 | `COMPLETE` | `COMPLETE` |
 | Worker Failure | `FAILED` | `FAILED` |
 | Controller Stop | `STOPPED` | `STOPPED` |
-| Context Cancel | `CANCELLED` | `CANCELLED` |
-| Worker A Failure → B/C cancel | A=`FAILED`, B/C=`CANCELLED` | `FAILED` |
-| Cancel中にChunk Commit済み | `CANCELLED` | `CANCELLED` |
-| Cancel中にTransaction未Commit | `CANCELLED` | `CANCELLED` |
-| Cancel後Restart | `CANCELLED` → 再実行可能 | Job再実行 |
+| Context Cancel | `CANCELLED` | `STOPPED` |
+| Worker 混在 (FAILED/CANCELLED/COMPLETE) | - | `FAILED` |
+| Worker 混在 (CANCELLED/COMPLETE) | - | `STOPPED` |
 
-**Failure Matrix は単なるテストケース一覧ではなく、Partition Execution Semantics の executable specification として扱う。各ケースは対応するテストコードによって証明される。**
+**Failure Matrix は単なるテストケース一覧ではなく、Partition Execution Semantics の executable specification として扱う。**
 
 ---
 
@@ -351,16 +346,8 @@ Partition Execution の Execution Semantics と concurrency control が確立し
 ### Phase 4 — Partition Failure Matrix
 * Partition Execution の状態・失敗パターンを Failure Matrix として整理し、自動テスト化する。
 
-### Phase 5 — Observability (可観測性)
-Partition Execution の並行実行状況を可視化し、障害時の原因特定を迅速化する。
-
-*   **Distributed Tracing (分散トレース)**:
-    *   `PartitionStep` (Controller) を親 Span とし、各 Worker の実行を子 Span として紐付ける。
-    *   Worker の Span には `partition.name` 属性を付与し、どのパーティションで遅延やエラーが発生したかを特定可能にする。
-*   **Metrics (メトリクス)**:
-    *   **Concurrency Saturation**: `concurrency` 設定値に対する現在の実行数（Gauge）を記録し、リソースのボトルネックを検知する。
-    *   **Worker Execution Time**: 各 Worker の実行時間をヒストグラムで記録し、パーティション間の処理時間の偏り（データスキュー）を検知する。
-    *   **Partition Failure Rate**: パーティションごとの成功/失敗率をカウントし、特定のパーティションのみが失敗していないかを監視する。
+### Phase 5 — OpenTelemetry
+* Partition 単位の Observability を追加する。
 
 ---
 

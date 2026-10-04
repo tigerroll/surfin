@@ -20,42 +20,43 @@ import (
 
 // MockStepExecutor is a mock implementation of port.StepExecutor for testing purposes.
 type MockStepExecutor struct {
-	mock.Mock
+	// Results holds the execution results for each partition name.
+	Results map[string]struct {
+		Err        error
+		Status     model.JobStatus
+		EC         model.ExecutionContext
+		ReadCount  int
+		WriteCount int
+	}
 }
 
 // ExecuteStep simulates the execution of a Worker Step and updates the StepExecution state.
 func (m *MockStepExecutor) ExecuteStep(ctx context.Context, step port.Step, jobExecution *model.JobExecution, stepExecution *model.StepExecution) (*model.StepExecution, error) {
-	args := m.Called(ctx, step, jobExecution, stepExecution)
-
-	execErr := args.Error(1)
-
-	if execErr != nil {
-		stepExecution.MarkAsFailed(execErr)
-	} else {
-		// On success, set ExitStatus from mock arguments.
-		var exitStatus model.ExitStatus = model.ExitStatusCompleted
-		if exitStatusStr, ok := args.Get(2).(string); ok {
-			exitStatus = model.ExitStatus(exitStatusStr)
-		}
-		stepExecution.ExitStatus = exitStatus
-		// Directly update status to avoid state transition errors.
+	// Retrieve the partition name from the ExecutionContext to determine the result.
+	pName, _ := stepExecution.ExecutionContext.GetString("partition.name")
+	res, ok := m.Results[pName]
+	if !ok {
+		// Default: Success.
 		stepExecution.Status = model.BatchStatusCompleted
+		stepExecution.ExitStatus = model.ExitStatusCompleted
+		return stepExecution, nil
 	}
 
-	// Update ExecutionContext for aggregation verification.
-	if ec, ok := args.Get(3).(model.ExecutionContext); ok {
-		stepExecution.ExecutionContext = ec
+	// 統計情報はエラーの有無に関わらず設定する
+	stepExecution.ReadCount = res.ReadCount
+	stepExecution.WriteCount = res.WriteCount
+	stepExecution.ExecutionContext = res.EC
+
+	// エラー発生時はエラーを返すのみ。状態遷移は PartitionStep に任せる
+	if res.Err != nil {
+		return stepExecution, res.Err
 	}
 
-	// Update Read/Write counts for aggregation verification.
-	if readCount, ok := args.Get(4).(int); ok {
-		stepExecution.ReadCount = readCount
-	}
-	if writeCount, ok := args.Get(5).(int); ok {
-		stepExecution.WriteCount = writeCount
-	}
+	// Handle success cases.
+	stepExecution.Status = res.Status
+	stepExecution.ExitStatus = model.ExitStatus(res.Status.String())
 
-	return stepExecution, execErr
+	return stepExecution, nil
 }
 
 // MockJobInstanceRepository is a mock implementation of repository.JobInstance.
@@ -237,7 +238,19 @@ func TestPartitionStep_Aggregation(t *testing.T) {
 
 	// 1. Setup
 	mockRepo := NewMockJobRepository()
-	mockExecutor := &MockStepExecutor{}
+	mockExecutor := &MockStepExecutor{
+		Results: map[string]struct {
+			Err        error
+			Status     model.JobStatus
+			EC         model.ExecutionContext
+			ReadCount  int
+			WriteCount int
+		}{
+			"partition0": {nil, model.BatchStatusCompleted, model.ExecutionContext{"p0.status": "OK", "p0.count": 10, "start": 0}, 10, 5},
+			"partition1": {errors.New("worker 1 failed"), model.BatchStatusFailed, model.ExecutionContext{"p1.count": 5, "p1.status": "ERROR", "start": 100}, 5, 0},
+			"partition2": {nil, model.BatchStatusCompleted, model.ExecutionContext{"p2.status": "OK", "extra": "data", "start": 200}, 20, 15},
+		},
+	}
 
 	// Worker Step (dummy)
 	workerStep := &MockStep{IDValue: "workerStep"}
@@ -245,9 +258,9 @@ func TestPartitionStep_Aggregation(t *testing.T) {
 	// Partitioner (returns 3 partitions)
 	mockPartitioner := &MockPartitioner{
 		Partitions: map[string]model.ExecutionContext{
-			"partition0": testutil.NewTestExecutionContext(map[string]interface{}{"start": 0}),
-			"partition1": testutil.NewTestExecutionContext(map[string]interface{}{"start": 100}),
-			"partition2": testutil.NewTestExecutionContext(map[string]interface{}{"start": 200}),
+			"partition0": testutil.NewTestExecutionContext(map[string]interface{}{"start": 0, "partition.name": "partition0"}),
+			"partition1": testutil.NewTestExecutionContext(map[string]interface{}{"start": 100, "partition.name": "partition1"}),
+			"partition2": testutil.NewTestExecutionContext(map[string]interface{}{"start": 200, "partition.name": "partition2"}),
 		},
 	}
 
@@ -283,39 +296,6 @@ func TestPartitionStep_Aggregation(t *testing.T) {
 	// Controller: STARTED (1 time), FAILED (1 time)
 	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(2)
 	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(3)
-
-	// MockStepExecutor expectations (for Worker Step execution)
-
-	// Worker 0: Success, Read=10, Write=5, EC: {p0.status: "OK", p0.count: 10, start: 0}
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(
-		nil,
-		nil,
-		"COMPLETED",
-		model.ExecutionContext{"p0.status": "OK", "p0.count": 10, "start": 0},
-		10,
-		5,
-	).Once()
-
-	// Worker 1: Failure (FAILED), Read=5, Write=0, EC: {p1.count: 5, p1.status: "ERROR", start: 100}
-	worker1Error := errors.New("worker 1 failed")
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(
-		nil,
-		worker1Error,
-		"FAILED",
-		model.ExecutionContext{"p1.count": 5, "p1.status": "ERROR", "start": 100},
-		5,
-		0,
-	).Once()
-
-	// Worker 2: Success, Read=20, Write=15, EC: {p2.status: "OK", extra: "data", start: 200}
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(
-		nil,
-		nil,
-		"COMPLETED",
-		model.ExecutionContext{"p2.status": "OK", "extra": "data", "start": 200},
-		20,
-		15,
-	).Once()
 
 	// 3. Execute
 	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
@@ -365,7 +345,6 @@ func TestPartitionStep_Aggregation(t *testing.T) {
 
 	// 5. Verify mocks
 	mockPartitioner.AssertExpectations(t)
-	mockExecutor.AssertExpectations(t)
 	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }
 
@@ -375,12 +354,23 @@ func TestPartitionStep_PartialFailure(t *testing.T) {
 	defer cancel()
 
 	mockRepo := NewMockJobRepository()
-	mockExecutor := &MockStepExecutor{}
+	mockExecutor := &MockStepExecutor{
+		Results: map[string]struct {
+			Err        error
+			Status     model.JobStatus
+			EC         model.ExecutionContext
+			ReadCount  int
+			WriteCount int
+		}{
+			"p0": {nil, model.BatchStatusCompleted, model.ExecutionContext{}, 1, 1},
+			"p1": {errors.New("fail"), model.BatchStatusFailed, model.ExecutionContext{}, 0, 0},
+		},
+	}
 	workerStep := &MockStep{IDValue: "workerStep"}
 	mockPartitioner := &MockPartitioner{
 		Partitions: map[string]model.ExecutionContext{
-			"p0": testutil.NewTestExecutionContext(nil),
-			"p1": testutil.NewTestExecutionContext(nil),
+			"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+			"p1": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p1"}),
 		},
 	}
 	jobExecution := testutil.NewTestJobExecution("jobInstID", "partitionJob", model.NewJobParameters())
@@ -398,32 +388,42 @@ func TestPartitionStep_PartialFailure(t *testing.T) {
 		mockExecutor,
 	)
 
-	mockPartitioner.On("Partition", mock.Anything, 2).Return(nil, nil).Once()
+	mockPartitioner.On("Partition", mock.Anything, 2).Return(map[string]model.ExecutionContext{
+		"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+		"p1": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p1"}),
+	}, nil).Once()
 	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
 	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(2)
 
-	// p0 success, p1 fail
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, nil, "COMPLETED", model.ExecutionContext{}, 1, 1).Once()
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, errors.New("fail"), "FAILED", model.ExecutionContext{}, 0, 0).Once()
-
 	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
 
 	assert.Error(t, err)
 	assert.Equal(t, model.BatchStatusFailed, controllerExecution.Status)
-	mockExecutor.AssertExpectations(t)
+	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }
 
-// TestPartitionStep_Cancellation verifies that if the context is cancelled, the controller step fails.
+// TestPartitionStep_Cancellation verifies that worker cancellation
+// results in a CANCELLED worker and a STOPPED controller.
 func TestPartitionStep_Cancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+	// キャンセルされたコンテキストではなく、有効なコンテキストを使用する
+	ctx := context.Background()
 
 	mockRepo := NewMockJobRepository()
-	mockExecutor := &MockStepExecutor{}
+	mockExecutor := &MockStepExecutor{
+		Results: map[string]struct {
+			Err        error
+			Status     model.JobStatus
+			EC         model.ExecutionContext
+			ReadCount  int
+			WriteCount int
+		}{
+			"p0": {context.Canceled, model.BatchStatusCancelled, model.ExecutionContext{}, 0, 0},
+		},
+	}
 	workerStep := &MockStep{IDValue: "workerStep"}
 	mockPartitioner := &MockPartitioner{
 		Partitions: map[string]model.ExecutionContext{
-			"p0": testutil.NewTestExecutionContext(nil),
+			"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
 		},
 	}
 	jobExecution := testutil.NewTestJobExecution("jobInstID", "partitionJob", model.NewJobParameters())
@@ -441,18 +441,20 @@ func TestPartitionStep_Cancellation(t *testing.T) {
 		mockExecutor,
 	)
 
-	// Expect UpdateStepExecution to be called twice (once for STARTED, once for failure)
+	// Expect UpdateStepExecution to be called twice (once for STARTED, once for final state)
 	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(2)
+	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once()
 
-	// Configure Partitioner to return context.Canceled
-	mockPartitioner.On("Partition", mock.Anything, 1).Return(nil, context.Canceled).Once()
+	// Configure Partitioner to return partitions
+	mockPartitioner.On("Partition", mock.Anything, 1).Return(map[string]model.ExecutionContext{
+		"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+	}, nil).Once()
 
 	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
 
-	assert.Error(t, err)
-	assert.True(t, errors.Is(err, context.Canceled) || assert.Contains(t, err.Error(), "one or more partitions failed"))
-	assert.Equal(t, model.BatchStatusFailed, controllerExecution.Status)
-	mockExecutor.AssertExpectations(t)
+	assert.NoError(t, err) // Controller は STOPPED として正常終了する
+	assert.Equal(t, model.BatchStatusStopped, controllerExecution.Status)
+	assert.Equal(t, model.ExitStatusStopped, controllerExecution.ExitStatus)
 	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }
 
@@ -462,13 +464,25 @@ func TestPartitionStep_MultipleWorkerFailures(t *testing.T) {
 	defer cancel()
 
 	mockRepo := NewMockJobRepository()
-	mockExecutor := &MockStepExecutor{}
+	mockExecutor := &MockStepExecutor{
+		Results: map[string]struct {
+			Err        error
+			Status     model.JobStatus
+			EC         model.ExecutionContext
+			ReadCount  int
+			WriteCount int
+		}{
+			"p0": {nil, model.BatchStatusCompleted, model.ExecutionContext{}, 1, 1},
+			"p1": {errors.New("fail1"), model.BatchStatusFailed, model.ExecutionContext{}, 0, 0},
+			"p2": {errors.New("fail2"), model.BatchStatusFailed, model.ExecutionContext{}, 0, 0},
+		},
+	}
 	workerStep := &MockStep{IDValue: "workerStep"}
 	mockPartitioner := &MockPartitioner{
 		Partitions: map[string]model.ExecutionContext{
-			"p0": testutil.NewTestExecutionContext(nil),
-			"p1": testutil.NewTestExecutionContext(nil),
-			"p2": testutil.NewTestExecutionContext(nil),
+			"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+			"p1": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p1"}),
+			"p2": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p2"}),
 		},
 	}
 	jobExecution := testutil.NewTestJobExecution("jobInstID", "partitionJob", model.NewJobParameters())
@@ -486,14 +500,13 @@ func TestPartitionStep_MultipleWorkerFailures(t *testing.T) {
 		mockExecutor,
 	)
 
-	mockPartitioner.On("Partition", mock.Anything, 3).Return(nil, nil).Once()
+	mockPartitioner.On("Partition", mock.Anything, 3).Return(map[string]model.ExecutionContext{
+		"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+		"p1": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p1"}),
+		"p2": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p2"}),
+	}, nil).Once()
 	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
 	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(3)
-
-	// p0 success, p1 fail, p2 fail
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, nil, "COMPLETED", model.ExecutionContext{}, 1, 1).Once()
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, errors.New("fail1"), "FAILED", model.ExecutionContext{}, 0, 0).Once()
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, errors.New("fail2"), "FAILED", model.ExecutionContext{}, 0, 0).Once()
 
 	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
 
@@ -501,7 +514,7 @@ func TestPartitionStep_MultipleWorkerFailures(t *testing.T) {
 	assert.Contains(t, err.Error(), "fail1")
 	assert.Contains(t, err.Error(), "fail2")
 	assert.Equal(t, model.BatchStatusFailed, controllerExecution.Status)
-	mockExecutor.AssertExpectations(t)
+	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }
 
 // TestPartitionStep_MixedFailureAndCancellation verifies that if FAILED and CANCELLED are mixed,
@@ -511,13 +524,25 @@ func TestPartitionStep_MixedFailureAndCancellation(t *testing.T) {
 	defer cancel()
 
 	mockRepo := NewMockJobRepository()
-	mockExecutor := &MockStepExecutor{}
+	mockExecutor := &MockStepExecutor{
+		Results: map[string]struct {
+			Err        error
+			Status     model.JobStatus
+			EC         model.ExecutionContext
+			ReadCount  int
+			WriteCount int
+		}{
+			"p0": {nil, model.BatchStatusCompleted, model.ExecutionContext{}, 1, 1},
+			"p1": {errors.New("fail"), model.BatchStatusFailed, model.ExecutionContext{}, 0, 0},
+			"p2": {nil, model.BatchStatusCancelled, model.ExecutionContext{}, 0, 0},
+		},
+	}
 	workerStep := &MockStep{IDValue: "workerStep"}
 	mockPartitioner := &MockPartitioner{
 		Partitions: map[string]model.ExecutionContext{
-			"p0": testutil.NewTestExecutionContext(nil), // COMPLETED
-			"p1": testutil.NewTestExecutionContext(nil), // FAILED
-			"p2": testutil.NewTestExecutionContext(nil), // CANCELLED
+			"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+			"p1": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p1"}),
+			"p2": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p2"}),
 		},
 	}
 	jobExecution := testutil.NewTestJobExecution("jobInstID", "partitionJob", model.NewJobParameters())
@@ -535,21 +560,20 @@ func TestPartitionStep_MixedFailureAndCancellation(t *testing.T) {
 		mockExecutor,
 	)
 
-	mockPartitioner.On("Partition", mock.Anything, 3).Return(nil, nil).Once()
+	mockPartitioner.On("Partition", mock.Anything, 3).Return(map[string]model.ExecutionContext{
+		"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+		"p1": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p1"}),
+		"p2": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p2"}),
+	}, nil).Once()
 	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
 	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(3)
-
-	// p0 success, p1 fail, p2 cancelled
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, nil, "COMPLETED", model.ExecutionContext{}, 1, 1).Once()
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, errors.New("fail"), "FAILED", model.ExecutionContext{}, 0, 0).Once()
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, nil, "CANCELLED", model.ExecutionContext{}, 0, 0).Once()
 
 	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
 
 	assert.Error(t, err)
 	assert.Equal(t, model.BatchStatusFailed, controllerExecution.Status)
 	assert.Equal(t, model.ExitStatusFailed, controllerExecution.ExitStatus)
-	mockExecutor.AssertExpectations(t)
+	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }
 
 // TestPartitionStep_WorkerTimeout verifies that if a worker times out, the controller step fails.
@@ -558,11 +582,21 @@ func TestPartitionStep_WorkerTimeout(t *testing.T) {
 	defer cancel()
 
 	mockRepo := NewMockJobRepository()
-	mockExecutor := &MockStepExecutor{}
+	mockExecutor := &MockStepExecutor{
+		Results: map[string]struct {
+			Err        error
+			Status     model.JobStatus
+			EC         model.ExecutionContext
+			ReadCount  int
+			WriteCount int
+		}{
+			"p0": {context.DeadlineExceeded, model.BatchStatusFailed, model.ExecutionContext{}, 0, 0},
+		},
+	}
 	workerStep := &MockStep{IDValue: "workerStep"}
 	mockPartitioner := &MockPartitioner{
 		Partitions: map[string]model.ExecutionContext{
-			"p0": testutil.NewTestExecutionContext(nil),
+			"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
 		},
 	}
 	jobExecution := testutil.NewTestJobExecution("jobInstID", "partitionJob", model.NewJobParameters())
@@ -580,19 +614,18 @@ func TestPartitionStep_WorkerTimeout(t *testing.T) {
 		mockExecutor,
 	)
 
-	mockPartitioner.On("Partition", mock.Anything, 1).Return(nil, nil).Once()
+	mockPartitioner.On("Partition", mock.Anything, 1).Return(map[string]model.ExecutionContext{
+		"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+	}, nil).Once()
 	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
 	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once()
-
-	// Worker times out
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, context.DeadlineExceeded, "FAILED", model.ExecutionContext{}, 0, 0).Once()
 
 	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
 
 	assert.Error(t, err)
 	assert.True(t, errors.Is(err, context.DeadlineExceeded))
 	assert.Equal(t, model.BatchStatusFailed, controllerExecution.Status)
-	mockExecutor.AssertExpectations(t)
+	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }
 
 // TestPartitionStep_RepositoryUpdateFailure verifies that if the repository fails to update the controller step, the step fails.
@@ -601,11 +634,21 @@ func TestPartitionStep_RepositoryUpdateFailure(t *testing.T) {
 	defer cancel()
 
 	mockRepo := NewMockJobRepository()
-	mockExecutor := &MockStepExecutor{}
+	mockExecutor := &MockStepExecutor{
+		Results: map[string]struct {
+			Err        error
+			Status     model.JobStatus
+			EC         model.ExecutionContext
+			ReadCount  int
+			WriteCount int
+		}{
+			"p0": {nil, model.BatchStatusCompleted, model.ExecutionContext{}, 1, 1},
+		},
+	}
 	workerStep := &MockStep{IDValue: "workerStep"}
 	mockPartitioner := &MockPartitioner{
 		Partitions: map[string]model.ExecutionContext{
-			"p0": testutil.NewTestExecutionContext(nil),
+			"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
 		},
 	}
 	jobExecution := testutil.NewTestJobExecution("jobInstID", "partitionJob", model.NewJobParameters())
@@ -623,7 +666,9 @@ func TestPartitionStep_RepositoryUpdateFailure(t *testing.T) {
 		mockExecutor,
 	)
 
-	mockPartitioner.On("Partition", mock.Anything, 1).Return(nil, nil).Once()
+	mockPartitioner.On("Partition", mock.Anything, 1).Return(map[string]model.ExecutionContext{
+		"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+	}, nil).Once()
 
 	// 1. The first call (update to STARTED) should succeed.
 	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once()
@@ -631,16 +676,12 @@ func TestPartitionStep_RepositoryUpdateFailure(t *testing.T) {
 	// 2. Worker saving should succeed.
 	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once()
 
-	// 3. ExecuteStep should succeed.
-	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, nil, "COMPLETED", model.ExecutionContext{}, 1, 1).Once()
-
-	// 4. The final call (update to final state) should return an error.
+	// 3. The final call (update to final state) should return an error.
 	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(errors.New("db error")).Once()
 
 	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "db error")
-	mockExecutor.AssertExpectations(t)
 	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }

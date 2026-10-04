@@ -92,15 +92,6 @@ func (r *PrometheusMetricRecorder) RecordDuration(ctx context.Context, name stri
 	logger.Debugf("Metrics: Duration recorded. Name: %s, Duration: %f, Tags: %+v", name, duration, tagsMap)
 }
 
-// RecordGauge records a gauge metric.
-func (r *PrometheusMetricRecorder) RecordGauge(ctx context.Context, name string, value float64, attrs ...attribute.KeyValue) {
-	tagsMap := make(map[string]string)
-	for _, attr := range attrs {
-		tagsMap[string(attr.Key)] = attr.Value.Emit()
-	}
-	logger.Debugf("Metrics: Gauge recorded. Name: %s, Value: %f, Tags: %+v", name, value, tagsMap)
-}
-
 // RecordExecutionError records a general execution error.
 func (r *PrometheusMetricRecorder) RecordExecutionError(ctx context.Context, err error) {
 	logger.Errorf("Metrics: Execution error recorded: %v", err)

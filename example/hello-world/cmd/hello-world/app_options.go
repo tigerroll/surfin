@@ -87,8 +87,6 @@ func (d *dummyMetricRecorder) RecordChunkCommit(ctx context.Context, stepExecuti
 }
 func (d *dummyMetricRecorder) RecordDuration(ctx context.Context, name string, duration float64, attrs ...attribute.KeyValue) {
 }
-func (d *dummyMetricRecorder) RecordGauge(ctx context.Context, name string, value float64, attrs ...attribute.KeyValue) {
-}
 func (d *dummyMetricRecorder) RecordExecutionError(ctx context.Context, err error) {}
 func (d *dummyMetricRecorder) RecordItemProcess(ctx context.Context, stepExecution *model.StepExecution, item int64) {
 }
@@ -122,7 +120,7 @@ func (d *dummyTracer) StartStepSpan(ctx context.Context, stepExecution *model.St
 func (d *dummyTracer) RecordError(ctx context.Context, msg string, err error) {}
 
 // RecordEvent performs no operation.
-func (d *dummyTracer) RecordEvent(ctx context.Context, name string, attrs map[string]interface{}) {}
+func (d *dummyTracer) RecordEvent(ctx context.Context, name string, attributes map[string]interface{}) {}
 
 // dummyPortDBConnectionResolver is a no-op implementation of database.DBConnectionResolver
 // and coreAdapter.ResourceConnectionResolver, used to satisfy dependencies in a DB-less environment.
@@ -184,7 +182,7 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 		embeddedJSL,
 		fx.Annotate(envFilePath, fx.ResultTags(`name:"envFilePath"`)),
 		cfg,
-		fx.Annotate(appCtx, fx.As(new(context.Context)), fx.ResultTags(`name:"appCtx"`)),
+		fx.Annotate(appCtx, fx.As(new(context.Context)), fx.ResultTags(`appCtx`)),
 	))
 
 	// Dummy providers to satisfy framework migration dependencies.

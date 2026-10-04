@@ -255,23 +255,24 @@ Worker（各パーティション）は、独立した `StepExecution` として
 ### 9.1. Cancellation のメカニズム
 Surfin における Cancellation は、`context.Context` を通じて上位の実行単位（Controller）から Worker へ停止信号を伝播させる仕組みである。
 
-### 9.2. Graceful Cancellation Semantics
-Worker は `context.Done()` を受信した際、即座に終了するのではなく、以下の手順で「Graceful」に終了しなければならない。
+### 9.2. Graceful Cancellation Semantics (将来の目標)
+Worker は `context.Done()` を受信した際、即座に終了するのではなく、以下の手順で「Graceful」に終了することを目標とする。
 
 1. **新しい処理の開始禁止**: 新しい Chunk や Tasklet の実行を開始しない。
 2. **現在の処理の完了**: 現在実行中の Chunk や Transaction をコミットまたはロールバックする。
 3. **Checkpoint の保存**: 可能な限り現在の状態を保存する。
 4. **状態遷移**: 最終的に `CANCELLED` 状態へ遷移する。
 
-この手順により、再実行（Restart）時にデータの一貫性が保たれる。
+**現時点での実装:**
+Worker 実行が `context.Canceled` を返した場合、PartitionStep はその Worker を `CANCELLED` として扱う。現時点では即時中断であり、Graceful Cancellation は未実装である。
 
 ### 9.3. STOPPED と CANCELLED の区別
-状態名から原因を読み取れるよう、以下の通り区別する。
+Surfin では、Execution State（内部状態）と ExitStatus（外部報告）を分離した2層構造を採用している。
 
-| 状態 | 意味 | 典型的な原因 |
-| :--- | :--- | :--- |
-| **STOPPED** | 明示的停止 | User / Controller による Stop 要求 |
-| **CANCELLED** | 上位キャンセルによる終了 | 親 Context の cancellation 伝播 |
+*   **Execution State**: `CANCELLED` は、親 Context からのキャンセル伝播によって終了したことを示す独立した状態である。
+*   **ExitStatus**: 既存の ExitStatus 体系との互換性を保つため、`CANCELLED` 状態の Worker は `STOPPED` として報告される。
+
+これにより、内部的には「明示的な停止(STOPPED)」と「キャンセル伝播(CANCELLED)」を区別しつつ、外部システムに対しては一貫した終了ステータスを提供できる。
 
 ---
 
@@ -294,11 +295,9 @@ Partition Execution についても、通常の ChunkStep と同様に Failure M
 | Worker 自身が成功 | `COMPLETE` | `COMPLETE` |
 | Worker Failure | `FAILED` | `FAILED` |
 | Controller Stop | `STOPPED` | `STOPPED` |
-| Context Cancel | `CANCELLED` | `CANCELLED` |
-| Worker A Failure → B/C cancel | A=`FAILED`, B/C=`CANCELLED` | `FAILED` |
-| Cancel中にChunk Commit済み | `CANCELLED` | `CANCELLED` |
-| Cancel中にTransaction未Commit | `CANCELLED` | `CANCELLED` |
-| Cancel後Restart | `CANCELLED` → 再実行可能 | Job再実行 |
+| Context Cancel | `CANCELLED` | `STOPPED` |
+| Worker 混在 (FAILED/CANCELLED/COMPLETE) | - | `FAILED` |
+| Worker 混在 (CANCELLED/COMPLETE) | - | `STOPPED` |
 
 **Failure Matrix は単なるテストケース一覧ではなく、Partition Execution Semantics の executable specification として扱う。**
 

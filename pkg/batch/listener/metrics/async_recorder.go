@@ -41,7 +41,6 @@ const (
 	MetricEventTypeItemRetry      = "item_retry"
 	MetricEventTypeChunkCommit    = "chunk_commit"
 	MetricEventTypeRecordDuration = "record_duration"
-	MetricEventTypeRecordGauge    = "record_gauge"
 	MetricEventTypeExecutionError = "execution_error"
 )
 
@@ -133,8 +132,6 @@ func (r *AsyncMetricRecorder) processEvent(event MetricEvent) {
 		r.syncRecorder.RecordChunkCommit(ctx, event.StepExecution, event.Count)
 	case MetricEventTypeRecordDuration:
 		r.syncRecorder.RecordDuration(ctx, event.Name, event.Duration, event.Attrs...)
-	case MetricEventTypeRecordGauge:
-		r.syncRecorder.RecordGauge(ctx, event.Name, event.Value, event.Attrs...)
 	case MetricEventTypeExecutionError:
 		r.syncRecorder.RecordExecutionError(ctx, event.Err)
 	default:
@@ -240,11 +237,6 @@ func (r *AsyncMetricRecorder) RecordChunkCommit(_ context.Context, stepExecution
 // RecordDuration records the execution time event of a specific operation.
 func (r *AsyncMetricRecorder) RecordDuration(_ context.Context, name string, duration float64, attrs ...attribute.KeyValue) {
 	r.sendEvent(MetricEvent{Type: MetricEventTypeRecordDuration, Name: name, Duration: duration, Attrs: attrs}, name)
-}
-
-// RecordGauge records a gauge metric asynchronously.
-func (r *AsyncMetricRecorder) RecordGauge(_ context.Context, name string, value float64, attrs ...attribute.KeyValue) {
-	r.sendEvent(MetricEvent{Type: MetricEventTypeRecordGauge, Name: name, Value: value, Attrs: attrs}, name)
 }
 
 // RecordExecutionError records an execution error asynchronously.
