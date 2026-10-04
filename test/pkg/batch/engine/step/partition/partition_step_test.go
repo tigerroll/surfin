@@ -441,9 +441,11 @@ func TestPartitionStep_Cancellation(t *testing.T) {
 		mockExecutor,
 	)
 
-	mockPartitioner.On("Partition", mock.Anything, 1).Return(nil, nil).Once()
-	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
-	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once()
+	// Expect UpdateStepExecution to be called twice (once for STARTED, once for failure)
+	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(2)
+
+	// Configure Partitioner to return context.Canceled
+	mockPartitioner.On("Partition", mock.Anything, 1).Return(nil, context.Canceled).Once()
 
 	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
 
@@ -451,6 +453,7 @@ func TestPartitionStep_Cancellation(t *testing.T) {
 	assert.True(t, errors.Is(err, context.Canceled) || assert.Contains(t, err.Error(), "one or more partitions failed"))
 	assert.Equal(t, model.BatchStatusFailed, controllerExecution.Status)
 	mockExecutor.AssertExpectations(t)
+	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }
 
 // TestPartitionStep_MultipleWorkerFailures verifies that if multiple partitions fail, the controller step fails and errors are aggregated.
@@ -498,6 +501,54 @@ func TestPartitionStep_MultipleWorkerFailures(t *testing.T) {
 	assert.Contains(t, err.Error(), "fail1")
 	assert.Contains(t, err.Error(), "fail2")
 	assert.Equal(t, model.BatchStatusFailed, controllerExecution.Status)
+	mockExecutor.AssertExpectations(t)
+}
+
+// TestPartitionStep_MixedFailureAndCancellation verifies that if FAILED and CANCELLED are mixed,
+// FAILED takes precedence and the controller step fails.
+func TestPartitionStep_MixedFailureAndCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mockRepo := NewMockJobRepository()
+	mockExecutor := &MockStepExecutor{}
+	workerStep := &MockStep{IDValue: "workerStep"}
+	mockPartitioner := &MockPartitioner{
+		Partitions: map[string]model.ExecutionContext{
+			"p0": testutil.NewTestExecutionContext(nil), // COMPLETED
+			"p1": testutil.NewTestExecutionContext(nil), // FAILED
+			"p2": testutil.NewTestExecutionContext(nil), // CANCELLED
+		},
+	}
+	jobExecution := testutil.NewTestJobExecution("jobInstID", "partitionJob", model.NewJobParameters())
+	controllerExecution := testutil.NewTestStepExecution(jobExecution, "controllerStep")
+
+	partitionStep := partition.NewPartitionStep(
+		"controllerStep",
+		mockPartitioner,
+		workerStep,
+		3,
+		3,
+		mockRepo,
+		[]port.StepExecutionListener{},
+		nil,
+		mockExecutor,
+	)
+
+	mockPartitioner.On("Partition", mock.Anything, 3).Return(nil, nil).Once()
+	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
+	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(3)
+
+	// p0 success, p1 fail, p2 cancelled
+	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, nil, "COMPLETED", model.ExecutionContext{}, 1, 1).Once()
+	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, errors.New("fail"), "FAILED", model.ExecutionContext{}, 0, 0).Once()
+	mockExecutor.On("ExecuteStep", mock.Anything, workerStep, jobExecution, mock.AnythingOfType("*model.StepExecution")).Return(nil, nil, "CANCELLED", model.ExecutionContext{}, 0, 0).Once()
+
+	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
+
+	assert.Error(t, err)
+	assert.Equal(t, model.BatchStatusFailed, controllerExecution.Status)
+	assert.Equal(t, model.ExitStatusFailed, controllerExecution.ExitStatus)
 	mockExecutor.AssertExpectations(t)
 }
 
