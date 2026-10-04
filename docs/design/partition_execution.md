@@ -114,6 +114,8 @@ Job
 
 現在の実装では、Partition はすべて生成され、それぞれに対応する goroutine が起動される。`concurrency` は、その中で**実際に処理を実行する Worker の数**を `semaphore` によって制御する。
 
+`concurrency` は goroutine の生成数ではなく、Partition Worker が実際に処理を実行している数の上限を表す。
+
 ```text
 100 Partitions (100 goroutines)
        │
@@ -230,52 +232,48 @@ PartitionExecutor
 
 Partition Execution では、Worker ごとに独立した実行結果が発生する。
 
-基本的なモデルは以下とする。
+### 8.1. Partition Worker の状態遷移
+Worker（各パーティション）は、独立した `StepExecution` として扱われます。
 
 ```text
-Partition Worker
-      │
-      ▼
-StepExecution
-      │
-      ├── COMPLETE
-      ├── FAILED
-      └── ...
-      │
-      ▼
-Partition Result Aggregation
-      │
-      ▼
-Controller StepExecution
+[STARTING] -> [STARTED] -> [COMPLETE]
+                 |    |
+                 |    +-> [FAILED]
+                 |    +-> [STOPPED]
+                 +------> [CANCELLED]
 ```
 
-Partition の並行実行と、Step Execution の状態管理は分離して考える。
+| 状態 | 定義 | 典型的な原因 |
+| :--- | :--- | :--- |
+| **COMPLETE** | 正常終了 | 処理の全完了 |
+| **FAILED** | エラーによる終了 | 業務エラー / システムエラー |
+| **STOPPED** | 明示的な停止 | ユーザーまたはControllerからのStop要求 |
+| **CANCELLED** | 上位キャンセルによる終了 | 親Contextのキャンセル伝播 |
 
 ---
 
-## 9. Cancellation
+## 9. Cancellation (キャンセル)
 
-1つの Partition がエラーを返した場合、`errgroup` と `context.Context` を利用して、他の Partition に cancellation を伝播できる構造とする。
+### 9.1. Cancellation のメカニズム
+Surfin における Cancellation は、`context.Context` を通じて上位の実行単位（Controller）から Worker へ停止信号を伝播させる仕組みである。
 
-```text
-Partition A ── COMPLETE
-Partition B ── FAILED
-                  │
-                  ▼
-             context cancel
-              │    │
-              ▼    ▼
-          Partition C
-          Partition D
-```
+### 9.2. Graceful Cancellation Semantics
+Worker は `context.Done()` を受信した際、即座に終了するのではなく、以下の手順で「Graceful」に終了しなければならない。
 
-ただし、
+1. **新しい処理の開始禁止**: 新しい Chunk や Tasklet の実行を開始しない。
+2. **現在の処理の完了**: 現在実行中の Chunk や Transaction をコミットまたはロールバックする。
+3. **Checkpoint の保存**: 可能な限り現在の状態を保存する。
+4. **状態遷移**: 最終的に `CANCELLED` 状態へ遷移する。
 
-* Worker が業務エラーによって `FAILED` になる
-* Controller が cancellation を受け取る
-* Worker が cancellation によって終了する
+この手順により、再実行（Restart）時にデータの一貫性が保たれる。
 
-ことは、それぞれ異なる状態として Execution Semantics 上で扱う。
+### 9.3. STOPPED と CANCELLED の区別
+状態名から原因を読み取れるよう、以下の通り区別する。
+
+| 状態 | 意味 | 典型的な原因 |
+| :--- | :--- | :--- |
+| **STOPPED** | 明示的停止 | User / Controller による Stop 要求 |
+| **CANCELLED** | 上位キャンセルによる終了 | 親 Context の cancellation 伝播 |
 
 ---
 
@@ -293,13 +291,16 @@ Restart 時には、正常終了した Partition と失敗した Partition を�
 
 Partition Execution についても、通常の ChunkStep と同様に Failure Matrix を仕様として持つ。
 
-| 状況                             | Worker            | Controller | Restart |
-| ------------------------------ | ----------------- | ---------- | ------- |
-| 全 Partition 成功                 | COMPLETE          | COMPLETE   | 不要      |
-| 一部 Partition 失敗                | FAILED            | FAILED     | 必要      |
-| Worker cancellation            | STOPPED/CANCELLED | 要定義        | 要定義     |
-| Context cancellation           | STOPPED/CANCELLED | 要定義        | 要定義     |
-| Controller persistence failure | 要定義               | FAILED     | 要定義     |
+| Case | Worker State | Controller State |
+| :--- | :--- | :--- |
+| Worker 自身が成功 | `COMPLETE` | `COMPLETE` |
+| Worker Failure | `FAILED` | `FAILED` |
+| Controller Stop | `STOPPED` | `STOPPED` |
+| Context Cancel | `CANCELLED` | `CANCELLED` |
+| Worker A Failure → B/C cancel | A=`FAILED`, B/C=`CANCELLED` | `FAILED` |
+| Cancel中にChunk Commit済み | `CANCELLED` | `CANCELLED` |
+| Cancel中にTransaction未Commit | `CANCELLED` | `CANCELLED` |
+| Cancel後Restart | `CANCELLED` → 再実行可能 | Job再実行 |
 
 **Failure Matrix は単なるテストケース一覧ではなく、Partition Execution Semantics の executable specification として扱う。**
 
