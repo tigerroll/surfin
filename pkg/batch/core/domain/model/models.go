@@ -106,6 +106,7 @@ const (
 	BatchStatusStoppingFailed JobStatus = "STOPPING_FAILED"
 	BatchStatusRestarting     JobStatus = "RESTARTING"
 	BatchStatusUnknown        JobStatus = "UNKNOWN"
+	BatchStatusCancelled      JobStatus = "CANCELLED"
 )
 
 // String returns the string representation of the JobStatus.
@@ -116,7 +117,7 @@ func (s JobStatus) String() string {
 // IsFinished checks if the JobStatus represents a finished state.
 func (s JobStatus) IsFinished() bool {
 	switch s {
-	case BatchStatusCompleted, BatchStatusFailed, BatchStatusStopped, BatchStatusAbandoned:
+	case BatchStatusCompleted, BatchStatusFailed, BatchStatusStopped, BatchStatusAbandoned, BatchStatusCancelled:
 		return true
 	default:
 		return false
@@ -134,6 +135,8 @@ func (s JobStatus) ToExitStatus() ExitStatus {
 		return ExitStatusStopped
 	case BatchStatusAbandoned:
 		return ExitStatusAbandoned
+	case BatchStatusCancelled:
+		return ExitStatusStopped
 	default:
 		return ExitStatusUnknown
 	}
@@ -717,9 +720,9 @@ func isValidJobTransition(from, to JobStatus) bool {
 func isValidStepTransition(from, to JobStatus) bool {
 	switch from {
 	case BatchStatusStarting:
-		return to == BatchStatusStarted || to == BatchStatusFailed
+		return to == BatchStatusStarted || to == BatchStatusFailed || to == BatchStatusCancelled
 	case BatchStatusStarted:
-		return to == BatchStatusCompleted || to == BatchStatusFailed || to == BatchStatusStopped
+		return to == BatchStatusCompleted || to == BatchStatusFailed || to == BatchStatusStopped || to == BatchStatusCancelled
 	case BatchStatusStopped:
 		return to == BatchStatusStarted
 	default:

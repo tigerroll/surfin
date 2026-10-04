@@ -194,9 +194,16 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 			completedWorkerExec, execErr := s.stepExecutor.ExecuteStep(workerCtx, s.workerStep, jobExecution, workerExec)
 
 			if execErr != nil {
-				logger.Errorf("PartitionStep '%s': Worker '%s' failed: %v", s.id, workerExec.StepName, execErr)
-				errChan <- execErr
-				s.tracer.RecordError(workerCtx, "partition_step", execErr)
+				// Treat context.Canceled as CANCELLED instead of FAILED.
+				if errors.Is(execErr, context.Canceled) {
+					logger.Infof("PartitionStep '%s': Worker '%s' was cancelled.", s.id, workerExec.StepName)
+					completedWorkerExec.Status = model.BatchStatusCancelled
+					completedWorkerExec.ExitStatus = model.ExitStatusStopped // Set exit status to STOPPED for cancelled workers.
+				} else {
+					logger.Errorf("PartitionStep '%s': Worker '%s' failed: %v", s.id, workerExec.StepName, execErr)
+					errChan <- execErr
+					s.tracer.RecordError(workerCtx, "partition_step", execErr)
+				}
 			} else {
 				logger.Infof("PartitionStep '%s': Worker '%s' completed with status: %s", s.id, workerExec.StepName, completedWorkerExec.Status)
 				s.tracer.RecordEvent(workerCtx, "partition_worker_success", map[string]interface{}{"status": completedWorkerExec.Status.String()})
@@ -246,6 +253,11 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 			// If there is a stop, and no failure, then it's a stop.
 			if aggregatedExitStatus != model.ExitStatusFailed {
 				aggregatedExitStatus = model.ExitStatusStopped
+			}
+		} else if workerExec.Status == model.BatchStatusCancelled {
+			// Aggregate CANCELLED status.
+			if aggregatedExitStatus != model.ExitStatusFailed && aggregatedExitStatus != model.ExitStatusStopped {
+				aggregatedExitStatus = model.ExitStatusStopped // Treat CANCELLED as a form of stopped status.
 			}
 		}
 		// Do nothing if COMPLETED (initial value is COMPLETED).
