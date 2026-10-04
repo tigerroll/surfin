@@ -115,6 +115,33 @@ func (s *PartitionStep) notifyAfterStep(ctx context.Context, stepExecution *mode
 	}
 }
 
+// determineAggregatedStatus determines the final status of the controller step based on the worker execution results,
+// following the defined Failure Matrix.
+func (s *PartitionStep) determineAggregatedStatus(workerExecutions []*model.StepExecution) (model.JobStatus, model.ExitStatus) {
+	hasFailed := false
+	hasStopped := false
+	hasCancelled := false
+
+	for _, exec := range workerExecutions {
+		if exec.Status == model.BatchStatusFailed || exec.Status == model.BatchStatusAbandoned {
+			hasFailed = true
+		} else if exec.Status == model.BatchStatusStopped {
+			hasStopped = true
+		} else if exec.Status == model.BatchStatusCancelled {
+			hasCancelled = true
+		}
+	}
+
+	// Apply Failure Matrix priority: FAILED > STOPPED/CANCELLED > COMPLETED
+	if hasFailed {
+		return model.BatchStatusFailed, model.ExitStatusFailed
+	}
+	if hasStopped || hasCancelled {
+		return model.BatchStatusStopped, model.ExitStatusStopped
+	}
+	return model.BatchStatusCompleted, model.ExitStatusCompleted
+}
+
 // Execute runs the partitioning logic, managing worker execution, concurrency, and result aggregation.
 func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExecution, controllerExecution *model.StepExecution) (err error) {
 	logger.Infof("PartitionStep '%s' executing (GridSize: %d, Concurrency: %d).", s.id, s.gridSize, s.concurrency)
@@ -143,7 +170,7 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 	errChan := make(chan error, len(partitionContexts))
 
 	// List of Worker StepExecutions (for aggregation).
-	workerExecutions := make(chan *model.StepExecution, len(partitionContexts))
+	workerExecutionsChan := make(chan *model.StepExecution, len(partitionContexts))
 
 	// Create semaphore only if concurrency is greater than 0
 	var sem *semaphore.Weighted
@@ -210,7 +237,7 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 			}
 
 			// Send the completed Worker StepExecution for aggregation.
-			workerExecutions <- completedWorkerExec
+			workerExecutionsChan <- completedWorkerExec
 		}(workerExecution, partitionName)
 	}
 
@@ -218,7 +245,7 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 	wg.Wait()
 	logger.Debugf("PartitionStep '%s': All workers finished.", s.id)
 	close(errChan)
-	close(workerExecutions)
+	close(workerExecutionsChan)
 
 	// 5. Aggregate results.
 	var combinedError error
@@ -226,80 +253,54 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 		combinedError = errors.Join(combinedError, err)
 	}
 
-	// Aggregate Worker Execution Context (Promotion should be done on Controller Execution Context, but here we aggregate Worker statistics).
+	// Collect worker execution results into a slice
+	var workerExecutions []*model.StepExecution
+	for workerExec := range workerExecutionsChan {
+		workerExecutions = append(workerExecutions, workerExec)
+	}
+
+	// Determine final status
+	finalStatus, finalExitStatus := s.determineAggregatedStatus(workerExecutions)
+
+	// Aggregate statistics
 	totalRead := 0
 	totalWrite := 0
-
-	// Track aggregated ExitStatus.
-	var aggregatedExitStatus model.ExitStatus = model.ExitStatusCompleted
-
-	// Initialize map to store aggregated Worker EC.
 	aggregatedEC := model.NewExecutionContext()
 
-	for workerExec := range workerExecutions {
+	for _, workerExec := range workerExecutions {
 		totalRead += workerExec.ReadCount
 		totalWrite += workerExec.WriteCount
 
-		// Logic to reflect Worker's ExitStatus in Controller's ExitStatus.
-		if workerExec.Status == model.BatchStatusFailed || workerExec.Status == model.BatchStatusAbandoned {
-			// If there is a failure or abandonment, the Controller also fails.
-			aggregatedExitStatus = model.ExitStatusFailed
-			// Aggregate failure messages.
+		// Aggregate failure messages
+		if workerExec.Status == model.BatchStatusFailed {
 			controllerExecution.Failures = append(controllerExecution.Failures, workerExec.Failures...)
-			if combinedError == nil {
-				combinedError = fmt.Errorf("one or more partitions failed")
-			}
-		} else if workerExec.Status == model.BatchStatusStopped {
-			// If there is a stop, and no failure, then it's a stop.
-			if aggregatedExitStatus != model.ExitStatusFailed {
-				aggregatedExitStatus = model.ExitStatusStopped
-			}
-		} else if workerExec.Status == model.BatchStatusCancelled {
-			// Aggregate CANCELLED status.
-			if aggregatedExitStatus != model.ExitStatusFailed && aggregatedExitStatus != model.ExitStatusStopped {
-				aggregatedExitStatus = model.ExitStatusStopped // Treat CANCELLED as a form of stopped status.
-			}
 		}
-		// Do nothing if COMPLETED (initial value is COMPLETED).
 
-		// Merge Worker Execution Context content into Controller EC.
-		// NOTE: If keys duplicate, the value from the later Worker will overwrite.
+		// Merge ExecutionContext
 		for k, v := range workerExec.ExecutionContext {
 			aggregatedEC[k] = v
 		}
 	}
 
-	// Save aggregated results to Controller Execution Context.
 	controllerExecution.ReadCount = totalRead
 	controllerExecution.WriteCount = totalWrite
-
-	// Set aggregated EC to Controller Execution.
 	controllerExecution.ExecutionContext = aggregatedEC
 
-	// 6. Update Controller StepExecution status.
-	if combinedError != nil {
-		// If there was a worker failure, wrap the aggregated error and return it.
+	// 6. Update Controller StepExecution status
+	controllerExecution.Status = finalStatus
+	controllerExecution.ExitStatus = finalExitStatus
+
+	if finalStatus == model.BatchStatusFailed {
+		if combinedError == nil {
+			combinedError = fmt.Errorf("one or more partitions failed")
+		}
 		wrappedErr := exception.NewBatchError(s.id, "one or more partitions failed", combinedError, false, false)
-		if s.metricRecorder != nil {
-			s.metricRecorder.RecordExecutionError(ctx, wrappedErr) // Record execution error.
-		}
 		controllerExecution.MarkAsFailed(wrappedErr)
-		combinedError = wrappedErr // Update the error to be returned finally.
+		combinedError = wrappedErr
+	} else if finalStatus == model.BatchStatusStopped {
+		controllerExecution.MarkAsStopped()
 	} else {
-		// If no failure, update status based on aggregated ExitStatus.
-		switch aggregatedExitStatus {
-		case model.ExitStatusStopped:
-			controllerExecution.MarkAsStopped()
-		case model.ExitStatusCompleted:
-			controllerExecution.MarkAsCompleted()
-		case model.ExitStatusFailed:
-			// If aggregatedExitStatus is FAILED, it should have already been handled in the combinedError != nil block, but just in case.
-			// If combinedError is nil but ExitStatus is FAILED (e.g., Worker returned ExitStatus FAILED without an error).
-			controllerExecution.MarkAsFailed(fmt.Errorf("partition execution resulted in aggregated status: %s", aggregatedExitStatus))
-		default:
-			// For other states (e.g., UNKNOWN), treat as failure.
-			controllerExecution.MarkAsFailed(fmt.Errorf("partition execution resulted in aggregated status: %s", aggregatedExitStatus))
-		}
+		controllerExecution.MarkAsCompleted()
 	}
 
 	// 7. Promote ExecutionContext (Controller EC -> Job EC).
