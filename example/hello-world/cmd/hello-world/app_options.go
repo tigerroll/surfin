@@ -120,7 +120,8 @@ func (d *dummyTracer) StartStepSpan(ctx context.Context, stepExecution *model.St
 func (d *dummyTracer) RecordError(ctx context.Context, msg string, err error) {}
 
 // RecordEvent performs no operation.
-func (d *dummyTracer) RecordEvent(ctx context.Context, name string, attributes map[string]interface{}) {}
+func (d *dummyTracer) RecordEvent(ctx context.Context, name string, attributes map[string]interface{}) {
+}
 
 // dummyPortDBConnectionResolver is a no-op implementation of database.DBConnectionResolver
 // and coreAdapter.ResourceConnectionResolver, used to satisfy dependencies in a DB-less environment.
@@ -177,12 +178,17 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 
 	var options []fx.Option
 
+	// Supply values that do not require annotations.
 	options = append(options, fx.Supply(
 		embeddedConfig,
 		embeddedJSL,
-		fx.Annotate(envFilePath, fx.ResultTags(`name:"envFilePath"`)),
 		cfg,
-		fx.Annotate(appCtx, fx.As(new(context.Context)), fx.ResultTags(`appCtx`)),
+	))
+
+	// Register values that require annotations using Provide.
+	options = append(options, fx.Provide(
+		fx.Annotate(func() string { return envFilePath }, fx.ResultTags(`name:"envFilePath"`)),
+		fx.Annotate(func() context.Context { return appCtx }, fx.ResultTags(`name:"appCtx"`)),
 	))
 
 	// Dummy providers to satisfy framework migration dependencies.
