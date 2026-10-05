@@ -259,7 +259,7 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 					completedWorkerExec.ExitStatus = model.ExitStatusStopped // Set exit status to STOPPED for cancelled workers.
 				} else {
 					logger.Errorf("PartitionStep '%s': Worker '%s' failed: %v", s.id, workerExec.StepName, execErr)
-					// 修正: エラー発生時は必ず MarkAsFailed を呼び出す
+					// Ensure MarkAsFailed is called when an error occurs.
 					completedWorkerExec.MarkAsFailed(execErr)
 					errChan <- execErr
 					s.tracer.RecordError(workerCtx, "partition_step", execErr)
@@ -332,7 +332,7 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 		combinedError = wrappedErr
 	} else if finalStatus == model.BatchStatusStopped {
 		controllerExecution.MarkAsStopped()
-		// STOPPED の場合は combinedError を nil にして正常終了扱いにする
+		// If status is STOPPED, treat as a successful completion by setting combinedError to nil.
 		combinedError = nil
 	} else {
 		controllerExecution.MarkAsCompleted()

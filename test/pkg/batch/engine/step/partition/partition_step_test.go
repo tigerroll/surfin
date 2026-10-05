@@ -42,12 +42,12 @@ func (m *MockStepExecutor) ExecuteStep(ctx context.Context, step port.Step, jobE
 		return stepExecution, nil
 	}
 
-	// 統計情報はエラーの有無に関わらず設定する
+	// Set statistics regardless of error status.
 	stepExecution.ReadCount = res.ReadCount
 	stepExecution.WriteCount = res.WriteCount
 	stepExecution.ExecutionContext = res.EC
 
-	// エラー発生時はエラーを返すのみ。状態遷移は PartitionStep に任せる
+	// Return the error if one occurs; state transition is handled by PartitionStep.
 	if res.Err != nil {
 		return stepExecution, res.Err
 	}
@@ -232,6 +232,7 @@ func (m *MockPartitioner) Partition(ctx context.Context, gridSize int) (map[stri
 // TestPartitionStep_Aggregation verifies that the PartitionStep correctly aggregates
 // results from multiple worker partitions, including statistics (ReadCount, WriteCount)
 // and the ExecutionContext.
+// Case: Mixed worker states (FAILED/CANCELLED/COMPLETE) -> FAILED
 func TestPartitionStep_Aggregation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -349,6 +350,7 @@ func TestPartitionStep_Aggregation(t *testing.T) {
 }
 
 // TestPartitionStep_PartialFailure verifies that if one partition fails, the controller step fails.
+// Case: Worker failure (FAILED) -> FAILED
 func TestPartitionStep_PartialFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -404,8 +406,9 @@ func TestPartitionStep_PartialFailure(t *testing.T) {
 
 // TestPartitionStep_Cancellation verifies that worker cancellation
 // results in a CANCELLED worker and a STOPPED controller.
+// Case: Context cancellation (CANCELLED) -> STOPPED
 func TestPartitionStep_Cancellation(t *testing.T) {
-	// キャンセルされたコンテキストではなく、有効なコンテキストを使用する
+	// Use a valid context instead of a canceled one.
 	ctx := context.Background()
 
 	mockRepo := NewMockJobRepository()
@@ -452,13 +455,15 @@ func TestPartitionStep_Cancellation(t *testing.T) {
 
 	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
 
-	assert.NoError(t, err) // Controller は STOPPED として正常終了する
+	assert.NoError(t, err) // Controller should finish normally as STOPPED.
 	assert.Equal(t, model.BatchStatusStopped, controllerExecution.Status)
 	assert.Equal(t, model.ExitStatusStopped, controllerExecution.ExitStatus)
 	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }
 
-// TestPartitionStep_MultipleWorkerFailures verifies that if multiple partitions fail, the controller step fails and errors are aggregated.
+// TestPartitionStep_MultipleWorkerFailures verifies that if multiple partitions fail,
+// the controller step fails and errors are aggregated.
+// Case: Mixed worker failures (FAILED/FAILED/COMPLETE) -> FAILED
 func TestPartitionStep_MultipleWorkerFailures(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -519,6 +524,7 @@ func TestPartitionStep_MultipleWorkerFailures(t *testing.T) {
 
 // TestPartitionStep_MixedFailureAndCancellation verifies that if FAILED and CANCELLED are mixed,
 // FAILED takes precedence and the controller step fails.
+// Case: Mixed worker states (FAILED/CANCELLED/COMPLETE) -> FAILED
 func TestPartitionStep_MixedFailureAndCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -577,6 +583,7 @@ func TestPartitionStep_MixedFailureAndCancellation(t *testing.T) {
 }
 
 // TestPartitionStep_WorkerTimeout verifies that if a worker times out, the controller step fails.
+// Case: Worker failure (FAILED due to timeout) -> FAILED
 func TestPartitionStep_WorkerTimeout(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

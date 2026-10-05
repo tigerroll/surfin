@@ -59,7 +59,13 @@ func (o *DefaultJobOperator) Restart(ctx context.Context, executionID string) (*
 	}
 
 	// 2. Check if it's in a restartable state
-	if prevJobExecution.Status != model.BatchStatusFailed && prevJobExecution.Status != model.BatchStatusStopped && prevJobExecution.Status != model.BatchStatusAbandoned {
+	// CANCELLED is now included as a restartable state.
+	isRestartable := prevJobExecution.Status == model.BatchStatusFailed ||
+		prevJobExecution.Status == model.BatchStatusStopped ||
+		prevJobExecution.Status == model.BatchStatusAbandoned ||
+		prevJobExecution.Status == model.BatchStatusCancelled
+
+	if !isRestartable {
 		return nil, exception.NewBatchErrorf("job_operator", "Restart processing error: JobExecution (ID: %s) is not in a restartable state (current status: %s)", executionID, prevJobExecution.Status)
 	}
 	logger.Infof("JobExecution (ID: %s) is in a restartable state (%s).", executionID, prevJobExecution.Status)
