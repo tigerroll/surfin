@@ -17,12 +17,18 @@ Surfin における Graceful Cancellation は、以下の原則を目標とす�
 | :--- | :--- | :--- | :--- | :--- |
 | **A** | Chunk 実行前 | なし | 維持 | Checkpoint から再開 |
 | **B** | Chunk 実行中 | Rollback | 維持 | Checkpoint から再開 |
-| **C** | Chunk Commit 直後 | 確定 | 未保存 | **要定義** (重複実行の可能性あり) |
-| **D** | Checkpoint 保存中 | 確定 | 不定 | **要定義** (原子性保証の課題) |
+| **C** | Chunk Commit 直後 | 確定 | 未保存 | 再実行の可能性あり |
+| **D** | Checkpoint 保存中 | 確定 | 不定 | 再実行の可能性あり |
 
-### 課題: 原子性の欠如
-現在のアーキテクチャでは、Workload DB の Commit と Metadata DB の Checkpoint 保存は別々のトランザクションである。そのため、Case C および D において「Commit は成功したが Checkpoint 保存に失敗した」という状態が発生しうる。
-この場合、再開時に「既に Commit 済みの Chunk」が再実行されるリスクがある。この重複実行を許容するか、あるいは原子性を保証する仕組み（例: 2相コミットや冪等性の強制）を導入するかは、今後の設計課題とする。
+### Commit と Checkpoint の非原子性
+
+Workload DB の Commit と Metadata DB の Checkpoint 保存は、別々のトランザクションとして扱う。
+
+Surfin では、両者を 2PC によって原子的に扱うことはしない。
+
+そのため、Commit 後に Checkpoint が保存されなかった場合、Restart によって直前の Chunk が再実行される可能性がある。
+
+この再実行に対しては、Restart Semantics、冪等性、Sage Pattern / Compensation などによって処理結果の整合性を維持することを基本方針とする。具体的な Compensation の適用方法は、対象リソースと Job の意味論に応じて定義する。
 
 ## 4. 状態遷移モデル
 キャンセル発生時の Worker と Controller の状態遷移は以下のように定義する。
@@ -44,10 +50,11 @@ Partition Execution においては、Worker の状態遷移と Controller の�
 
 | Worker State | Controller State | 備考 |
 | :--- | :--- | :--- |
-| `COMPLETE` | `COMPLETE` | 正常終了 |
+| `COMPLETED` | `COMPLETED` | 正常終了 |
 | `FAILED` | `FAILED` | 業務/システムエラー |
 | `STOPPED` | `STOPPED` | 明示的な停止 |
 | `CANCELLED` | `STOPPED` | 上位キャンセル伝播 |
+| `ABANDONED` | `ABANDONED` | 破棄 |
 | 混在 (FAILED/...) | `FAILED` | 優先度最高 |
 | 混在 (CANCELLED/...) | `STOPPED` | 優先度中 |
 
