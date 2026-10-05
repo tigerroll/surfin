@@ -225,9 +225,6 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 			// Start measuring the execution duration.
 			startTime := time.Now()
 
-			// Record the current concurrency as a gauge metric.
-			s.metricRecorder.RecordGauge(ctx, "partition_concurrency_active", float64(1), attribute.String("step.id", s.id))
-
 			// Start Span for the worker
 			workerCtx, finishSpan := s.tracer.StartStepSpan(ctx, workerExec)
 			defer finishSpan()
@@ -238,6 +235,8 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 				if err := sem.Acquire(workerCtx, 1); err != nil {
 					errChan <- err
 					s.tracer.RecordError(workerCtx, "partition_step", err)
+					// Send the worker execution even if semaphore acquisition fails
+					workerExecutionsChan <- workerExec
 					return
 				}
 				defer sem.Release(1)
@@ -260,6 +259,8 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 					completedWorkerExec.ExitStatus = model.ExitStatusStopped // Set exit status to STOPPED for cancelled workers.
 				} else {
 					logger.Errorf("PartitionStep '%s': Worker '%s' failed: %v", s.id, workerExec.StepName, execErr)
+					// 修正: エラー発生時は必ず MarkAsFailed を呼び出す
+					completedWorkerExec.MarkAsFailed(execErr)
 					errChan <- execErr
 					s.tracer.RecordError(workerCtx, "partition_step", execErr)
 				}
@@ -331,6 +332,8 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 		combinedError = wrappedErr
 	} else if finalStatus == model.BatchStatusStopped {
 		controllerExecution.MarkAsStopped()
+		// STOPPED の場合は combinedError を nil にして正常終了扱いにする
+		combinedError = nil
 	} else {
 		controllerExecution.MarkAsCompleted()
 	}
