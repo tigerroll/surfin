@@ -232,7 +232,7 @@ func (m *MockPartitioner) Partition(ctx context.Context, gridSize int) (map[stri
 // TestPartitionStep_Aggregation verifies that the PartitionStep correctly aggregates
 // results from multiple worker partitions, including statistics (ReadCount, WriteCount)
 // and the ExecutionContext.
-// Case: Mixed worker states (FAILED/CANCELLED/COMPLETE) -> FAILED
+// Case: Mixed worker states (FAILED/CANCELLED/COMPLETED) -> FAILED
 func TestPartitionStep_Aggregation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -383,9 +383,10 @@ func TestPartitionStep_EmptyPartitions(t *testing.T) {
 	assert.Equal(t, model.BatchStatusCompleted, controllerExecution.Status)
 }
 
-// TestPartitionStep_SemaphoreAcquisitionFailure verifies that if semaphore acquisition fails,
-// the worker is marked as FAILED or CANCELLED and the controller step fails.
-func TestPartitionStep_SemaphoreAcquisitionFailure(t *testing.T) {
+// TestPartitionStep_CancellationDuringSemaphoreAcquisition verifies that
+// cancellation while waiting for the semaphore results in CANCELLED workers
+// and a STOPPED controller.
+func TestPartitionStep_CancellationDuringSemaphoreAcquisition(t *testing.T) {
 	mockRepo := NewMockJobRepository()
 	mockExecutor := &MockStepExecutor{}
 	workerStep := &MockStep{IDValue: "workerStep"}
@@ -401,11 +402,8 @@ func TestPartitionStep_SemaphoreAcquisitionFailure(t *testing.T) {
 	jobExecution := testutil.NewTestJobExecution("jobInstID", "partitionJob", model.NewJobParameters())
 	controllerExecution := testutil.NewTestStepExecution(jobExecution, "controllerStep")
 
-	// Set concurrency to 1, so one worker will be blocked/fail if we try to run 2.
-	// Actually, the semaphore logic in PartitionStep will block.
-	// To test failure, we need to simulate an error in semaphore acquisition.
-	// Since semaphore.Acquire only returns error on context cancellation, we use a canceled context.
-
+	// Use concurrency=1 so the second worker waits for the semaphore.
+	// Cancellation causes the waiting Acquire to return context.Canceled.
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
@@ -551,7 +549,7 @@ func TestPartitionStep_Cancellation(t *testing.T) {
 
 // TestPartitionStep_MultipleWorkerFailures verifies that if multiple partitions fail,
 // the controller step fails and errors are aggregated.
-// Case: Mixed worker failures (FAILED/FAILED/COMPLETE) -> FAILED
+// Case: Mixed worker failures (FAILED/FAILED/COMPLETED) -> FAILED
 func TestPartitionStep_MultipleWorkerFailures(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -612,7 +610,7 @@ func TestPartitionStep_MultipleWorkerFailures(t *testing.T) {
 
 // TestPartitionStep_MixedFailureAndCancellation verifies that if FAILED and CANCELLED are mixed,
 // FAILED takes precedence and the controller step fails.
-// Case: Mixed worker states (FAILED/CANCELLED/COMPLETE) -> FAILED
+// Case: Mixed worker states (FAILED/CANCELLED/COMPLETED) -> FAILED
 func TestPartitionStep_MixedFailureAndCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -778,5 +776,57 @@ func TestPartitionStep_RepositoryUpdateFailure(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "db error")
+	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
+}
+
+// TestPartitionStep_AbandonedWorker verifies that an ABANDONED worker
+// causes the controller step to fail (Failure Matrix: ABANDONED -> FAILED).
+func TestPartitionStep_AbandonedWorker(t *testing.T) {
+	ctx := context.Background()
+
+	mockRepo := NewMockJobRepository()
+	mockExecutor := &MockStepExecutor{
+		Results: map[string]struct {
+			Err        error
+			Status     model.JobStatus
+			EC         model.ExecutionContext
+			ReadCount  int
+			WriteCount int
+		}{
+			"p0": {nil, model.BatchStatusAbandoned, model.ExecutionContext{}, 0, 0},
+		},
+	}
+	workerStep := &MockStep{IDValue: "workerStep"}
+	mockPartitioner := &MockPartitioner{
+		Partitions: map[string]model.ExecutionContext{
+			"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+		},
+	}
+	jobExecution := testutil.NewTestJobExecution("jobInstID", "partitionJob", model.NewJobParameters())
+	controllerExecution := testutil.NewTestStepExecution(jobExecution, "controllerStep")
+
+	partitionStep := partition.NewPartitionStep(
+		"controllerStep",
+		mockPartitioner,
+		workerStep,
+		1,
+		1,
+		mockRepo,
+		[]port.StepExecutionListener{},
+		nil,
+		mockExecutor,
+	)
+
+	mockPartitioner.On("Partition", mock.Anything, 1).Return(map[string]model.ExecutionContext{
+		"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+	}, nil).Once()
+	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
+	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Once()
+
+	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
+
+	assert.Error(t, err)
+	assert.Equal(t, model.BatchStatusFailed, controllerExecution.Status)
+	assert.Equal(t, model.ExitStatusFailed, controllerExecution.ExitStatus)
 	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }
