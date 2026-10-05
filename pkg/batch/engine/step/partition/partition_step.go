@@ -131,22 +131,26 @@ func (s *PartitionStep) notifyAfterStep(ctx context.Context, stepExecution *mode
 
 // determineAggregatedStatus calculates the final status of the controller step based on the
 // execution results of all worker partitions, adhering to the defined Failure Matrix.
+// Priority: FAILED > STOPPED/CANCELLED > COMPLETED
 func (s *PartitionStep) determineAggregatedStatus(workerExecutions []*model.StepExecution) (model.JobStatus, model.ExitStatus) {
-	hasFailed := false
-	hasStopped := false
-	hasCancelled := false
+	var (
+		hasFailed    bool
+		hasStopped   bool
+		hasCancelled bool
+	)
 
 	for _, exec := range workerExecutions {
-		if exec.Status == model.BatchStatusFailed || exec.Status == model.BatchStatusAbandoned {
+		switch exec.Status {
+		case model.BatchStatusFailed, model.BatchStatusAbandoned:
 			hasFailed = true
-		} else if exec.Status == model.BatchStatusStopped {
+		case model.BatchStatusStopped:
 			hasStopped = true
-		} else if exec.Status == model.BatchStatusCancelled {
+		case model.BatchStatusCancelled:
 			hasCancelled = true
 		}
 	}
 
-	// Apply Failure Matrix priority: FAILED > STOPPED/CANCELLED > COMPLETED
+	// Apply Failure Matrix priority
 	if hasFailed {
 		return model.BatchStatusFailed, model.ExitStatusFailed
 	}

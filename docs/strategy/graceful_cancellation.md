@@ -1,39 +1,54 @@
-# Graceful Cancellation 戦略
+# Graceful Cancellation Semantics
 
 ## 1. 目的
-バッチ処理実行中にキャンセル要求（`context.Context` のキャンセル）が発生した際、システムが整合性を保ちつつ、安全かつ予測可能な方法で終了するための挙動を定義する。
+バッチ処理実行中にキャンセル要求（`context.Context` のキャンセル）が発生した際、システムがどのような状態遷移を行い、再開時にどのような挙動をとるべきかという「実行意味論（Execution Semantics）」を定義する。
 
 ## 2. 基本方針
-Surfin における Graceful Cancellation は、以下の原則に従う。
+Surfin における Graceful Cancellation は、以下の原則を目標とする。
 
-1.  **整合性の優先**: 処理中のトランザクションは必ずロールバックし、データ不整合を防ぐ。
-2.  **再開可能性の維持**: 最後に成功したチェックポイントの状態を維持し、再開時に重複処理が発生しないようにする。
+1.  **整合性の優先**: 処理中のトランザクションはロールバックし、データ不整合を防ぐ。
+2.  **再開可能性の維持**: 最後に確定した Restart Checkpoint を基準として、再開時の処理結果が予測可能であること。
 3.  **即時性の尊重**: キャンセル要求を受け取った場合、可能な限り速やかに新しい処理の開始を停止する。
 
-## 3. ケース別挙動
+## 3. 実行意味論と Failure Matrix
+キャンセル発生タイミングと、その後の状態（Commit, Checkpoint, Restart）の関係を以下のように定義する。
 
-| Case | 状況 | 挙動 | 最終状態 |
-| :--- | :--- | :--- | :--- |
-| **A** | Chunk 実行前 | 新しい Chunk の開始を中止し、即座に終了する。 | `CANCELLED` |
-| **B** | Chunk 実行中 | 現在のトランザクションをロールバックし、前回チェックポイントの状態に戻す。 | `CANCELLED` |
-| **C** | Chunk Commit 直後 | コミット済みデータは確定させる。次の Chunk 処理には入らず終了する。 | `CANCELLED` |
-| **D** | Checkpoint 保存中 | 保存処理を中断またはロールバックし、前回チェックポイントの状態を維持する。 | `CANCELLED` |
+| Case | 状況 | Commit | Checkpoint | Restart 挙動 |
+| :--- | :--- | :--- | :--- | :--- |
+| **A** | Chunk 実行前 | なし | 維持 | Checkpoint から再開 |
+| **B** | Chunk 実行中 | Rollback | 維持 | Checkpoint から再開 |
+| **C** | Chunk Commit 直後 | 確定 | 未保存 | **要定義** (重複実行の可能性あり) |
+| **D** | Checkpoint 保存中 | 確定 | 不定 | **要定義** (原子性保証の課題) |
 
-### 詳細解説
-*   **Case B (実行中)**: `ChunkStep` はトランザクション境界でキャンセルをチェックする。ロールバックにより、処理中のアイテムは未処理状態に戻るため、再開時に安全に再処理できる。
-*   **Case C (Commit 直後)**: トランザクションが完了しているため、その Chunk は「完了」として扱う。ただし、次の Chunk の読み込みは行わない。
-*   **Case D (保存中)**: チェックポイントの保存はアトミックに行われるべきである。保存が完了していない場合、再開時は「前回成功したチェックポイント」から開始されるため、データ整合性は保たれる。
+### 課題: 原子性の欠如
+現在のアーキテクチャでは、Workload DB の Commit と Metadata DB の Checkpoint 保存は別々のトランザクションである。そのため、Case C および D において「Commit は成功したが Checkpoint 保存に失敗した」という状態が発生しうる。
+この場合、再開時に「既に Commit 済みの Chunk」が再実行されるリスクがある。この重複実行を許容するか、あるいは原子性を保証する仕組み（例: 2相コミットや冪等性の強制）を導入するかは、今後の設計課題とする。
 
-## 4. 実装上の注意点
+## 4. 状態遷移モデル
+キャンセル発生時の Worker と Controller の状態遷移は以下のように定義する。
 
-### 4.1. Context の伝播
-*   `ChunkStep` のループ内（Read, Process, Write）で、定期的に `ctx.Err()` をチェックする。
-*   特に `ItemReader` や `ItemWriter` の実装において、長時間ブロックする処理がある場合は、`ctx.Done()` を監視すること。
+*   **Worker**: `context.Canceled` を検知した場合、`BatchStatusCancelled` へ遷移する。
+*   **Controller**: Worker の `CANCELLED` を検知した場合、集約ロジックにより `BatchStatusStopped` へ遷移する。
 
-### 4.2. トランザクション管理
-*   キャンセル発生時は、`currentTxManager.Rollback(txAdapter)` を呼び出し、リソースを解放する。
-*   `ChunkStep` の `Execute` メソッドにおいて、キャンセルを検知した場合は `chunkError` に `ctx.Err()` をセットし、ループを抜ける。
+### 集約優先度 (Failure Matrix)
+複数の Worker が混在する場合、以下の優先度で Controller の最終状態を決定する。
+`FAILED` > `STOPPED` / `CANCELLED` > `COMPLETED`
 
-### 4.3. 状態遷移
-*   キャンセルによって終了した Worker は、`model.BatchStatusCancelled` に遷移させる。
-*   Controller Step は、Worker の `CANCELLED` を検知し、最終的な ExitStatus を `STOPPED` として報告する。
+## 5. 実装上の注意点
+*   **Context の伝播**: `ItemReader`, `ItemWriter` 等の長時間ブロックする処理は `ctx.Done()` を監視すること。
+*   **トランザクション管理**: キャンセル時は `currentTxManager.Rollback()` を呼び出し、リソースを解放すること。
+*   **Restartability**: `JobOperator.Restart` は `BatchStatusCancelled` を再開可能な状態として扱う。
+
+## 6. 実行意味論の確立 (Partition Execution)
+Partition Execution においては、Worker の状態遷移と Controller の集約ロジックを Failure Matrix として定義し、実装レベルでこれを保証する。
+
+| Worker State | Controller State | 備考 |
+| :--- | :--- | :--- |
+| `COMPLETE` | `COMPLETE` | 正常終了 |
+| `FAILED` | `FAILED` | 業務/システムエラー |
+| `STOPPED` | `STOPPED` | 明示的な停止 |
+| `CANCELLED` | `STOPPED` | 上位キャンセル伝播 |
+| 混在 (FAILED/...) | `FAILED` | 優先度最高 |
+| 混在 (CANCELLED/...) | `STOPPED` | 優先度中 |
+
+この意味論により、Partition 単位の並行実行においても、一貫した状態遷移と再開可能性を保証する。
