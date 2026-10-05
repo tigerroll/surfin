@@ -226,9 +226,6 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 		go func(workerExec *model.StepExecution, pName string) {
 			defer wg.Done()
 
-			// Start measuring the execution duration.
-			startTime := time.Now()
-
 			// Start Span for the worker
 			workerCtx, finishSpan := s.tracer.StartStepSpan(ctx, workerExec)
 			defer finishSpan()
@@ -237,14 +234,23 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 			// Acquire semaphore only if enabled
 			if sem != nil {
 				if err := sem.Acquire(workerCtx, 1); err != nil {
+					// If the error is context cancellation, mark as CANCELLED; otherwise, mark as FAILED.
+					if errors.Is(err, context.Canceled) {
+						workerExec.Status = model.BatchStatusCancelled
+						workerExec.ExitStatus = model.ExitStatusStopped
+					} else {
+						workerExec.MarkAsFailed(err)
+					}
 					errChan <- err
 					s.tracer.RecordError(workerCtx, "partition_step", err)
-					// Send the worker execution even if semaphore acquisition fails
 					workerExecutionsChan <- workerExec
 					return
 				}
 				defer sem.Release(1)
 			}
+
+			// Start measurement after semaphore acquisition to exclude waiting time from the duration.
+			startTime := time.Now()
 
 			// Execute the Worker Step using the StepExecutor.
 			completedWorkerExec, execErr := s.stepExecutor.ExecuteStep(workerCtx, s.workerStep, jobExecution, workerExec)

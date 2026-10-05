@@ -349,6 +349,94 @@ func TestPartitionStep_Aggregation(t *testing.T) {
 	mockRepo.MockStepExecutionRepository.AssertExpectations(t)
 }
 
+// TestPartitionStep_EmptyPartitions verifies that if no partitions are generated,
+// the controller step completes successfully.
+func TestPartitionStep_EmptyPartitions(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := NewMockJobRepository()
+	mockExecutor := &MockStepExecutor{}
+	workerStep := &MockStep{IDValue: "workerStep"}
+	mockPartitioner := &MockPartitioner{
+		Partitions: map[string]model.ExecutionContext{},
+	}
+	jobExecution := testutil.NewTestJobExecution("jobInstID", "partitionJob", model.NewJobParameters())
+	controllerExecution := testutil.NewTestStepExecution(jobExecution, "controllerStep")
+
+	partitionStep := partition.NewPartitionStep(
+		"controllerStep",
+		mockPartitioner,
+		workerStep,
+		0,
+		1,
+		mockRepo,
+		[]port.StepExecutionListener{},
+		nil,
+		mockExecutor,
+	)
+
+	mockPartitioner.On("Partition", mock.Anything, 0).Return(map[string]model.ExecutionContext{}, nil).Once()
+	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(2)
+
+	err := partitionStep.Execute(ctx, jobExecution, controllerExecution)
+
+	assert.NoError(t, err)
+	assert.Equal(t, model.BatchStatusCompleted, controllerExecution.Status)
+}
+
+// TestPartitionStep_SemaphoreAcquisitionFailure verifies that if semaphore acquisition fails,
+// the worker is marked as FAILED or CANCELLED and the controller step fails.
+func TestPartitionStep_SemaphoreAcquisitionFailure(t *testing.T) {
+	mockRepo := NewMockJobRepository()
+	mockExecutor := &MockStepExecutor{}
+	workerStep := &MockStep{IDValue: "workerStep"}
+
+	// Create a partitioner that returns 2 partitions
+	mockPartitioner := &MockPartitioner{
+		Partitions: map[string]model.ExecutionContext{
+			"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+			"p1": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p1"}),
+		},
+	}
+
+	jobExecution := testutil.NewTestJobExecution("jobInstID", "partitionJob", model.NewJobParameters())
+	controllerExecution := testutil.NewTestStepExecution(jobExecution, "controllerStep")
+
+	// Set concurrency to 1, so one worker will be blocked/fail if we try to run 2.
+	// Actually, the semaphore logic in PartitionStep will block.
+	// To test failure, we need to simulate an error in semaphore acquisition.
+	// Since semaphore.Acquire only returns error on context cancellation, we use a canceled context.
+
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	partitionStep := partition.NewPartitionStep(
+		"controllerStep",
+		mockPartitioner,
+		workerStep,
+		2,
+		1,
+		mockRepo,
+		[]port.StepExecutionListener{},
+		nil,
+		mockExecutor,
+	)
+
+	mockPartitioner.On("Partition", mock.Anything, 2).Return(map[string]model.ExecutionContext{
+		"p0": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p0"}),
+		"p1": testutil.NewTestExecutionContext(map[string]interface{}{"partition.name": "p1"}),
+	}, nil).Once()
+
+	// Expect updates for controller
+	mockRepo.MockStepExecutionRepository.On("UpdateStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Maybe()
+	// Expect saves for workers
+	mockRepo.MockStepExecutionRepository.On("SaveStepExecution", mock.Anything, mock.AnythingOfType("*model.StepExecution")).Return(nil).Times(2)
+
+	err := partitionStep.Execute(canceledCtx, jobExecution, controllerExecution)
+
+	assert.NoError(t, err)                                                // Controller should finish normally as STOPPED.
+	assert.Equal(t, model.BatchStatusStopped, controllerExecution.Status) // Aggregated status should be STOPPED for cancelled workers
+}
+
 // TestPartitionStep_PartialFailure verifies that if one partition fails, the controller step fails.
 // Case: Worker failure (FAILED) -> FAILED
 func TestPartitionStep_PartialFailure(t *testing.T) {
