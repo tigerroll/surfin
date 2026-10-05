@@ -106,7 +106,10 @@ const (
 	BatchStatusStoppingFailed JobStatus = "STOPPING_FAILED"
 	BatchStatusRestarting     JobStatus = "RESTARTING"
 	BatchStatusUnknown        JobStatus = "UNKNOWN"
-	BatchStatusCancelled      JobStatus = "CANCELLED"
+	// BatchStatusCancelled represents cancellation at the Worker/Step execution level.
+	// Controller and Job executions currently aggregate cancellation into STOPPED.
+	// This status is reserved for future Job-level cancellation semantics.
+	BatchStatusCancelled JobStatus = "CANCELLED"
 )
 
 // String returns the string representation of the JobStatus.
