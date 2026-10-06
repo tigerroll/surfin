@@ -132,7 +132,8 @@ func (s *PartitionStep) notifyAfterStep(ctx context.Context, stepExecution *mode
 
 // determineAggregatedStatus calculates the final status of the controller step based on the
 // execution results of all worker partitions, adhering to the defined Failure Matrix.
-// Priority: FAILED > STOPPED/CANCELLED > COMPLETED
+// Priority: FAILED > STOPPED > COMPLETED
+// (CANCELLED workers are aggregated into STOPPED)
 func (s *PartitionStep) determineAggregatedStatus(workerExecutions []*model.StepExecution) (model.JobStatus, model.ExitStatus) {
 	var (
 		hasFailed    bool
@@ -414,14 +415,11 @@ func (s *PartitionStep) promoteExecutionContext(stepExecution *model.StepExecuti
 		}
 	}
 
-	// 2. JobLevelKeys promotion (with renaming)
-	for stepKey, jobKey := range s.promotion.JobLevelKeys {
-		if val, ok := stepExecution.ExecutionContext.GetNested(stepKey); ok {
+	// 2. JobLevelKeys promotion
+	for key, jobKey := range s.promotion.JobLevelKeys {
+		if val, ok := stepExecution.ExecutionContext.GetNested(key); ok {
 			jobExecution.ExecutionContext.PutNested(jobKey, val)
-			logger.Debugf("PartitionStep '%s': Promoted and renamed key '%s' to '%s' in JobExecutionContext.", s.id, stepKey, jobKey)
+			logger.Debugf("PartitionStep '%s': Promoted key '%s' to JobExecutionContext as '%s'.", s.id, key, jobKey)
 		}
 	}
 }
-
-// Verify that PartitionStep implements the core.Step interface.
-var _ port.Step = (*PartitionStep)(nil)
