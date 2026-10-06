@@ -132,26 +132,16 @@ Proxyの有無はApplicationから利用するHTTP Clientの通信設定とし�
 
 これはWeb Proxy Adapterそのものの責務ではなく、Requestを処理する認証・署名コンポーネントとして分離します。
 
-概念的には、
-
-```go
-type RequestAuthenticator interface {
-    Authenticate(ctx context.Context, req *http.Request) error
-}
-```
-
-のようなインターフェースを想定します。
-
-これにより、例えば、
+概念的には、Requestに対する認証や署名付与を行うメカニズムを想定します。
 
 ```text
-RequestAuthenticator
-    ├── APIKeyAuthenticator
-    ├── OAuth2Authenticator
-    └── RequestSigner
+Request Authentication / Processing
+    ├── API Key
+    ├── OAuth2
+    └── Request Signing
 ```
 
-のような実装を追加できます。
+これにより、例えばAPI Key認証やOAuth2、あるいは特定の署名方式を必要とするサービスに対して、柔軟にコンポーネントを追加できます。
 
 実際のインターフェースや命名は実装状況に応じて決定します。
 
@@ -274,7 +264,7 @@ Amazon Adapter (業務ロジック / Report Lifecycle)
 Authenticator (認証 / Request Signing)
     │
     ▼
-Web Proxy Adapter (HTTP Transport / Proxy Routing)
+Web Proxy Adapter (HTTP Transport / Proxy)
     │
     ▼
 Amazon SP-API
