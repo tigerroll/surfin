@@ -23,7 +23,9 @@ Worker は `context.Done()` を受信した際、即座に終了するのでは�
 
 1. **新しい処理の開始禁止**: 新しい Chunk や Tasklet の実行を開始しない。
 2. **現在の処理の完了**: 現在実行中の Chunk や Transaction をコミットまたはロールバックする。
-3. **Checkpoint の保存**: 可能な限り現在の状態を保存する。
+3. **Checkpoint の維持**: 最後に正常に Commit された処理位置を Restart Checkpoint として維持する。
+   Checkpoint の保存自体が Commit と原子的でないため、Cancellation に伴って新しい Checkpoint が確定できない場合は、
+   直前の Checkpoint からの再実行を許容する。
 4. **状態遷移**: 最終的に `CANCELLED` 状態へ遷移する。
 
 ## 5. Cancellation Mechanism

@@ -16,8 +16,10 @@ Partition Execution は、処理範囲を複数の Partition に分割し、そ�
 ## 3. Concurrency Model
 `concurrency` は、同時に実行される Partition の最大数を表す。
 
-- **Partition 数と concurrency は別の概念**: `concurrency` は goroutine の生成数ではなく、実際に処理を実行している Partition の上限を表す。
-- **実装**: すべての Partition に対して goroutine を起動するが、`semaphore` を用いて「実行中 Partition 数」を制御する。現在の Local Execution では、各 Partition を Worker が担当するため、結果として同時実行される Worker 数も `concurrency` 以下となる。これにより、リソース（DB Connection, メモリ等）の過剰な消費を防止する。
+- **Partition 数と concurrency は別の概念**:
+  - `concurrency` は goroutine の生成数ではなく、実際に処理を実行している Partition の上限を表す。
+- **Local Execution**:
+  - Partition ごとに goroutine を起動し、`semaphore` を用いて「実行中 Partition 数」を制御する。<br/>現在の Local Execution では、各 Partition を Worker が担当するため、結果として同時実行される Worker 数も `concurrency` 以下となる。<br/>これにより、リソース（DB Connection, メモリ等）の過剰な消費を防止する。
 
 ## 4. Cancellation Mechanism
 キャンセル要求は `context.Context` を通じて伝播される。
