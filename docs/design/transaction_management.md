@@ -47,17 +47,20 @@ Resource
 
 ## 2.2. トランザクションの抽象化
 
-データベーストランザクションについては、具体的なデータベース実装を隠蔽するために `tx.Tx` インターフェースを利用します。
+データベーストランザクションについては、具体的なデータベース実装を実行エンジンから隠蔽します。
 
-```go
-type Tx interface {
-    Commit() error
-    Rollback() error
-    // その他、トランザクション内で実行する操作の定義
-}
+トランザクションのライフサイクルは、概念的には以下のように扱います。
+
+```text
+Transaction
+  ├── Begin
+  ├── Commit
+  └── Rollback
 ```
 
-これにより、GORMなどの具体的なデータベース実装にChunkStepやItemWriterが直接依存することを避けます。
+ChunkStepなどの実行エンジンは、具体的なDB実装に直接依存せず、トランザクション境界を管理します。
+
+DB操作そのものは、RepositoryやItemWriterなどのInfrastructure実装が担当します。
 
 ---
 
