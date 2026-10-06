@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -150,13 +151,25 @@ func (s *PartitionStep) determineAggregatedStatus(workerExecutions []*model.Step
 		}
 	}
 
-	// Apply Failure Matrix priority
+	// 1. Validate that all workers are in a known terminal state.
+	for _, exec := range workerExecutions {
+		if exec.Status != model.BatchStatusCompleted &&
+			exec.Status != model.BatchStatusFailed &&
+			exec.Status != model.BatchStatusStopped &&
+			exec.Status != model.BatchStatusCancelled &&
+			exec.Status != model.BatchStatusAbandoned {
+			return model.BatchStatusFailed, model.ExitStatusFailed
+		}
+	}
+
+	// 2. Apply Failure Matrix priority
 	if hasFailed {
 		return model.BatchStatusFailed, model.ExitStatusFailed
 	}
 	if hasStopped || hasCancelled {
 		return model.BatchStatusStopped, model.ExitStatusStopped
 	}
+
 	return model.BatchStatusCompleted, model.ExitStatusCompleted
 }
 
@@ -187,6 +200,12 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 		s.notifyAfterStep(ctx, controllerExecution)
 		return exception.NewBatchError(s.id, "Failed to execute Partitioner", err, false, false)
 	}
+
+	// Defensive check: ensure partitionContexts is not nil to avoid panic.
+	if partitionContexts == nil {
+		partitionContexts = make(map[string]model.ExecutionContext)
+	}
+
 	logger.Infof("PartitionStep '%s': Partitioner returned %d partitions.", s.id, len(partitionContexts))
 
 	// 4. Execute each partition in parallel.
@@ -302,6 +321,11 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 		workerExecutions = append(workerExecutions, workerExec)
 	}
 
+	// Sort worker executions by ID to ensure deterministic ExecutionContext merge order.
+	sort.Slice(workerExecutions, func(i, j int) bool {
+		return workerExecutions[i].ID < workerExecutions[j].ID
+	})
+
 	// Determine final status
 	finalStatus, finalExitStatus := s.determineAggregatedStatus(workerExecutions)
 
@@ -321,6 +345,13 @@ func (s *PartitionStep) Execute(ctx context.Context, jobExecution *model.JobExec
 
 		// Merge ExecutionContext
 		for k, v := range workerExec.ExecutionContext {
+			// Skip internal keys used for partition identification
+			if k == "partition.name" {
+				continue
+			}
+			if _, exists := aggregatedEC[k]; exists {
+				return exception.NewBatchError(s.id, fmt.Sprintf("duplicate ExecutionContext key found: %s", k), nil, false, false)
+			}
 			aggregatedEC[k] = v
 		}
 	}

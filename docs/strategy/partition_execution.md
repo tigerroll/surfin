@@ -234,7 +234,7 @@ Partition Execution では、Worker ごとに独立した実行結果が発生�
 Worker（各パーティション）は、独立した `StepExecution` として扱われる。
 
 ```text
-[STARTING] -> [STARTED] -> [COMPLETE]
+[STARTING] -> [STARTED] -> [COMPLETED]
                  |    |
                  |    +-> [FAILED]
                  |    +-> [STOPPED]
@@ -243,7 +243,7 @@ Worker（各パーティション）は、独立した `StepExecution` として
 
 | 状態 | 定義 | 典型的な原因 |
 | :--- | :--- | :--- |
-| **COMPLETE** | 正常終了 | 処理の全完了 |
+| **COMPLETED** | 正常終了 | 処理の全完了 |
 | **FAILED** | エラーによる終了 | 業務エラー / システムエラー |
 | **STOPPED** | 明示的な停止 | ユーザーまたはControllerからのStop要求 |
 | **CANCELLED** | 上位キャンセルによる終了 | 親Contextのキャンセル伝播 |
@@ -292,12 +292,12 @@ Partition Execution についても、通常の ChunkStep と同様に Failure M
 
 | Case | Worker State | Controller State |
 | :--- | :--- | :--- |
-| Worker 自身が成功 | `COMPLETE` | `COMPLETE` |
+| Worker 自身が成功 | `COMPLETED` | `COMPLETED` |
 | Worker Failure | `FAILED` | `FAILED` |
 | Controller Stop | `STOPPED` | `STOPPED` |
 | Context Cancel | `CANCELLED` | `STOPPED` |
-| Worker 混在 (FAILED/CANCELLED/COMPLETE) | - | `FAILED` |
-| Worker 混在 (CANCELLED/COMPLETE) | - | `STOPPED` |
+| Worker 混在 (FAILED/CANCELLED/COMPLETED) | - | `FAILED` |
+| Worker 混在 (CANCELLED/COMPLETED) | - | `STOPPED` |
 
 **Failure Matrix は単なるテストケース一覧ではなく、Partition Execution Semantics の executable specification として扱う。**
 

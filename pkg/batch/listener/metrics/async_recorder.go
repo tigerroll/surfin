@@ -23,7 +23,6 @@ type MetricEvent struct {
 	Count         int64                // Numeric count for events like item reads, writes, or chunk commits.
 	Err           error                // The error associated with skip or retry events.
 	Duration      float64              // The duration value for time-based metrics, typically in seconds.
-	Value         float64              // The value for gauge metrics.
 	Attrs         []attribute.KeyValue // OpenTelemetry attributes to associate with the metric.
 	Name          string               // The name of the metric, particularly for RecordDuration and RecordGauge.
 }

@@ -183,11 +183,11 @@ func GetApplicationOptions(appCtx context.Context, envFilePath string, embeddedC
 		embeddedConfig,
 		embeddedJSL,
 		cfg,
+		envFilePath,
 	))
 
-	// Register values that require annotations using Provide.
+	// Provide values that require annotations.
 	options = append(options, fx.Provide(
-		fx.Annotate(func() string { return envFilePath }, fx.ResultTags(`name:"envFilePath"`)),
 		fx.Annotate(func() context.Context { return appCtx }, fx.ResultTags(`name:"appCtx"`)),
 	))
 

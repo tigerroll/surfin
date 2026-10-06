@@ -7,7 +7,7 @@
 Surfin における Graceful Cancellation は、以下の原則を目標とする。
 
 1.  **整合性の優先**: 処理中のトランザクションはロールバックし、データ不整合を防ぐ。
-2.  **再開可能性の維持**: 最後に確定した Restart Checkpoint を基準として、再開時の処理結果が予測可能であること。
+2.  **再開可能性の維持**: 最後に正常に Commit された処理位置を Restart Checkpoint として維持する。未 Commit の処理を Checkpoint として確定させない。
 3.  **即時性の尊重**: キャンセル要求を受け取った場合、可能な限り速やかに新しい処理の開始を停止する。
 
 ## 3. 実行意味論と Failure Matrix
@@ -21,20 +21,14 @@ Surfin における Graceful Cancellation は、以下の原則を目標とす�
 | **D** | Checkpoint 保存中 | 確定 | 不定 | 再実行の可能性あり |
 
 ### Commit と Checkpoint の非原子性
-
-Workload DB の Commit と Metadata DB の Checkpoint 保存は、別々のトランザクションとして扱う。
-
-Surfin では、両者を 2PC によって原子的に扱うことはしない。
-
-そのため、Commit 後に Checkpoint が保存されなかった場合、Restart によって直前の Chunk が再実行される可能性がある。
-
-この再実行に対しては、Restart Semantics、冪等性、Sage Pattern / Compensation などによって処理結果の整合性を維持することを基本方針とする。具体的な Compensation の適用方法は、対象リソースと Job の意味論に応じて定義する。
+Workload DB の Commit と Metadata DB の Checkpoint 保存は、別々のトランザクションとして扱う。Surfin では両者を 2PC によって原子的に扱うことはしない。そのため、Commit 後に Checkpoint が保存されなかった場合、Restart によって直前の Chunk が再実行される可能性がある。この再実行に対しては、Restart Semantics、冪等性、Sage Pattern / Compensation などによって処理結果の整合性を維持することを基本方針とする。具体的な Compensation の適用方法は、対象リソースと Job の意味論に応じて定義する。
 
 ## 4. 状態遷移モデル
 キャンセル発生時の Worker と Controller の状態遷移は以下のように定義する。
 
 *   **Worker**: `context.Canceled` を検知した場合、`BatchStatusCancelled` へ遷移する。
 *   **Controller**: Worker の `CANCELLED` を検知した場合、集約ロジックにより `BatchStatusStopped` へ遷移する。
+*   **CANCELLED のスコープ**: `CANCELLED` は Worker/Step-level の Execution State であり、Controller/Job-level では `STOPPED` に集約される。
 
 ### 集約優先度 (Failure Matrix)
 複数の Worker が混在する場合、以下の優先度で Controller の最終状態を決定する。
@@ -54,8 +48,6 @@ Partition Execution においては、Worker の状態遷移と Controller の�
 | `FAILED` | `FAILED` | 業務/システムエラー |
 | `STOPPED` | `STOPPED` | 明示的な停止 |
 | `CANCELLED` | `STOPPED` | 上位キャンセル伝播 |
-| `ABANDONED` | `ABANDONED` | 破棄 |
+| `ABANDONED` | `FAILED` | 破棄された Worker は Controller Failure として扱う |
 | 混在 (FAILED/...) | `FAILED` | 優先度最高 |
 | 混在 (CANCELLED/...) | `STOPPED` | 優先度中 |
-
-この意味論により、Partition 単位の並行実行においても、一貫した状態遷移と再開可能性を保証する。
