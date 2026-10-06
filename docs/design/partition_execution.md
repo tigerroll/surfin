@@ -33,7 +33,16 @@ Partition Execution では、Worker ごとに独立した実行結果が発生�
 | **STOPPED** | 明示的な停止 | ユーザーまたはControllerからのStop要求 |
 | **CANCELLED** | 上位キャンセルによる終了 | 親Contextのキャンセル伝播 |
 
-## 4. Cancellation Mechanism
+## 4. Concurrency Model
+`concurrency` は、同時に実行される Partition の最大数を表す。
+
+- **Partition 数と concurrency は別の概念**:
+  - `concurrency` は goroutine の生成数ではなく、実際に処理を実行している Partition の上限を表す。
+- **Local Execution**:
+  - Partition ごとに goroutine を起動し、`semaphore` を用いて「実行中 Partition 数」を制御する。
+  - 現在の Local Execution では、各 Partition を Worker が担当するため、結果として同時実行される Worker 数も `concurrency` 以下となる。これにより、リソース（DB Connection, メモリ等）の過剰な消費を防止する。
+
+## 5. Cancellation Mechanism
 キャンセル要求は `context.Context` を通じて伝播される。
 
 - **Worker**: `context.Canceled` を検知した場合、`BatchStatusCancelled` へ遷移する。
@@ -42,8 +51,8 @@ Partition Execution では、Worker ごとに独立した実行結果が発生�
     - **Execution State**: `CANCELLED` は親 Context からのキャンセル伝播によって終了したことを示す独立した状態。
     - **ExitStatus**: 既存の ExitStatus 体系との互換性のため、`CANCELLED` 状態の Worker は `STOPPED` として報告される。これにより、内部的には区別しつつ、外部には一貫した終了ステータスを提供する。
 
-## 5. Failure Matrix (集約ロジック)
-Partition Execution についても、通常の ChunkStep と同様に Failure Matrix を定義し、Controller の最終状態を決定する。
+## 6. Failure Matrix (集約ロジック)
+Controller は以下の優先度で最終状態を決定する。
 
 | Case | Worker State | Controller State |
 | :--- | :--- | :--- |
